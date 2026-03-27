@@ -87,7 +87,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       {/* Stats */}
       <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
-        <StatCell label="Status" value={hasData ? (isUp ? "Up" : "Down") : "—"} />
+        <StatCell label="Status" value={hasData ? (isUp ? "Up" : "Down") : "-"} />
         <StatCell label="Check Type" value={checkTypeLabel(service.category)} />
         <StatCell
           label="Last Checked"
@@ -233,7 +233,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                           )}
                         </td>
                         <td className="py-2.5 pr-4 font-mono text-xs text-muted">
-                          {check.extra_data || "—"}
+                          {check.extra_data || "-"}
                         </td>
                         <td className="py-2.5">
                           {txHash ? (
@@ -247,7 +247,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                               Tx
                             </a>
                           ) : (
-                            <span className="text-xs text-zinc-300">—</span>
+                            <span className="text-xs text-zinc-300">-</span>
                           )}
                         </td>
                       </tr>

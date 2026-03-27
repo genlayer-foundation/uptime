@@ -44,7 +44,7 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
   return (
     <div>
       <h4 className="mb-3 text-xs text-muted">
-        {service?.name ?? serviceId} — Last {checks.length} checks
+        {service?.name ?? serviceId} · Last {checks.length} checks
       </h4>
       <ResponsiveContainer width="100%" height={120}>
         <AreaChart data={data}>

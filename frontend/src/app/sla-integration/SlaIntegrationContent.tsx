@@ -29,7 +29,7 @@ export function SlaIntegrationContent() {
           >
             Internet Court
           </a>{" "}
-          to create service level agreements that enforce themselves — no
+          to create service level agreements that enforce themselves. No
           lawyers, no screenshots, no trust required.
         </p>
       </div>
@@ -45,12 +45,12 @@ export function SlaIntegrationContent() {
           <StepCard
             step={2}
             title="Evidence is automatic"
-            description="The Uptime contract stores every health check result on-chain. When a dispute arises, submit the contract address as evidence — the data is already there, immutable and timestamped."
+            description="The Uptime contract stores every health check result on-chain. When a dispute arises, submit the contract address as evidence. The data is already there, immutable and timestamped."
           />
           <StepCard
             step={3}
             title="Verdict & payout"
-            description="Internet Court's AI validators independently evaluate the on-chain evidence against the SLA terms. The verdict triggers automatic payment or penalty — no human intervention needed."
+            description="Internet Court's AI validators independently evaluate the on-chain evidence against the SLA terms. The verdict triggers automatic payment or penalty. No human intervention needed."
           />
         </div>
       </Section>
@@ -115,7 +115,7 @@ export function SlaIntegrationContent() {
                 <div className="mt-1.5 rounded border border-border bg-surface p-3 font-mono text-xs text-muted">
                   <p>Same contract reference</p>
                   <p>Both parties read the same</p>
-                  <p>immutable on-chain data —</p>
+                  <p>immutable on-chain data.</p>
                   <p>no conflicting evidence possible</p>
                 </div>
               </div>
@@ -164,14 +164,14 @@ export function SlaIntegrationContent() {
             <h3 className="text-sm font-medium text-foreground">Works for agents</h3>
             <p className="mt-2 text-xs leading-relaxed text-muted">
               AI agents can create SLA agreements, submit evidence, and receive
-              payouts — no human in the loop. Built for the agent economy.
+              payouts without a human in the loop. Built for the agent economy.
             </p>
           </div>
           <div className="bg-background p-5">
             <h3 className="text-sm font-medium text-foreground">Composable</h3>
             <p className="mt-2 text-xs leading-relaxed text-muted">
               Any service monitored by Uptime can have an SLA enforced through
-              Internet Court. Add new services, create new agreements — it
+              Internet Court. Add new services, create new agreements. It
               scales without additional infrastructure.
             </p>
           </div>

@@ -1,7 +1,7 @@
 import { HowItWorksContent } from "./HowItWorksContent";
 
 export const metadata = {
-  title: "How It Works — Uptime by GenLayer",
+  title: "How It Works | Uptime by GenLayer",
   description:
     "Learn how GenLayer's trustless uptime monitoring uses consensus and intelligent contracts to provide tamper-proof infrastructure monitoring.",
 };

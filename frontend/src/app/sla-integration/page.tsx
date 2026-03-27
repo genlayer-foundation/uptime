@@ -1,7 +1,7 @@
 import { SlaIntegrationContent } from "./SlaIntegrationContent";
 
 export const metadata = {
-  title: "SLA Integration — Uptime by GenLayer",
+  title: "SLA Integration | Uptime by GenLayer",
   description:
     "Trustless SLA enforcement with Internet Court. Auto-payable service level agreements backed by on-chain uptime evidence.",
 };

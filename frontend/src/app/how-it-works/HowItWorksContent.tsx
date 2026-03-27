@@ -20,7 +20,7 @@ export function HowItWorksContent() {
         </h1>
         <p className="mt-4 text-base leading-relaxed text-muted">
           Traditional monitoring relies on a single provider you have to trust.
-          GenLayer replaces trust with cryptographic proof — every health
+          GenLayer replaces trust with cryptographic proof. Every health
           check is independently verified by multiple validators and stored
           permanently on-chain.
         </p>
@@ -39,11 +39,11 @@ export function HowItWorksContent() {
             </thead>
             <tbody>
               {[
-                ["Single point of failure", "Yes", "No — multiple validators"],
-                ["Tamper-proof results", "No", "Yes — consensus-verified"],
-                ["On-chain proof", "No", "Yes — immutable storage"],
+                ["Single point of failure", "Yes", "No, multiple validators"],
+                ["Tamper-proof results", "No", "Yes, consensus-verified"],
+                ["On-chain proof", "No", "Yes, immutable storage"],
                 ["Open source", "No", "Yes"],
-                ["Decentralized checking", "No", "Yes — geographic distribution"],
+                ["Decentralized checking", "No", "Yes, geographic distribution"],
                 ["SLA disputes", "Screenshots", "Cryptographic evidence"],
               ].map(([feature, traditional, genlayer]) => (
                 <tr key={feature} className="border-b border-border/50 last:border-0">
@@ -61,7 +61,7 @@ export function HowItWorksContent() {
       <Section title="What does this monitor?">
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
           This system monitors 7 critical infrastructure services across the
-          GenLayer ecosystem — RPC endpoints, block explorers, and the ZKSync
+          GenLayer ecosystem: RPC endpoints, block explorers, and the ZKSync
           bridge. Every hour, a cron job triggers the on-chain{" "}
           <strong className="text-foreground">UptimeMonitor</strong> contract.
           The contract makes HTTP and JSON-RPC calls to each service, records
@@ -79,12 +79,12 @@ export function HowItWorksContent() {
           <StepCard
             step={1}
             title="Leader Proposes"
-            description="A randomly selected validator executes the health check — pinging the service via HTTP or JSON-RPC — and proposes the result to the network."
+            description="A randomly selected validator executes the health check by pinging the service via HTTP or JSON-RPC, then proposes the result to the network."
           />
           <StepCard
             step={2}
             title="Validators Verify"
-            description="Other validators independently repeat the exact same check. They compare their result to the leader's using strict equality — the response must match exactly."
+            description="Other validators independently repeat the exact same check. They compare their result to the leader's using strict equality: the response must match exactly."
           />
           <StepCard
             step={3}
@@ -96,7 +96,7 @@ export function HowItWorksContent() {
         <div className="mt-6 rounded-lg border border-border p-4">
           <p className="text-sm text-muted">
             <strong className="text-purple">Why strict equality?</strong>{" "}
-            Health checks are factual — a service is either responding or it
+            Health checks are factual: a service is either responding or it
             isn&apos;t. Unlike subjective tasks, there&apos;s no room for interpretation.
             This makes{" "}
             <code className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs">
@@ -127,7 +127,7 @@ export function HowItWorksContent() {
           />
           <BenefitCard
             title="On-chain accountability"
-            description="SLA violations are provable on-chain — useful for dispute resolution backed by cryptographic evidence."
+            description="SLA violations are provable on-chain, useful for dispute resolution backed by cryptographic evidence."
           />
         </div>
       </Section>
@@ -226,14 +226,14 @@ export function HowItWorksContent() {
               GenLayer
             </a>{" "}
             is a blockchain that runs{" "}
-            <strong className="text-foreground">Intelligent Contracts</strong> —
+            <strong className="text-foreground">Intelligent Contracts</strong>,
             smart contracts that can access the internet, call APIs, and use AI,
             all verified through decentralized consensus.
           </p>
           <p>
             This uptime monitor is a real-world example: a decentralized
             application that reads live data from external services and stores
-            verified results on-chain — something impossible with traditional
+            verified results on-chain. Something impossible with traditional
             smart contracts.
           </p>
         </div>

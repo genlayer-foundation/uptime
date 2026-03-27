@@ -33,24 +33,16 @@ export function HeroSection() {
           >
             Internet Court
           </a>{" "}
-          to create auto-payable SLAs — trustlessly enforced, with
+          to create auto-payable SLAs, trustlessly enforced, with
           cryptographic evidence for every claim.
         </p>
 
         <div className="mt-8 flex items-center gap-6">
           <a
-            href="https://docs.genlayer.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-foreground transition-colors hover:text-purple"
-          >
-            Read Docs
-          </a>
-          <a
             href="https://github.com/genlayer-foundation/uptime"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-muted transition-colors hover:text-foreground"
+            className="text-sm font-medium text-foreground transition-colors hover:text-purple"
           >
             GitHub
           </a>

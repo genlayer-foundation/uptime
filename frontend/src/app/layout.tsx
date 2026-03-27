@@ -16,7 +16,7 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Uptime by GenLayer — Trustless Infrastructure Monitoring",
+  title: "Uptime by GenLayer | Trustless Infrastructure Monitoring",
   description:
     "The first uptime monitor that can't lie. Every health check independently verified by multiple validators and stored permanently on-chain.",
   metadataBase: new URL("https://uptime.dev.genlayer.foundation"),
