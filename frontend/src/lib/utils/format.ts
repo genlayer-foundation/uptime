@@ -18,10 +18,10 @@ export function timeAgo(timestamp: number): string {
 }
 
 export function uptimeColor(basisPoints: number): string {
-  if (basisPoints >= 9950) return "text-emerald-400";
-  if (basisPoints >= 9900) return "text-yellow-400";
-  if (basisPoints >= 9500) return "text-orange-400";
-  return "text-red-400";
+  if (basisPoints >= 9950) return "text-emerald-600";
+  if (basisPoints >= 9900) return "text-yellow-600";
+  if (basisPoints >= 9500) return "text-orange-600";
+  return "text-red-600";
 }
 
 export function statusColor(isUp: boolean): string {

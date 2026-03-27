@@ -11,12 +11,12 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-12 animate-pulse rounded-lg bg-zinc-900" />
+        <div className="h-12 animate-pulse rounded-lg bg-surface" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 7 }).map((_, i) => (
             <div
               key={i}
-              className="h-32 animate-pulse rounded-lg bg-zinc-900"
+              className="h-32 animate-pulse rounded-lg bg-surface"
             />
           ))}
         </div>

@@ -28,10 +28,10 @@ export function HowItWorksContent() {
 
       {/* Comparison Table */}
       <Section title="How It Compares">
-        <div className="overflow-x-auto rounded-lg border border-border/60">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border/60">
+              <tr className="border-b border-border bg-surface">
                 <th className="p-4 text-left text-xs font-medium text-muted">Feature</th>
                 <th className="p-4 text-left text-xs font-medium text-muted">Pingdom / UptimeRobot</th>
                 <th className="p-4 text-left text-xs font-medium text-purple">GenLayer</th>
@@ -46,10 +46,10 @@ export function HowItWorksContent() {
                 ["Decentralized checking", "No", "Yes — geographic distribution"],
                 ["SLA disputes", "Screenshots", "Cryptographic evidence"],
               ].map(([feature, traditional, genlayer]) => (
-                <tr key={feature} className="border-b border-border/40 last:border-0">
+                <tr key={feature} className="border-b border-border/50 last:border-0">
                   <td className="p-4 text-sm text-foreground">{feature}</td>
                   <td className="p-4 text-sm text-muted">{traditional}</td>
-                  <td className="p-4 text-sm text-emerald-400">{genlayer}</td>
+                  <td className="p-4 text-sm text-emerald-600">{genlayer}</td>
                 </tr>
               ))}
             </tbody>
@@ -75,7 +75,7 @@ export function HowItWorksContent() {
         title="The Consensus Process"
         subtitle="How validators reach agreement on each check"
       >
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
           <StepCard
             step={1}
             title="Leader Proposes"
@@ -93,13 +93,13 @@ export function HowItWorksContent() {
           />
         </div>
 
-        <div className="mt-6 rounded-lg border border-border/60 p-4">
+        <div className="mt-6 rounded-lg border border-border p-4">
           <p className="text-sm text-muted">
             <strong className="text-purple">Why strict equality?</strong>{" "}
             Health checks are factual — a service is either responding or it
             isn&apos;t. Unlike subjective tasks, there&apos;s no room for interpretation.
             This makes{" "}
-            <code className="rounded border border-border/60 px-1.5 py-0.5 text-xs">
+            <code className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs">
               strict_eq
             </code>{" "}
             the right consensus mode.
@@ -112,7 +112,7 @@ export function HowItWorksContent() {
         title="Why Trustless Monitoring?"
         subtitle="What makes this different"
       >
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-2">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
           <BenefitCard
             title="Tamper-proof SLA proof"
             description="No single party can fake uptime data. Results are verified by independent validators and stored immutably on-chain."
@@ -134,7 +134,7 @@ export function HowItWorksContent() {
 
       {/* Technical Architecture */}
       <Section title="Architecture">
-        <div className="rounded-lg border border-border/60 p-6 font-mono text-xs leading-relaxed text-muted">
+        <div className="rounded-lg border border-border bg-surface p-6 font-mono text-xs leading-relaxed text-muted">
           <pre>{`┌─────────────┐   cron    ┌──────────────────┐   writeContract   ┌─────────────────────┐
 │   Vercel    │ ────────► │  Next.js API      │ ────────────────► │  UptimeMonitor.py   │
 │   Cron Job  │           │  /api/cron/check  │                   │  (on-chain)         │
@@ -152,11 +152,11 @@ export function HowItWorksContent() {
           <p>
             <strong className="text-foreground">1. Cron trigger:</strong> A Vercel
             cron job calls{" "}
-            <code className="rounded border border-border/60 px-1.5 py-0.5 text-xs">
+            <code className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs">
               /api/cron/check
             </code>{" "}
             every hour, sending a{" "}
-            <code className="rounded border border-border/60 px-1.5 py-0.5 text-xs">
+            <code className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs">
               run_checks()
             </code>{" "}
             transaction to the contract.
@@ -187,7 +187,7 @@ export function HowItWorksContent() {
               href={getContractExplorerLink(d)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg border border-border/60 px-5 py-4 transition-colors hover:border-border"
+              className="flex items-center justify-between rounded-lg border border-border px-5 py-4 transition-colors hover:bg-surface"
             >
               <div>
                 <p className="text-sm text-foreground">{d.networkName}</p>

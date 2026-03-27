@@ -49,12 +49,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between border-b border-border/60 pb-6">
+      <div className="flex items-start justify-between border-b border-border pb-6">
         <div>
           <div className="flex items-center gap-3">
             <div
               className={`h-2.5 w-2.5 rounded-full ${
-                hasData ? (isUp ? "bg-emerald-500" : "bg-red-500") : "bg-zinc-600"
+                hasData ? (isUp ? "bg-emerald-500" : "bg-red-500") : "bg-zinc-300"
               }`}
             />
             <h1 className="text-xl font-semibold text-foreground">
@@ -64,8 +64,8 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
               className={`text-sm ${
                 hasData
                   ? isUp
-                    ? "text-emerald-400"
-                    : "text-red-400"
+                    ? "text-emerald-600"
+                    : "text-red-600"
                   : "text-muted"
               }`}
             >
@@ -86,7 +86,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-4">
+      <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
         <StatCell label="Status" value={hasData ? (isUp ? "Up" : "Down") : "—"} />
         <StatCell label="Check Type" value={checkTypeLabel(service.category)} />
         <StatCell
@@ -98,7 +98,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       {/* Uptime Stats */}
       {hasData && (
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
           <UptimeCell period="24 Hours" value={serviceStatus?.uptime_24h ?? 0} />
           <UptimeCell period="7 Days" value={serviceStatus?.uptime_7d ?? 0} />
           <UptimeCell period="30 Days" value={serviceStatus?.uptime_30d ?? 0} />
@@ -107,7 +107,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       {/* ZKSync Block Sync Status */}
       {isZksync && syncData && syncData.rpcBlock && (
-        <div className="rounded-lg border border-border/60 p-5">
+        <div className="rounded-lg border border-border p-5">
           <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted">
             ZKSync Chain Status
           </h3>
@@ -129,10 +129,10 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
               <p
                 className={`mt-1 font-mono text-lg ${
                   syncData.secondsBehind <= 30
-                    ? "text-emerald-400"
+                    ? "text-emerald-600"
                     : syncData.secondsBehind <= 120
-                      ? "text-yellow-400"
-                      : "text-red-400"
+                      ? "text-yellow-600"
+                      : "text-red-600"
                 }`}
               >
                 {syncData.secondsBehind < 60
@@ -144,18 +144,18 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
             </div>
           </div>
           {syncData.error && (
-            <p className="mt-2 text-xs text-red-400">{syncData.error}</p>
+            <p className="mt-2 text-xs text-red-500">{syncData.error}</p>
           )}
         </div>
       )}
 
       {/* Uptime Chart */}
-      <div className="rounded-lg border border-border/60 p-5">
+      <div className="rounded-lg border border-border p-5">
         <UptimeChart serviceId={serviceId} />
       </div>
 
       {/* Contract Deployments */}
-      <div className="border-t border-border/60 pt-6">
+      <div className="border-t border-border pt-6">
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
           On-Chain Contract
         </h3>
@@ -169,7 +169,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
               href={getContractExplorerLink(d)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3 transition-colors hover:border-border"
+              className="flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-surface"
             >
               <div className="flex items-center gap-3">
                 <span className="text-sm text-foreground">
@@ -187,14 +187,14 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       {/* Recent Checks Table */}
       {history && history.length > 0 && (
-        <div className="border-t border-border/60 pt-6">
+        <div className="border-t border-border pt-6">
           <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted">
             Recent Checks
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border/60 text-left text-xs text-muted">
+                <tr className="border-b border-border text-left text-xs text-muted">
                   <th className="pb-3 pr-4 font-medium">Time</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 pr-4 font-medium">Details</th>
@@ -216,18 +216,18 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     return (
                       <tr
                         key={i}
-                        className="border-b border-border/40 last:border-0"
+                        className="border-b border-border/50 last:border-0"
                       >
                         <td className="py-2.5 pr-4 font-mono text-xs text-muted">
                           {formatTimestamp(ts)}
                         </td>
                         <td className="py-2.5 pr-4">
                           {check.is_up ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                               <CheckCircle className="h-3 w-3" /> Up
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
                               <XCircle className="h-3 w-3" /> Down
                             </span>
                           )}
@@ -247,7 +247,7 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                               Tx
                             </a>
                           ) : (
-                            <span className="text-xs text-zinc-700">—</span>
+                            <span className="text-xs text-zinc-300">—</span>
                           )}
                         </td>
                       </tr>

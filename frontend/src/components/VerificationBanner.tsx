@@ -10,7 +10,7 @@ import {
 
 export function VerificationBanner() {
   return (
-    <section className="border-t border-border/60 pt-8">
+    <section className="border-t border-border pt-8">
       <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
         On-Chain Verification
       </h2>
@@ -55,7 +55,7 @@ function ContractRow({
   };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
       <div className="flex items-center gap-3">
         <span className="text-sm text-foreground">
           {deployment.networkName}
@@ -69,7 +69,7 @@ function ContractRow({
           title="Copy address"
         >
           {copied ? (
-            <Check className="h-3 w-3 text-emerald-400" />
+            <Check className="h-3 w-3 text-emerald-500" />
           ) : (
             <Copy className="h-3 w-3" />
           )}

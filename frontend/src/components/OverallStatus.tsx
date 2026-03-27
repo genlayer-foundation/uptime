@@ -27,14 +27,14 @@ export function OverallStatus({ services }: OverallStatusProps) {
 
   if (!hasData) {
     return (
-      <div className="border-b border-border/60 pb-6">
+      <div className="border-b border-border pb-6">
         <p className="text-sm text-muted">Waiting for first check...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-between border-b border-border/60 pb-6">
+    <div className="flex items-center justify-between border-b border-border pb-6">
       <div className="flex items-center gap-3">
         <div
           className={`h-2.5 w-2.5 rounded-full ${allUp ? "bg-emerald-500" : "bg-red-500"}`}
@@ -61,8 +61,8 @@ export function OverallStatus({ services }: OverallStatusProps) {
         <span
           className={`rounded-full border px-2.5 py-1 text-xs ${
             slaCompliant
-              ? "border-emerald-500/30 text-emerald-400"
-              : "border-red-500/30 text-red-400"
+              ? "border-emerald-200 text-emerald-600"
+              : "border-red-200 text-red-600"
           }`}
         >
           {slaCompliant ? "SLA Met" : "Below SLA"}

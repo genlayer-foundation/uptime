@@ -24,7 +24,7 @@ export function HeroSection() {
         </h1>
         <p className="mt-4 text-base leading-relaxed text-muted">
           Every health check independently verified by multiple validators
-          and stored permanently on-chain. Minutes, not months.
+          and stored permanently on-chain.
         </p>
 
         <div className="mt-8 flex items-center gap-6">
@@ -55,7 +55,7 @@ export function HeroSection() {
       </div>
 
       {/* Status strip */}
-      <div className="mt-10 flex items-center gap-8 border-t border-border/60 pt-6">
+      <div className="mt-10 flex items-center gap-8 border-t border-border pt-6">
         <div className="flex items-center gap-2">
           <div
             className={`h-2 w-2 rounded-full ${
@@ -63,7 +63,7 @@ export function HeroSection() {
                 ? allUp
                   ? "bg-emerald-500"
                   : "bg-red-500"
-                : "bg-zinc-500 animate-pulse"
+                : "bg-zinc-300 animate-pulse"
             }`}
           />
           <span className="text-sm text-muted">

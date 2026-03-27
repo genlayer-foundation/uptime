@@ -27,12 +27,12 @@ export function StatusCard({ serviceId, status }: StatusCardProps) {
   return (
     <Link
       href={`/service/${serviceId}`}
-      className="block rounded-lg border border-border/60 p-5 transition-colors hover:border-border"
+      className="block rounded-lg border border-border p-5 transition-colors hover:border-zinc-300 hover:bg-surface"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2.5">
           <div
-            className={`h-2 w-2 rounded-full ${hasData ? (isUp ? "bg-emerald-500" : "bg-red-500") : "bg-zinc-600"}`}
+            className={`h-2 w-2 rounded-full ${hasData ? (isUp ? "bg-emerald-500" : "bg-red-500") : "bg-zinc-300"}`}
           />
           <div>
             <h3 className="text-sm font-medium text-foreground">{service.name}</h3>
@@ -72,7 +72,7 @@ export function StatusCard({ serviceId, status }: StatusCardProps) {
       )}
 
       {hasData && !isUp && status.latest?.extra_data && (
-        <p className="mt-3 truncate text-xs text-red-400">
+        <p className="mt-3 truncate text-xs text-red-500">
           {status.latest.extra_data}
         </p>
       )}

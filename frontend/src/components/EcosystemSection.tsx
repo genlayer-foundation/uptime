@@ -48,7 +48,7 @@ const ECOSYSTEM_CARDS = [
 
 export function EcosystemSection() {
   return (
-    <section className="border-t border-border/60 pt-8">
+    <section className="border-t border-border pt-8">
       <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
         Build Your Own
       </h2>
@@ -56,7 +56,7 @@ export function EcosystemSection() {
         Intelligent Contracts can do more than uptime monitoring.
       </p>
 
-      <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
+      <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
         {ECOSYSTEM_CARDS.map((card) => (
           <div
             key={card.title}

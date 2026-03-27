@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --muted: #a1a1aa;
-  --border: #27272a;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
   --purple: #9b6af6;
+  --surface: #fafafa;
 }
 
 @theme inline {
@@ -14,6 +15,7 @@
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-purple: var(--purple);
+  --color-surface: var(--surface);
   --font-sans: var(--font-dm-sans);
   --font-mono: var(--font-dm-mono);
 }

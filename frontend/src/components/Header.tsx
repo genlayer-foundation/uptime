@@ -12,7 +12,7 @@ export function Header() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-border/60 sticky top-0 z-50 bg-background/90 backdrop-blur-sm">
+    <header className="border-b border-border sticky top-0 z-50 bg-background/90 backdrop-blur-sm">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-4">
         <Link href="/" className="flex items-center gap-2.5">
           <svg

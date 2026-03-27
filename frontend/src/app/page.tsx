@@ -14,7 +14,7 @@ export default function Home() {
         <EcosystemSection />
       </div>
 
-      <footer className="mt-16 flex items-center justify-between border-t border-border/60 pt-6 pb-8">
+      <footer className="mt-16 flex items-center justify-between border-t border-border pt-6 pb-8">
         <div className="flex items-center gap-2 text-xs text-muted">
           <svg
             viewBox="0 0 24 24"
@@ -25,7 +25,7 @@ export default function Home() {
           >
             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
           </svg>
-          <span>Trustless uptime monitoring</span>
+          <span>Uptime by GenLayer</span>
         </div>
         <div className="flex items-center gap-6 text-xs text-muted">
           <a
@@ -43,14 +43,6 @@ export default function Home() {
             className="transition-colors hover:text-foreground"
           >
             Docs
-          </a>
-          <a
-            href="https://genlayer.com"
-            className="transition-colors hover:text-foreground"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Powered by GenLayer
           </a>
         </div>
       </footer>

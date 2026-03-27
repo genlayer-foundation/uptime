@@ -21,7 +21,7 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
 
   if (isLoading) {
     return (
-      <div className="h-32 animate-pulse rounded-lg bg-zinc-900" />
+      <div className="h-32 animate-pulse rounded-lg bg-surface" />
     );
   }
 
@@ -50,13 +50,13 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
         <AreaChart data={data}>
           <defs>
             <linearGradient id={`gradient-${serviceId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#9B6AF6" stopOpacity={0.15} />
+              <stop offset="0%" stopColor="#9B6AF6" stopOpacity={0.12} />
               <stop offset="100%" stopColor="#9B6AF6" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 10, fill: "#71717a" }}
+            tick={{ fontSize: 10, fill: "#a1a1aa" }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
@@ -64,11 +64,11 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
           <YAxis domain={[0, 1]} hide />
           <Tooltip
             contentStyle={{
-              backgroundColor: "#09090b",
-              border: "1px solid #27272a",
+              backgroundColor: "#ffffff",
+              border: "1px solid #e4e4e7",
               borderRadius: "6px",
               fontSize: "12px",
-              color: "#a1a1aa",
+              color: "#71717a",
             }}
             formatter={(value) => [Number(value) === 1 ? "Up" : "Down", "Status"]}
           />
