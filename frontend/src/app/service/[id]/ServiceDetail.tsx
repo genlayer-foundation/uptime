@@ -10,31 +10,14 @@ import {
   getTxExplorerLink,
   shortenAddress,
 } from "@/lib/utils/contracts";
-import { formatUptime, timeAgo, uptimeColor, statusColor, formatTimestamp } from "@/lib/utils/format";
+import { formatUptime, timeAgo, uptimeColor, formatTimestamp } from "@/lib/utils/format";
 import { UptimeChart } from "@/components/UptimeChart";
 import {
-  Activity,
-  Globe,
-  Server,
   ExternalLink,
   ArrowUpRight,
-  Clock,
   CheckCircle,
   XCircle,
-  FileCode,
-  Layers,
 } from "lucide-react";
-
-function CategoryIcon({ category }: { category: string }) {
-  switch (category) {
-    case "rpc":
-      return <Server className="h-5 w-5" />;
-    case "explorer":
-      return <Globe className="h-5 w-5" />;
-    default:
-      return <Activity className="h-5 w-5" />;
-  }
-}
 
 function checkTypeLabel(category: string): string {
   switch (category) {
@@ -64,135 +47,87 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   const deployNetworkId = process.env.NEXT_PUBLIC_DEPLOY_NETWORK || "studionet";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div
-            className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-              hasData
-                ? isUp
-                  ? "bg-emerald-500/20 text-emerald-400"
-                  : "bg-red-500/20 text-red-400"
-                : "bg-gray-500/20 text-gray-400"
-            }`}
-          >
-            <CategoryIcon category={service.category} />
-          </div>
-          <div>
-            <h1
-              className="text-2xl font-semibold text-white"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
+      <div className="flex items-start justify-between border-b border-border/60 pb-6">
+        <div>
+          <div className="flex items-center gap-3">
+            <div
+              className={`h-2.5 w-2.5 rounded-full ${
+                hasData ? (isUp ? "bg-emerald-500" : "bg-red-500") : "bg-zinc-600"
+              }`}
+            />
+            <h1 className="text-xl font-semibold text-foreground">
               {service.name}
             </h1>
-            <p className="text-sm text-gray-500">{service.description}</p>
-            <a
-              href={service.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-purple transition-colors"
+            <span
+              className={`text-sm ${
+                hasData
+                  ? isUp
+                    ? "text-emerald-400"
+                    : "text-red-400"
+                  : "text-muted"
+              }`}
             >
-              {service.url}
-              <ArrowUpRight className="h-3 w-3" />
-            </a>
+              {hasData ? (isUp ? "Operational" : "Down") : "No data"}
+            </span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-3 w-3 rounded-full ${
-              hasData ? statusColor(isUp) : "bg-gray-500"
-            } ${isUp ? "shadow-[0_0_8px_rgba(16,185,129,0.6)]" : ""}`}
-          />
-          <span
-            className={`text-sm font-medium ${
-              hasData
-                ? isUp
-                  ? "text-emerald-400"
-                  : "text-red-400"
-                : "text-gray-400"
-            }`}
+          <p className="mt-1 text-sm text-muted">{service.description}</p>
+          <a
+            href={service.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
           >
-            {hasData ? (isUp ? "Operational" : "Down") : "No data"}
-          </span>
+            {service.url}
+            <ArrowUpRight className="h-3 w-3" />
+          </a>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Status"
-          value={hasData ? (isUp ? "Up" : "Down") : "Unknown"}
-          icon={isUp ? <CheckCircle className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-red-400" />}
-        />
-        <StatCard
-          label="Check Type"
-          value={checkTypeLabel(service.category)}
-          icon={<Server className="h-4 w-4 text-purple" />}
-        />
-        <StatCard
+      {/* Stats */}
+      <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-4">
+        <StatCell label="Status" value={hasData ? (isUp ? "Up" : "Down") : "—"} />
+        <StatCell label="Check Type" value={checkTypeLabel(service.category)} />
+        <StatCell
           label="Last Checked"
           value={serviceStatus?.latest ? timeAgo(serviceStatus.latest.timestamp) : "Never"}
-          icon={<Clock className="h-4 w-4 text-purple" />}
         />
-        <StatCard
-          label="Total Checks"
-          value={String(serviceStatus?.total_checks ?? 0)}
-          icon={<Activity className="h-4 w-4 text-purple" />}
-        />
+        <StatCell label="Total Checks" value={String(serviceStatus?.total_checks ?? 0)} mono />
       </div>
 
       {/* Uptime Stats */}
       {hasData && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <UptimeStatCard
-            period="24 Hours"
-            value={serviceStatus?.uptime_24h ?? 0}
-          />
-          <UptimeStatCard
-            period="7 Days"
-            value={serviceStatus?.uptime_7d ?? 0}
-          />
-          <UptimeStatCard
-            period="30 Days"
-            value={serviceStatus?.uptime_30d ?? 0}
-          />
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
+          <UptimeCell period="24 Hours" value={serviceStatus?.uptime_24h ?? 0} />
+          <UptimeCell period="7 Days" value={serviceStatus?.uptime_7d ?? 0} />
+          <UptimeCell period="30 Days" value={serviceStatus?.uptime_30d ?? 0} />
         </div>
       )}
 
       {/* ZKSync Block Sync Status */}
       {isZksync && syncData && syncData.rpcBlock && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-purple" />
-            <h3 className="text-sm font-medium text-gray-300">
-              ZKSync Chain Status
-            </h3>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-lg border border-border/60 p-5">
+          <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted">
+            ZKSync Chain Status
+          </h3>
+          <div className="grid gap-6 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                Latest Block
-              </p>
-              <p className="font-mono text-lg text-white">
+              <p className="text-xs text-muted">Latest Block</p>
+              <p className="mt-1 font-mono text-lg text-foreground">
                 {syncData.rpcBlock.toLocaleString()}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                Block Timestamp
-              </p>
-              <p className="font-mono text-sm text-white">
+              <p className="text-xs text-muted">Block Timestamp</p>
+              <p className="mt-1 font-mono text-sm text-foreground">
                 {new Date(syncData.blockTimestamp * 1000).toLocaleString()}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                Block Age
-              </p>
+              <p className="text-xs text-muted">Block Age</p>
               <p
-                className={`font-mono text-lg ${
+                className={`mt-1 font-mono text-lg ${
                   syncData.secondsBehind <= 30
                     ? "text-emerald-400"
                     : syncData.secondsBehind <= 120
@@ -215,21 +150,17 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
       )}
 
       {/* Uptime Chart */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+      <div className="rounded-lg border border-border/60 p-5">
         <UptimeChart serviceId={serviceId} />
       </div>
 
       {/* Contract Deployments */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <FileCode className="h-4 w-4 text-purple" />
-          <h3 className="text-sm font-medium text-gray-300">
-            On-Chain Contract
-          </h3>
-        </div>
-        <p className="mb-3 text-xs text-gray-500">
-          Check results for this service are stored in the UptimeMonitor
-          contract deployed on these networks:
+      <div className="border-t border-border/60 pt-6">
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
+          On-Chain Contract
+        </h3>
+        <p className="mb-4 text-xs text-muted">
+          Check results are stored in the UptimeMonitor contract:
         </p>
         <div className="space-y-2">
           {CONTRACT_DEPLOYMENTS.map((d) => (
@@ -238,18 +169,17 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
               href={getContractExplorerLink(d)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-4 py-2.5 transition-colors hover:border-purple/30"
+              className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3 transition-colors hover:border-border"
             >
               <div className="flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-foreground">
                   {d.networkName}
                 </span>
-                <code className="font-mono text-xs text-gray-500">
+                <code className="font-mono text-xs text-muted">
                   {shortenAddress(d.address)}
                 </code>
               </div>
-              <ExternalLink className="h-3.5 w-3.5 text-gray-500" />
+              <ExternalLink className="h-3.5 w-3.5 text-muted" />
             </a>
           ))}
         </div>
@@ -257,18 +187,18 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
 
       {/* Recent Checks Table */}
       {history && history.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-          <h3 className="mb-3 text-sm font-medium text-gray-300">
+        <div className="border-t border-border/60 pt-6">
+          <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted">
             Recent Checks
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/5 text-left text-xs text-gray-500">
-                  <th className="pb-2 pr-4">Time</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2 pr-4">Details</th>
-                  <th className="pb-2">Verify</th>
+                <tr className="border-b border-border/60 text-left text-xs text-muted">
+                  <th className="pb-3 pr-4 font-medium">Time</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Details</th>
+                  <th className="pb-3 font-medium">Verify</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,12 +216,12 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                     return (
                       <tr
                         key={i}
-                        className="border-b border-white/5 last:border-0"
+                        className="border-b border-border/40 last:border-0"
                       >
-                        <td className="py-2 pr-4 font-mono text-xs text-gray-400">
+                        <td className="py-2.5 pr-4 font-mono text-xs text-muted">
                           {formatTimestamp(ts)}
                         </td>
-                        <td className="py-2 pr-4">
+                        <td className="py-2.5 pr-4">
                           {check.is_up ? (
                             <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                               <CheckCircle className="h-3 w-3" /> Up
@@ -302,22 +232,22 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
                             </span>
                           )}
                         </td>
-                        <td className="py-2 pr-4 font-mono text-xs text-gray-500">
-                          {check.extra_data || "-"}
+                        <td className="py-2.5 pr-4 font-mono text-xs text-muted">
+                          {check.extra_data || "—"}
                         </td>
-                        <td className="py-2">
+                        <td className="py-2.5">
                           {txHash ? (
                             <a
                               href={getTxExplorerLink(deployNetworkId, txHash)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-purple hover:underline"
+                              className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
                             >
                               <ExternalLink className="h-3 w-3" />
                               Tx
                             </a>
                           ) : (
-                            <span className="text-xs text-gray-600">-</span>
+                            <span className="text-xs text-zinc-700">—</span>
                           )}
                         </td>
                       </tr>
@@ -332,27 +262,26 @@ export function ServiceDetail({ serviceId }: { serviceId: string }) {
   );
 }
 
-function StatCard({
+function StatCell({
   label,
   value,
-  icon,
+  mono,
 }: {
   label: string;
   value: string;
-  icon: React.ReactNode;
+  mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-2 flex items-center gap-2 text-gray-500">
-        {icon}
-        <span className="text-xs">{label}</span>
-      </div>
-      <p className="text-sm font-medium text-white">{value}</p>
+    <div className="bg-background p-4">
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`mt-1 text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}>
+        {value}
+      </p>
     </div>
   );
 }
 
-function UptimeStatCard({
+function UptimeCell({
   period,
   value,
 }: {
@@ -360,11 +289,9 @@ function UptimeStatCard({
   value: number;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <p className="text-[10px] uppercase tracking-wider text-gray-500">
-        Uptime {period}
-      </p>
-      <p className={`mt-1 font-mono text-2xl font-semibold ${uptimeColor(value)}`}>
+    <div className="bg-background p-4">
+      <p className="text-xs text-muted">Uptime {period}</p>
+      <p className={`mt-1 font-mono text-xl font-semibold ${uptimeColor(value)}`}>
         {formatUptime(value)}
       </p>
     </div>

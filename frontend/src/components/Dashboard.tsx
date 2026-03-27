@@ -4,7 +4,6 @@ import { useStatus } from "@/lib/hooks/useStatus";
 import { SERVICES } from "@/lib/utils/services";
 import { StatusCard } from "./StatusCard";
 import { OverallStatus } from "./OverallStatus";
-import { RefreshCw } from "lucide-react";
 
 export function Dashboard() {
   const { data: status, isLoading, dataUpdatedAt } = useStatus();
@@ -12,12 +11,12 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-24 animate-pulse rounded-xl bg-white/5" />
+        <div className="h-12 animate-pulse rounded-lg bg-zinc-900" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 7 }).map((_, i) => (
             <div
               key={i}
-              className="h-40 animate-pulse rounded-xl bg-white/5"
+              className="h-32 animate-pulse rounded-lg bg-zinc-900"
             />
           ))}
         </div>
@@ -32,16 +31,17 @@ export function Dashboard() {
       <OverallStatus services={services} />
 
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-gray-400">Service Status</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
+          Services
+        </h2>
         {dataUpdatedAt > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-gray-600">
-            <RefreshCw className="h-3 w-3" />
+          <span className="text-xs text-muted">
             Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
           </span>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SERVICES.map((service) => (
           <StatusCard
             key={service.id}

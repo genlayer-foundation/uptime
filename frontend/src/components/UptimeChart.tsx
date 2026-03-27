@@ -21,13 +21,13 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
 
   if (isLoading) {
     return (
-      <div className="h-32 animate-pulse rounded-lg bg-white/5" />
+      <div className="h-32 animate-pulse rounded-lg bg-zinc-900" />
     );
   }
 
   if (!checks || checks.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-white/5 bg-white/[0.02] text-xs text-gray-600">
+      <div className="flex h-32 items-center justify-center text-xs text-muted">
         No history
       </div>
     );
@@ -43,20 +43,20 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
 
   return (
     <div>
-      <h4 className="mb-2 text-xs font-medium text-gray-400">
+      <h4 className="mb-3 text-xs text-muted">
         {service?.name ?? serviceId} — Last {checks.length} checks
       </h4>
       <ResponsiveContainer width="100%" height={120}>
         <AreaChart data={data}>
           <defs>
             <linearGradient id={`gradient-${serviceId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#9B6AF6" stopOpacity={0.3} />
+              <stop offset="0%" stopColor="#9B6AF6" stopOpacity={0.15} />
               <stop offset="100%" stopColor="#9B6AF6" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 10, fill: "#666" }}
+            tick={{ fontSize: 10, fill: "#71717a" }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
@@ -64,10 +64,11 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
           <YAxis domain={[0, 1]} hide />
           <Tooltip
             contentStyle={{
-              backgroundColor: "#1a1a2e",
-              border: "1px solid rgba(155,106,246,0.3)",
-              borderRadius: "8px",
+              backgroundColor: "#09090b",
+              border: "1px solid #27272a",
+              borderRadius: "6px",
               fontSize: "12px",
+              color: "#a1a1aa",
             }}
             formatter={(value) => [Number(value) === 1 ? "Up" : "Down", "Status"]}
           />
@@ -76,7 +77,7 @@ export function UptimeChart({ serviceId }: UptimeChartProps) {
             dataKey="up"
             stroke="#9B6AF6"
             fill={`url(#gradient-${serviceId})`}
-            strokeWidth={2}
+            strokeWidth={1.5}
           />
         </AreaChart>
       </ResponsiveContainer>

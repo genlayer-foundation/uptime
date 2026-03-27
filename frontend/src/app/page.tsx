@@ -5,28 +5,54 @@ import { EcosystemSection } from "@/components/EcosystemSection";
 
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-12">
+      <HeroSection />
+
       <div className="space-y-10">
-        <HeroSection />
-
         <Dashboard />
-
         <VerificationBanner />
-
         <EcosystemSection />
       </div>
 
-      <footer className="mt-12 border-t border-white/5 pt-6 pb-8 text-center text-xs text-gray-600">
-        Powered by{" "}
-        <a
-          href="https://genlayer.com"
-          className="text-purple hover:underline"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GenLayer
-        </a>{" "}
-        Intelligent Contracts
+      <footer className="mt-16 flex items-center justify-between border-t border-border/60 pt-6 pb-8">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="h-3.5 w-3.5 text-purple"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+          <span>Trustless uptime monitoring</span>
+        </div>
+        <div className="flex items-center gap-6 text-xs text-muted">
+          <a
+            href="https://github.com/genlayer-foundation/uptime"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://docs.genlayer.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            Docs
+          </a>
+          <a
+            href="https://genlayer.com"
+            className="transition-colors hover:text-foreground"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Powered by GenLayer
+          </a>
+        </div>
       </footer>
     </main>
   );

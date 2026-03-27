@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowRight, Layers, BookOpen, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 const ECOSYSTEM_CARDS = [
   {
-    icon: <Zap className="h-5 w-5" />,
     title: "Prediction Markets",
     description:
       "Build prediction markets on real-world events powered by AI consensus.",
@@ -20,7 +19,6 @@ const ECOSYSTEM_CARDS = [
     ],
   },
   {
-    icon: <Layers className="h-5 w-5" />,
     title: "Cross-Chain Bridge",
     description:
       "Bridge data and assets across chains with GenLayer + LayerZero.",
@@ -32,7 +30,6 @@ const ECOSYSTEM_CARDS = [
     ],
   },
   {
-    icon: <BookOpen className="h-5 w-5" />,
     title: "Developer Docs",
     description:
       "Build your own Intelligent Contract. Start from the boilerplate or fork this project.",
@@ -51,43 +48,34 @@ const ECOSYSTEM_CARDS = [
 
 export function EcosystemSection() {
   return (
-    <section>
-      <div className="mb-5">
-        <h2
-          className="text-lg font-semibold text-white"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Build Your Own
-        </h2>
-        <p className="text-sm text-gray-500">
-          Intelligent Contracts can do more than uptime monitoring.
-        </p>
-      </div>
+    <section className="border-t border-border/60 pt-8">
+      <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
+        Build Your Own
+      </h2>
+      <p className="mt-2 text-sm text-muted">
+        Intelligent Contracts can do more than uptime monitoring.
+      </p>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
         {ECOSYSTEM_CARDS.map((card) => (
           <div
             key={card.title}
-            className="rounded-xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-purple-500/20"
+            className="bg-background p-5"
           >
-            <div className="mb-3 text-purple">{card.icon}</div>
-            <h3
-              className="mb-2 text-sm font-semibold text-white"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
+            <h3 className="text-sm font-medium text-foreground">
               {card.title}
             </h3>
-            <p className="mb-4 text-xs leading-relaxed text-gray-500">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               {card.description}
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-wrap gap-4">
               {card.links.map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-purple hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
                 >
                   {link.label}
                   <ArrowRight className="h-3 w-3" />
