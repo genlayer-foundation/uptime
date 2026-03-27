@@ -23,8 +23,18 @@ export function HeroSection() {
           <span className="text-muted">that can&apos;t lie.</span>
         </h1>
         <p className="mt-4 text-base leading-relaxed text-muted">
-          Every health check independently verified by multiple validators
-          and stored permanently on-chain.
+          Every health check verified by independent validators and stored
+          on-chain. Integrate with{" "}
+          <a
+            href="https://internetcourt.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground hover:text-purple transition-colors"
+          >
+            Internet Court
+          </a>{" "}
+          to create auto-payable SLAs — trustlessly enforced, with
+          cryptographic evidence for every claim.
         </p>
 
         <div className="mt-8 flex items-center gap-6">

@@ -15,18 +15,6 @@ export default function Home() {
       </div>
 
       <footer className="mt-16 flex items-center justify-between border-t border-border pt-6 pb-8">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="h-3.5 w-3.5 text-purple"
-            stroke="currentColor"
-            strokeWidth="2.5"
-          >
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-          </svg>
-          <span>Uptime by GenLayer</span>
-        </div>
         <div className="flex items-center gap-6 text-xs text-muted">
           <a
             href="https://github.com/genlayer-foundation/uptime"
@@ -45,6 +33,14 @@ export default function Home() {
             Docs
           </a>
         </div>
+        <a
+          href="https://genlayer.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-muted transition-colors hover:text-foreground"
+        >
+          Powered by GenLayer
+        </a>
       </footer>
     </main>
   );
