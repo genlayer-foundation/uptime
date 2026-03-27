@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { Providers } from "@/components/Providers";
+import { Header } from "@/components/Header";
 import "./globals.css";
 
 const inter = Inter({
@@ -14,9 +15,24 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "GenLayer Uptime Monitor",
+  title: "Uptime by GenLayer — Trustless Infrastructure Monitoring",
   description:
-    "Trustless uptime monitoring for GenLayer infrastructure services",
+    "The first uptime monitor that can't lie. Every health check independently verified by multiple validators and stored permanently on-chain.",
+  metadataBase: new URL("https://uptime.dev.genlayer.foundation"),
+  openGraph: {
+    title: "Uptime by GenLayer",
+    description:
+      "Every check verified. Every result on-chain. Trustless uptime monitoring for GenLayer infrastructure.",
+    url: "https://uptime.dev.genlayer.foundation",
+    siteName: "Uptime by GenLayer",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Uptime by GenLayer",
+    description:
+      "The first uptime monitor that can't lie. Consensus-verified health checks stored on-chain.",
+  },
 };
 
 export default function RootLayout({
@@ -30,7 +46,10 @@ export default function RootLayout({
       className={`${inter.variable} ${spaceGrotesk.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <Providers>{children}</Providers>
+        <Providers>
+          <Header />
+          <div className="flex-1">{children}</div>
+        </Providers>
       </body>
     </html>
   );

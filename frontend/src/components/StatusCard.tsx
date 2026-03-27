@@ -1,6 +1,7 @@
 "use client";
 
-import { Activity, Globe, Server, ArrowUpRight } from "lucide-react";
+import { Activity, Globe, Server } from "lucide-react";
+import Link from "next/link";
 import { getServiceById } from "@/lib/utils/services";
 import { formatUptime, timeAgo, uptimeColor, statusColor } from "@/lib/utils/format";
 
@@ -36,7 +37,10 @@ export function StatusCard({ serviceId, status }: StatusCardProps) {
   const hasData = status.latest !== null;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all hover:border-purple-500/30 hover:bg-white/[0.07]">
+    <Link
+      href={`/service/${serviceId}`}
+      className="block rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all hover:border-purple-500/30 hover:bg-white/[0.07]"
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -49,15 +53,7 @@ export function StatusCard({ serviceId, status }: StatusCardProps) {
                 <CategoryIcon category={service.category} />
               </span>
             </div>
-            <a
-              href={service.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-purple-400 transition-colors"
-            >
-              {new URL(service.url).hostname}
-              <ArrowUpRight className="h-3 w-3" />
-            </a>
+            <p className="text-xs text-gray-500">{service.description}</p>
           </div>
         </div>
         {hasData && (
@@ -108,6 +104,6 @@ export function StatusCard({ serviceId, status }: StatusCardProps) {
           )}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

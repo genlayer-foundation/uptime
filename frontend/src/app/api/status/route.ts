@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getReadClient, NETWORKS, type NetworkId } from "@/lib/genlayer/client";
 import { SERVICES } from "@/lib/utils/services";
+import { getCachedStatus, setCachedStatus } from "@/lib/cache/kv";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +9,25 @@ const CHECKS_24H = 24;
 const CHECKS_7D = 168;
 const CHECKS_30D = 720;
 
+const CACHE_TTL_SECONDS = 2 * 60 * 60; // 2 hours
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tryKvCache(): Promise<ReturnType<typeof getCachedStatus>> {
+  try {
+    const cached = await getCachedStatus();
+    if (cached && cached.last_sync) {
+      const age = Math.floor(Date.now() / 1000) - cached.last_sync;
+      if (age < CACHE_TTL_SECONDS) {
+        return cached;
+      }
+    }
+  } catch {
+    // KV not configured or unavailable — fall through to contract
+  }
+  return null;
 }
 
 async function fetchFromContract() {
@@ -88,7 +106,28 @@ async function fetchFromContract() {
     }
   }
 
-  return { services, last_sync: Math.floor(Date.now() / 1000) };
+  const status = {
+    services: services as Record<
+      string,
+      {
+        latest: { timestamp: number; is_up: boolean; extra_data: string } | null;
+        uptime_24h: number;
+        uptime_7d: number;
+        uptime_30d: number;
+        total_checks: number;
+      }
+    >,
+    last_sync: Math.floor(Date.now() / 1000),
+  };
+
+  // Warm KV cache
+  try {
+    await setCachedStatus(status);
+  } catch {
+    // KV not configured — ignore
+  }
+
+  return status;
 }
 
 async function fetchHistory(serviceId: string, limit: number) {
@@ -129,10 +168,23 @@ export async function GET(request: Request) {
       return NextResponse.json(checks);
     }
 
+    // Try KV cache first
+    const cached = await tryKvCache();
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          "X-Data-Source": "kv-cache",
+        },
+      });
+    }
+
+    // Fall through to contract reads
     const status = await fetchFromContract();
     return NextResponse.json(status, {
       headers: {
         "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        "X-Data-Source": "contract",
       },
     });
   } catch (error) {

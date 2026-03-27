@@ -4,6 +4,7 @@ export interface CachedCheck {
   timestamp: number;
   is_up: boolean;
   extra_data: string;
+  txHash?: string;
 }
 
 export interface CachedStatus {
@@ -82,4 +83,43 @@ export async function getCachedStatus(): Promise<CachedStatus | null> {
 export async function setCachedStatus(status: CachedStatus): Promise<void> {
   const redis = getRedis();
   await redis.set("cached_status", JSON.stringify(status));
+}
+
+export async function storeTxHash(
+  networkId: string,
+  timestamp: number,
+  txHash: string
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(`tx:${networkId}:${timestamp}`, txHash, { ex: 60 * 60 * 24 * 90 });
+}
+
+export async function getTxHash(
+  networkId: string,
+  timestamp: number
+): Promise<string | null> {
+  const redis = getRedis();
+  return await redis.get<string>(`tx:${networkId}:${timestamp}`);
+}
+
+export async function getLatestTxHash(
+  networkId: string
+): Promise<{ txHash: string; timestamp: number } | null> {
+  const redis = getRedis();
+  const val = await redis.get<string>(`latest_tx:${networkId}`);
+  if (!val) return null;
+  const parsed = JSON.parse(val);
+  return parsed;
+}
+
+export async function setLatestTxHash(
+  networkId: string,
+  txHash: string,
+  timestamp: number
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(
+    `latest_tx:${networkId}`,
+    JSON.stringify({ txHash, timestamp })
+  );
 }

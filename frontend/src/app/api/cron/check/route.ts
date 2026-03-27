@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getWriteClient, NETWORKS, type NetworkId } from "@/lib/genlayer/client";
+import { storeTxHash, setLatestTxHash } from "@/lib/cache/kv";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -60,6 +61,16 @@ export async function GET(request: Request) {
       success: isSuccess,
       ...(!isSuccess && { error: `status=${txStatus}` }),
     };
+
+    // Store txHash in KV for on-chain verification links
+    if (txHash) {
+      try {
+        await storeTxHash(networkId, Number(timestamp), txHash);
+        await setLatestTxHash(networkId, txHash, Number(timestamp));
+      } catch (kvError) {
+        console.warn("Failed to store txHash in KV:", kvError);
+      }
+    }
   } catch (error) {
     results[networkId] = {
       success: false,

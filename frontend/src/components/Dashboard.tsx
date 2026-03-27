@@ -4,7 +4,6 @@ import { useStatus } from "@/lib/hooks/useStatus";
 import { SERVICES } from "@/lib/utils/services";
 import { StatusCard } from "./StatusCard";
 import { OverallStatus } from "./OverallStatus";
-import { UptimeChart } from "./UptimeChart";
 import { RefreshCw } from "lucide-react";
 
 export function Dashboard() {
@@ -58,22 +57,6 @@ export function Dashboard() {
             }
           />
         ))}
-      </div>
-
-      <div>
-        <h2 className="mb-4 text-sm font-medium text-gray-400">
-          Uptime History
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {SERVICES.map((service) => (
-            <div
-              key={service.id}
-              className="rounded-xl border border-white/10 bg-white/5 p-4"
-            >
-              <UptimeChart serviceId={service.id} />
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
