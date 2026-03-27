@@ -5,21 +5,34 @@ import {
   testnetBradbury,
 } from "genlayer-js/chains";
 
+function getContractAddress(key: string): `0x${string}` | undefined {
+  const val =
+    process.env[key] || process.env[`NEXT_PUBLIC_${key}`];
+  if (!val || val === "undefined") return undefined;
+  return val.trim() as `0x${string}`;
+}
+
 export const NETWORKS = {
   studionet: {
     name: "Studionet",
     chain: studionet,
-    contractAddress: process.env.NEXT_PUBLIC_CONTRACT_STUDIONET as `0x${string}`,
+    get contractAddress() {
+      return getContractAddress("CONTRACT_STUDIONET");
+    },
   },
   asimov: {
     name: "Asimov",
     chain: testnetAsimov,
-    contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ASIMOV as `0x${string}`,
+    get contractAddress() {
+      return getContractAddress("CONTRACT_ASIMOV");
+    },
   },
   bradbury: {
     name: "Bradbury",
     chain: testnetBradbury,
-    contractAddress: process.env.NEXT_PUBLIC_CONTRACT_BRADBURY as `0x${string}`,
+    get contractAddress() {
+      return getContractAddress("CONTRACT_BRADBURY");
+    },
   },
 } as const;
 
@@ -32,7 +45,9 @@ export function getReadClient(networkId: NetworkId) {
 
 export function getWriteClient(networkId: NetworkId) {
   const network = NETWORKS[networkId];
-  const privateKey = process.env.PRIVATE_KEY as `0x${string}`;
+  const privateKey = process.env.PRIVATE_KEY?.trim() as
+    | `0x${string}`
+    | undefined;
   if (!privateKey) throw new Error("PRIVATE_KEY not configured");
   const account = createAccount(privateKey);
   return createClient({ chain: network.chain, account });
