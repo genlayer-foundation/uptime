@@ -80,10 +80,34 @@ export function SlaIntegrationContent() {
         </div>
       </Section>
 
+      {/* Deployed Contracts */}
+      <Section
+        title="Deployed Contracts"
+        subtitle="SLA Verifier and two agreements on Studionet"
+      >
+        <div className="space-y-2">
+          <ContractRow
+            label="SLA Verifier"
+            address="0x8D926888B6781d9C987dB89693E771D702366D85"
+            description="Base verification contract (10% protocol fee)"
+          />
+          <ContractRow
+            label="SLA-001"
+            address="0x2A3139E97262F25DFd0B039D55cdD99c1C192B36"
+            description="GenLayer Labs → Matter Labs (ZKSync bridge)"
+          />
+          <ContractRow
+            label="SLA-002"
+            address="0x90287aec8e7028EF57Ad58fb9060a7Bdb3D5d548"
+            description="GenLayer Foundation → GenLayer Labs (RPCs + Explorers)"
+          />
+        </div>
+      </Section>
+
       {/* The Two Agreements */}
       <Section
-        title="Live Agreements"
-        subtitle="Two SLA contracts deployed on Studionet"
+        title="Agreement Details"
+        subtitle="Terms for each SLA contract"
       >
         <div className="space-y-4">
           <AgreementCard
@@ -215,7 +239,7 @@ export function SlaIntegrationContent() {
               &quot;GenLayer Labs failed to maintain 99.90% uptime on Asimov RPC
               during March 2026, as defined in SLA Agreement SLA-002 deployed at{" "}
               <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">
-                0x...
+                0x90287aec...D5d548
               </code>{" "}
               on Studionet.&quot;
             </p>
@@ -248,7 +272,7 @@ export function SlaIntegrationContent() {
               <div>
                 <p className="text-xs text-muted">Foundation submits</p>
                 <div className="mt-1.5 rounded border border-border bg-surface p-3 font-mono text-xs text-muted">
-                  <p>SLA Contract: 0x... (SLA-002)</p>
+                  <p>SLA Contract: 0x90287aec...D5d548</p>
                   <p>Method: check_compliance(720)</p>
                   <p>Asimov RPC uptime: 98.75%</p>
                   <p>Target: 99.90%</p>
@@ -377,8 +401,8 @@ export function SlaIntegrationContent() {
             <p>provider_name: &quot;Service Provider&quot;</p>
             <p>customer_address: 0x...</p>
             <p>provider_address: 0x...</p>
-            <p>sla_verifier_address: 0x...  // deployed verifier</p>
-            <p>uptime_monitor_address: 0x...  // existing monitor</p>
+            <p>sla_verifier_address: 0x8D926888...66D85</p>
+            <p>uptime_monitor_address: 0x1AE5Eb9a...f2573</p>
             <p>service_ids_json: &apos;[&quot;studionet_rpc&quot;, &quot;asimov_rpc&quot;]&apos;</p>
             <p>target_uptime_bps: 9950  // 99.50%</p>
             <p>penalty_model: &quot;tiered&quot;</p>
@@ -531,6 +555,37 @@ function AgreementCard({
         Penalty model: {penalty}
       </p>
     </div>
+  );
+}
+
+function ContractRow({
+  label,
+  address,
+  description,
+}: {
+  label: string;
+  address: string;
+  description: string;
+}) {
+  const explorerUrl = `https://explorer-studio.genlayer.com/contracts/${address}`;
+  return (
+    <a
+      href={explorerUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-surface"
+    >
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          <code className="font-mono text-xs text-muted">
+            {address.slice(0, 8)}...{address.slice(-4)}
+          </code>
+        </div>
+        <p className="mt-0.5 text-xs text-muted">{description}</p>
+      </div>
+      <ExternalLink className="h-3.5 w-3.5 text-muted" />
+    </a>
   );
 }
 
