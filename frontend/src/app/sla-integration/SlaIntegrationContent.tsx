@@ -20,7 +20,7 @@ export function SlaIntegrationContent() {
           <span className="text-muted">Trustlessly enforced.</span>
         </h1>
         <p className="mt-4 text-base leading-relaxed text-muted">
-          Combine on-chain uptime evidence from this monitor with{" "}
+          Combine on-chain uptime evidence with{" "}
           <a
             href="https://internetcourt.org"
             target="_blank"
@@ -34,192 +34,365 @@ export function SlaIntegrationContent() {
         </p>
       </div>
 
-      {/* How It Works */}
-      <Section title="How It Works">
+      {/* The Entities */}
+      <Section title="Who's Involved">
         <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
-          <StepCard
-            step={1}
-            title="Define the SLA"
-            description="Create a case in Internet Court with a clear statement: 'Service X maintained 99.5% uptime over the past 30 days.' Both parties agree on the evaluation criteria upfront."
+          <div className="bg-background p-5">
+            <p className="text-xs text-purple font-mono">Provider</p>
+            <h3 className="mt-1 text-sm font-medium text-foreground">Matter Labs</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Provides ZKSync bridge infrastructure. GenLayer Labs pays
+              them for maintaining bridge uptime.
+            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-wider text-muted">
+              Services covered
+            </p>
+            <p className="text-xs text-foreground">ZKSync Bridge</p>
+          </div>
+          <div className="bg-background p-5">
+            <p className="text-xs text-purple font-mono">Provider + Customer</p>
+            <h3 className="mt-1 text-sm font-medium text-foreground">GenLayer Labs</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Operates the Asimov, Bradbury, and Studionet networks.
+              Pays Matter Labs. Gets paid by GenLayer Foundation.
+            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-wider text-muted">
+              Services covered
+            </p>
+            <p className="text-xs text-foreground">
+              Asimov RPC, Bradbury RPC, Studionet Node
+            </p>
+          </div>
+          <div className="bg-background p-5">
+            <p className="text-xs text-purple font-mono">Customer</p>
+            <h3 className="mt-1 text-sm font-medium text-foreground">GenLayer Foundation</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Pays GenLayer Labs for infrastructure uptime across all
+              RPC endpoints and block explorers.
+            </p>
+            <p className="mt-3 text-[10px] uppercase tracking-wider text-muted">
+              Services covered
+            </p>
+            <p className="text-xs text-foreground">
+              All RPCs + Explorers
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      {/* The Two Agreements */}
+      <Section
+        title="Live Agreements"
+        subtitle="Two SLA contracts deployed on Studionet"
+      >
+        <div className="space-y-4">
+          <AgreementCard
+            id="SLA-001"
+            customer="GenLayer Labs"
+            provider="Matter Labs"
+            services={["zksync_bridge"]}
+            target="99.50%"
+            payment="5,000 USDC/month"
+            penalty="Tiered"
+            description="GenLayer Labs pays Matter Labs for ZKSync bridge availability.
+              Tiered penalties: 10% for minor breach (< 0.5% shortfall),
+              25% for major (0.5-2%), 50% for critical (2-5%), 100% for severe (> 5%)."
           />
-          <StepCard
-            step={2}
-            title="Evidence is automatic"
-            description="The Uptime contract stores every health check result on-chain. When a dispute arises, submit the contract address as evidence. The data is already there, immutable and timestamped."
-          />
-          <StepCard
-            step={3}
-            title="Verdict & payout"
-            description="Internet Court's AI validators independently evaluate the on-chain evidence against the SLA terms. The verdict triggers automatic payment or penalty. No human intervention needed."
+          <AgreementCard
+            id="SLA-002"
+            customer="GenLayer Foundation"
+            provider="GenLayer Labs"
+            services={[
+              "studionet_rpc",
+              "asimov_rpc",
+              "bradbury_rpc",
+              "explorer_studio",
+              "explorer_asimov",
+              "explorer_bradbury",
+            ]}
+            target="99.90%"
+            payment="20,000 USDC/month"
+            penalty="Linear"
+            description="GenLayer Foundation pays GenLayer Labs for all RPC and
+              Explorer infrastructure. Linear penalty: payment reduced
+              proportionally to the shortfall of the worst-performing service."
           />
         </div>
       </Section>
 
-      {/* Example Case */}
+      {/* How Settlement Works */}
+      <Section title="How Settlement Works">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
+          <StepCard
+            step={1}
+            title="Period ends"
+            description="At the end of each billing period, either party can call
+              settle_period() on the SLA Agreement contract. The contract
+              reads uptime data directly from the UptimeMonitor."
+          />
+          <StepCard
+            step={2}
+            title="Penalty calculated"
+            description="The SLA Verifier calculates the penalty based on the
+              agreed model (linear, tiered, or full). A 10% protocol fee
+              is taken from any penalty amount."
+          />
+          <StepCard
+            step={3}
+            title="Dispute or accept"
+            description="If either party disagrees, they open a case in Internet
+              Court. The court reads internet_court_summary() from the
+              SLA contract and evaluates the on-chain evidence."
+          />
+        </div>
+      </Section>
+
+      {/* Penalty Models */}
       <Section
-        title="Example Case"
-        subtitle="What an SLA dispute looks like in Internet Court"
+        title="Penalty Models"
+        subtitle="Each agreement chooses one model at creation"
+      >
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-surface">
+                <th className="p-4 text-left text-xs font-medium text-muted">Model</th>
+                <th className="p-4 text-left text-xs font-medium text-muted">How it works</th>
+                <th className="p-4 text-left text-xs font-medium text-muted">Example</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-border/50">
+                <td className="p-4 text-sm font-medium text-foreground">Linear</td>
+                <td className="p-4 text-sm text-muted">
+                  Penalty scales proportionally to the shortfall
+                </td>
+                <td className="p-4 font-mono text-xs text-muted">
+                  Target 99.50%, measured 99.00% = 0.50% shortfall.
+                  Penalty = payment x 50/9950 = ~0.5%
+                </td>
+              </tr>
+              <tr className="border-b border-border/50">
+                <td className="p-4 text-sm font-medium text-foreground">Tiered</td>
+                <td className="p-4 text-sm text-muted">
+                  Fixed penalty brackets based on severity
+                </td>
+                <td className="p-4 font-mono text-xs text-muted">
+                  {'< 0.50% shortfall: 10% penalty'}
+                  <br />
+                  {'0.50-2.00%: 25% penalty'}
+                  <br />
+                  {'2.00-5.00%: 50% penalty'}
+                  <br />
+                  {'> 5.00%: 100% penalty'}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-4 text-sm font-medium text-foreground">Full</td>
+                <td className="p-4 text-sm text-muted">
+                  Any breach = full payment withheld
+                </td>
+                <td className="p-4 font-mono text-xs text-muted">
+                  Target 99.50%, measured 99.49% = full refund
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* Internet Court Dispute Example */}
+      <Section
+        title="Dispute Example"
+        subtitle="What happens when GenLayer Foundation disputes SLA-002"
       >
         <div className="rounded-lg border border-border">
-          {/* Statement */}
           <div className="border-b border-border p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted">
               Statement
             </p>
             <p className="mt-2 text-sm text-foreground">
-              &quot;The Studionet RPC endpoint maintained at least 99.50% uptime
-              between March 1 and March 31, 2026, as measured by the
-              UptimeMonitor contract at{" "}
+              &quot;GenLayer Labs failed to maintain 99.90% uptime on Asimov RPC
+              during March 2026, as defined in SLA Agreement SLA-002 deployed at{" "}
               <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">
-                0x1AE5...2573
+                0x...
               </code>{" "}
               on Studionet.&quot;
             </p>
           </div>
 
-          {/* Guidelines */}
           <div className="border-b border-border p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted">
               Guidelines
             </p>
             <ul className="mt-2 space-y-1.5 text-sm text-muted">
               <li>
-                Read <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">get_uptime_stats(&quot;studionet_rpc&quot;, 720)</code> from the contract
+                Call <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">check_compliance(720)</code> on
+                the SLA Agreement contract (720 checks = 30 days at 1/hour)
               </li>
               <li>
-                The <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">uptime_pct</code> field returns basis points (9950 = 99.50%)
+                Read <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">internet_court_summary()</code> for
+                full terms and settlement history
               </li>
               <li>
-                Verdict is TRUE if uptime_pct &ge; 9950, FALSE otherwise
+                Verdict is TRUE (breach occurred) if any covered service measured below 9990 bps
               </li>
             </ul>
           </div>
 
-          {/* Evidence */}
           <div className="border-b border-border p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted">
               Evidence
             </p>
             <div className="mt-2 grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs text-muted">Provider submits</p>
+                <p className="text-xs text-muted">Foundation submits</p>
                 <div className="mt-1.5 rounded border border-border bg-surface p-3 font-mono text-xs text-muted">
-                  <p>Contract: 0x1AE5...2573</p>
-                  <p>Network: Studionet</p>
-                  <p>Method: get_uptime_stats</p>
-                  <p>Args: [&quot;studionet_rpc&quot;, 720]</p>
+                  <p>SLA Contract: 0x... (SLA-002)</p>
+                  <p>Method: check_compliance(720)</p>
+                  <p>Asimov RPC uptime: 98.75%</p>
+                  <p>Target: 99.90%</p>
+                  <p>Shortfall: 1.15%</p>
                 </div>
               </div>
               <div>
-                <p className="text-xs text-muted">Customer submits</p>
+                <p className="text-xs text-muted">GenLayer Labs responds</p>
                 <div className="mt-1.5 rounded border border-border bg-surface p-3 font-mono text-xs text-muted">
-                  <p>Same contract reference</p>
-                  <p>Both parties read the same</p>
-                  <p>immutable on-chain data.</p>
-                  <p>no conflicting evidence possible</p>
+                  <p>Same contract, same data.</p>
+                  <p>Both parties read identical</p>
+                  <p>immutable on-chain records.</p>
+                  <p>No conflicting evidence.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Verdict */}
           <div className="p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted">
               Verdict
             </p>
             <div className="mt-3 flex items-center gap-4">
-              <VerdictOption label="True" description="SLA Met" active />
-              <VerdictOption label="False" description="SLA Breached" />
-              <VerdictOption label="Undetermined" description="Insufficient Data" />
+              <VerdictOption label="True" description="Breach occurred" active />
+              <VerdictOption label="False" description="SLA met" />
+              <VerdictOption label="Undetermined" description="Insufficient data" />
             </div>
             <p className="mt-3 text-xs text-muted">
-              AI validators independently read the contract, verify the uptime
-              percentage, and reach consensus on the verdict. Payment is
-              released or penalty applied automatically.
+              Linear penalty applied: $20,000 x (115/9990) = $230.23 penalty.
+              10% protocol fee: $23.02. Net payout to GenLayer Labs: $19,769.77.
             </p>
           </div>
         </div>
       </Section>
 
-      {/* Why This Matters */}
-      <Section title="Why This Matters">
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
-          <div className="bg-background p-5">
-            <h3 className="text-sm font-medium text-foreground">No he-said-she-said</h3>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              Both parties reference the same on-chain data. There are no
-              conflicting monitoring dashboards or cherry-picked screenshots.
-              The contract is the single source of truth.
-            </p>
-          </div>
-          <div className="bg-background p-5">
-            <h3 className="text-sm font-medium text-foreground">Instant enforcement</h3>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              When the verdict is reached, funds move automatically. No
-              invoicing, no 30-day payment terms, no collections. The SLA
-              enforces itself.
-            </p>
-          </div>
-          <div className="bg-background p-5">
-            <h3 className="text-sm font-medium text-foreground">Works for agents</h3>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              AI agents can create SLA agreements, submit evidence, and receive
-              payouts without a human in the loop. Built for the agent economy.
-            </p>
-          </div>
-          <div className="bg-background p-5">
-            <h3 className="text-sm font-medium text-foreground">Composable</h3>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              Any service monitored by Uptime can have an SLA enforced through
-              Internet Court. Add new services, create new agreements. It
-              scales without additional infrastructure.
-            </p>
-          </div>
-        </div>
-      </Section>
-
-      {/* Implementation Outline */}
+      {/* Contract Architecture */}
       <Section
-        title="Implementation"
-        subtitle="High-level architecture for the integration"
+        title="Contract Architecture"
+        subtitle="Two contracts work together"
       >
         <div className="rounded-lg border border-border bg-surface p-6 font-mono text-xs leading-relaxed text-muted">
-          <pre>{`┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
-│  Uptime Monitor  │         │  SLA Contract    │         │  Internet Court  │
-│  (on-chain)      │────────►│  (terms + stake) │────────►│  (dispute res.)  │
-│                  │ evidence│                  │ if breach│                  │
-│  stores checks   │         │  auto-triggers   │         │  AI jury decides │
-│  per service     │         │  dispute on      │         │  reads contract  │
-│                  │         │  threshold miss  │         │  releases funds  │
-└──────────────────┘         └──────────────────┘         └──────────────────┘`}</pre>
+          <pre>{`┌──────────────────┐
+│  UptimeMonitor   │  Source of truth for all health checks
+│  (existing)      │  get_uptime_stats(service_id, last_n)
+└────────┬─────────┘
+         │ reads
+         v
+┌──────────────────┐
+│  SLA Verifier    │  Base contract that verifies uptime claims
+│  (new)           │  calculate_penalty(payment, measured, target, model)
+│                  │  Takes 10% protocol fee on penalties
+└────────┬─────────┘
+         │ used by
+         v
+┌──────────────────┐     ┌──────────────────┐
+│  SLA Agreement   │     │  SLA Agreement   │
+│  SLA-001         │     │  SLA-002         │
+│  GL Labs -> ML   │     │  GL Found -> Labs│
+│  ZKSync bridge   │     │  All RPCs + Expl │
+│  Tiered penalty  │     │  Linear penalty  │
+└──────────────────┘     └──────────────────┘
+         │                        │
+         └───── settleable by ────┘
+                     │
+              ┌──────v──────────┐
+              │ Internet Court  │  Reads internet_court_summary()
+              │ (dispute res.)  │  AI jury verifies on-chain data
+              └─────────────────┘`}</pre>
         </div>
+      </Section>
 
-        <div className="mt-6 space-y-4 text-sm text-muted">
+      {/* Future: SLA Templates */}
+      <Section
+        title="Future Work"
+        subtitle="Planned features for the SLA system"
+      >
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+          <div className="bg-background p-5">
+            <h3 className="text-sm font-medium text-foreground">SLA Templates</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Standardized SLA templates, similar to software licenses (MIT, BSD, Apache).
+              Pick a template for your use case: Public API, Infrastructure, Data Pipeline,
+              Bridge. Each comes with reasonable defaults for target uptime, penalty model,
+              and payment curves.
+            </p>
+          </div>
+          <div className="bg-background p-5">
+            <h3 className="text-sm font-medium text-foreground">Composable verification</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              The SLA Verifier is the base layer. Any contract can call it to verify uptime
+              claims. Build custom SLA logic on top: multi-party agreements, escrow with
+              auto-release, insurance pools. The verifier takes a 10% fee, creating a
+              sustainable revenue model for developers.
+            </p>
+          </div>
+          <div className="bg-background p-5">
+            <h3 className="text-sm font-medium text-foreground">Payment curves</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Beyond linear and tiered: exponential penalties, grace periods, bonus
+              payments for exceeding SLA targets, time-weighted penalties (downtime
+              during peak hours costs more), and rolling window calculations.
+            </p>
+          </div>
+          <div className="bg-background p-5">
+            <h3 className="text-sm font-medium text-foreground">Auto-settlement</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Automatic period settlement via cron. At the end of each billing cycle,
+              the contract settles itself: reads uptime, calculates penalties, and
+              triggers payment. Disputes go to Internet Court automatically if the
+              penalty exceeds a configurable threshold.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      {/* How to Create Your Own */}
+      <Section title="Create Your Own SLA">
+        <div className="space-y-4 text-sm text-muted">
           <p>
-            <strong className="text-foreground">1. SLA Contract:</strong> A new
-            Intelligent Contract that holds both parties&apos; stakes and defines
-            the SLA terms (service ID, target uptime, measurement period,
-            penalty amount).
+            Deploy an SLA Agreement contract with your terms. You need:
           </p>
+          <div className="rounded-lg border border-border bg-surface p-4 font-mono text-xs">
+            <p className="text-muted">// Constructor arguments</p>
+            <p>agreement_id: &quot;MY-SLA-001&quot;</p>
+            <p>customer_name: &quot;Your Company&quot;</p>
+            <p>provider_name: &quot;Service Provider&quot;</p>
+            <p>customer_address: 0x...</p>
+            <p>provider_address: 0x...</p>
+            <p>sla_verifier_address: 0x...  // deployed verifier</p>
+            <p>uptime_monitor_address: 0x...  // existing monitor</p>
+            <p>service_ids_json: &apos;[&quot;studionet_rpc&quot;, &quot;asimov_rpc&quot;]&apos;</p>
+            <p>target_uptime_bps: 9950  // 99.50%</p>
+            <p>penalty_model: &quot;tiered&quot;</p>
+            <p>payment_schedule: &quot;monthly&quot;</p>
+            <p>base_payment_monthly: 10000  // in smallest unit</p>
+            <p>base_payment_yearly: 100000</p>
+            <p>effective_from: 1711929600  // Unix timestamp</p>
+            <p>effective_until: 0  // 0 = no end date</p>
+          </div>
           <p>
-            <strong className="text-foreground">2. Auto-trigger:</strong> At the
-            end of each measurement period, the SLA contract reads{" "}
-            <code className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs">
-              get_uptime_stats()
-            </code>{" "}
-            from the Uptime contract. If the target is missed, it automatically
-            creates a case in Internet Court.
-          </p>
-          <p>
-            <strong className="text-foreground">3. Evidence submission:</strong> The
-            case references the Uptime contract address and the specific
-            service ID. Internet Court validators read the same on-chain data
-            to reach a verdict.
-          </p>
-          <p>
-            <strong className="text-foreground">4. Settlement:</strong> Based on
-            the verdict, the SLA contract releases payment to the provider
-            (SLA met) or transfers the penalty to the customer (SLA breached).
+            Once deployed, both parties can call{" "}
+            <code className="rounded border border-border bg-surface px-1 py-0.5 text-xs">settle_period()</code>{" "}
+            at the end of each billing cycle. If there is a dispute, either party opens a case
+            in Internet Court pointing to the contract address.
           </p>
         </div>
       </Section>
@@ -235,13 +408,24 @@ export function SlaIntegrationContent() {
           Internet Court
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
-        <Link
-          href="/how-it-works"
-          className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+        <a
+          href="https://github.com/genlayer-foundation/uptime/blob/main/contracts/sla_verifier.py"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
         >
-          How Uptime Works
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+          SLA Verifier source
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+        <a
+          href="https://github.com/genlayer-foundation/uptime/blob/main/contracts/sla_agreement.py"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
+        >
+          SLA Agreement source
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
@@ -290,6 +474,62 @@ function StepCard({
       <span className="font-mono text-xs text-purple">{step}.</span>
       <h3 className="mt-2 text-sm font-medium text-foreground">{title}</h3>
       <p className="mt-2 text-xs leading-relaxed text-muted">{description}</p>
+    </div>
+  );
+}
+
+function AgreementCard({
+  id,
+  customer,
+  provider,
+  services,
+  target,
+  payment,
+  penalty,
+  description,
+}: {
+  id: string;
+  customer: string;
+  provider: string;
+  services: string[];
+  target: string;
+  payment: string;
+  penalty: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-foreground">{id}</h3>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-600">
+              Active
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {customer} pays {provider}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="font-mono text-sm text-foreground">{payment}</p>
+          <p className="text-xs text-muted">Target: {target}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {services.map((s) => (
+          <span
+            key={s}
+            className="rounded border border-border bg-surface px-2 py-0.5 text-[10px] font-mono text-muted"
+          >
+            {s}
+          </span>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-muted">{description}</p>
+      <p className="mt-2 text-[10px] uppercase tracking-wider text-muted">
+        Penalty model: {penalty}
+      </p>
     </div>
   );
 }
