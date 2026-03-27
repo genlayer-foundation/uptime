@@ -10,6 +10,9 @@ const CHECKS_7D = 168;
 const CHECKS_30D = 720;
 
 const CACHE_TTL_SECONDS = 2 * 60 * 60; // 2 hours
+const MEMORY_CACHE_TTL_MS = 60 * 1000; // 1 minute in-memory cache
+
+let memoryCache: { data: unknown; timestamp: number } | null = null;
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -168,9 +171,20 @@ export async function GET(request: Request) {
       return NextResponse.json(checks);
     }
 
-    // Try KV cache first
+    // Try in-memory cache first (fastest)
+    if (memoryCache && Date.now() - memoryCache.timestamp < MEMORY_CACHE_TTL_MS) {
+      return NextResponse.json(memoryCache.data, {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          "X-Data-Source": "memory-cache",
+        },
+      });
+    }
+
+    // Try KV cache second
     const cached = await tryKvCache();
     if (cached) {
+      memoryCache = { data: cached, timestamp: Date.now() };
       return NextResponse.json(cached, {
         headers: {
           "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
@@ -181,6 +195,7 @@ export async function GET(request: Request) {
 
     // Fall through to contract reads
     const status = await fetchFromContract();
+    memoryCache = { data: status, timestamp: Date.now() };
     return NextResponse.json(status, {
       headers: {
         "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
