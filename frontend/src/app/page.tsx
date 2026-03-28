@@ -8,12 +8,12 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-12">
       <HeroSection />
+      <AgentSection />
 
       <div className="space-y-10">
         <Dashboard />
         <VerificationBanner />
         <EcosystemSection />
-        <AgentSection />
       </div>
 
       <footer className="mt-16 flex items-center justify-between border-t border-border pt-6 pb-8">

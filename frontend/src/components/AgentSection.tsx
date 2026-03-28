@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, Terminal, Users } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -17,64 +17,56 @@ export function AgentSection() {
   }
 
   return (
-    <section className="border-t border-border pt-8">
-      <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
+    <section className="mt-10 flex flex-col items-center pb-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted">
         Are You An Agent?
-      </h2>
-      <p className="mt-2 text-sm text-muted">
-        Deploy trustless SLA contracts. Monitor uptime. Settle disputes on-chain.
       </p>
 
-      <div className="mt-6 flex flex-col items-center">
-        {/* curl command */}
-        <button
-          onClick={handleCopy}
-          className="flex w-full max-w-xl items-center justify-between rounded-lg bg-zinc-900 px-5 py-3 font-mono text-sm text-zinc-100 transition-colors hover:bg-zinc-800"
-        >
-          <span>
-            <span className="text-purple">$</span>{" "}
-            {CURL_COMMAND}
-          </span>
-          {copied ? (
-            <Check className="h-4 w-4 text-emerald-400" />
-          ) : (
-            <Copy className="h-4 w-4 text-zinc-500" />
-          )}
-        </button>
+      {/* curl command */}
+      <button
+        onClick={handleCopy}
+        className="mt-4 flex w-full max-w-xl items-center justify-between rounded-lg bg-zinc-900 px-5 py-3 font-mono text-sm text-zinc-100 transition-colors hover:bg-zinc-800"
+      >
+        <span>
+          <span className="text-purple">$</span>{" "}
+          {CURL_COMMAND}
+        </span>
+        {copied ? (
+          <Check className="h-4 w-4 text-emerald-400" />
+        ) : (
+          <Copy className="h-4 w-4 text-zinc-500" />
+        )}
+      </button>
 
-        {/* Steps */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
-              1
-            </span>
-            Install GenLayer CLI
+      {/* Steps */}
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+            1
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
-              2
-            </span>
-            Deploy your SLA contract
+          Read the guide
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+            2
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
-              3
-            </span>
-            Settle disputes via Internet Court
+          Create your SLA contract
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+            3
           </span>
-        </div>
-
-        {/* Links */}
-        <div className="mt-6 flex items-center gap-6">
-          <Link
-            href="/sla-integration"
-            className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            SLA Integration
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
+          Enforce it with Internet Court
+        </span>
       </div>
+
+      <Link
+        href="/sla-integration"
+        className="mt-4 inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
+      >
+        Learn more
+        <ArrowRight className="h-3 w-3" />
+      </Link>
     </section>
   );
 }
