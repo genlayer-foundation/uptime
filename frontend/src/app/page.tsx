@@ -2,6 +2,7 @@ import { HeroSection } from "@/components/HeroSection";
 import { Dashboard } from "@/components/Dashboard";
 import { VerificationBanner } from "@/components/VerificationBanner";
 import { EcosystemSection } from "@/components/EcosystemSection";
+import { AgentSection } from "@/components/AgentSection";
 
 export default function Home() {
   return (
@@ -12,6 +13,7 @@ export default function Home() {
         <Dashboard />
         <VerificationBanner />
         <EcosystemSection />
+        <AgentSection />
       </div>
 
       <footer className="mt-16 flex items-center justify-between border-t border-border pt-6 pb-8">
