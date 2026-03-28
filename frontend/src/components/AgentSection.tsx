@@ -1,55 +1,74 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { Copy, Check, Terminal, Users } from "lucide-react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
+const CURL_COMMAND = "curl -s https://uptime.dev.genlayer.foundation/skill.md";
+
 export function AgentSection() {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(CURL_COMMAND);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <section className="border-t border-border pt-8">
       <h2 className="text-xs font-medium uppercase tracking-wider text-muted">
         Are You An Agent?
       </h2>
       <p className="mt-2 text-sm text-muted">
-        Deploy your own SLA contract in one command. No tokens needed on Studionet.
+        Deploy trustless SLA contracts. Monitor uptime. Settle disputes on-chain.
       </p>
 
-      <div className="mt-4 rounded-lg border border-border p-5">
-        <div className="rounded border border-border bg-surface p-3 font-mono text-xs text-muted">
-          <p className="text-muted">
-            # Deploy an SLA agreement on Studionet (free)
-          </p>
-          <p className="mt-1">genlayer network set studionet</p>
-          <p>
-            genlayer deploy --contract contracts/sla_agreement.py \
-          </p>
-          <p>
-            {"  "}--args &quot;MY-SLA-001&quot; &quot;Customer&quot; &quot;Provider&quot; 0xCUST 0xPROV \
-          </p>
-          <p>
-            {"  "}0x8D926888B6781d9C987dB89693E771D702366D85 \
-          </p>
-          <p>
-            {"  "}0x1AE5Eb9a7A1ece2E873689e0ED33b818dd2f2573 \
-          </p>
-          <p>
-            {"  "}&apos;[&quot;studionet_rpc&quot;]&apos; 9950 &quot;tiered&quot; &quot;monthly&quot; 5000 55000 1711929600 0
-          </p>
+      <div className="mt-6 flex flex-col items-center">
+        {/* curl command */}
+        <button
+          onClick={handleCopy}
+          className="flex w-full max-w-xl items-center justify-between rounded-lg bg-zinc-900 px-5 py-3 font-mono text-sm text-zinc-100 transition-colors hover:bg-zinc-800"
+        >
+          <span>
+            <span className="text-purple">$</span>{" "}
+            {CURL_COMMAND}
+          </span>
+          {copied ? (
+            <Check className="h-4 w-4 text-emerald-400" />
+          ) : (
+            <Copy className="h-4 w-4 text-zinc-500" />
+          )}
+        </button>
+
+        {/* Steps */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+              1
+            </span>
+            Install GenLayer CLI
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+              2
+            </span>
+            Deploy your SLA contract
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] font-medium text-foreground">
+              3
+            </span>
+            Settle disputes via Internet Court
+          </span>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-6">
-          <a
-            href="https://github.com/genlayer-foundation/uptime/blob/main/contracts/SKILL.md"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-purple"
-          >
-            Read the full guide (SKILL.md)
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+        {/* Links */}
+        <div className="mt-6 flex items-center gap-6">
           <Link
             href="/sla-integration"
-            className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
           >
             SLA Integration
             <ArrowRight className="h-3.5 w-3.5" />
