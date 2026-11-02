@@ -1,11 +1,11 @@
-# Heartbeat
+# Uptime by GenLayer
 
-A correctness-over-time benchmark for GenLayer's **Bradbury** testnet. Every hour
-the same probes run; results are graded off-chain and served as JSON (for the
-dashboard and for Grafana). Overview, probe table and setup: `README.md`.
-External surface: `INTEGRATIONS.md`.
-
-Uptime: a paid cron for GenLayer — schedule any call/deploy/read and track results; Bradbury Heartbeat is one example job.
+Uptime: a paid GEN cron for GenLayer — schedule any call/deploy/read and track
+results. **Bradbury Heartbeat** is ONE example job: a correctness-over-time
+benchmark for the **Bradbury** testnet (same probes every hour, graded off-chain,
+served as JSON for its dashboard and for Grafana). "Heartbeat" names only that
+example job, its contract and its code — never the product.
+Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md`.
 
 ## Invariants
 
@@ -29,7 +29,7 @@ Uptime: a paid cron for GenLayer — schedule any call/deploy/read and track res
 genvm-lint check contracts/heartbeat.py
 .venv/bin/pytest test/direct -q
 (cd contracts/evm && forge test)
-cd frontend && npx tsc --noEmit && npx eslint src && npx next build
+cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next build
 ```
 
 ## Layout
@@ -44,8 +44,9 @@ frontend/src/app/api/heartbeat  public JSON (summary, or ?format=rows for Grafan
 test/direct/                    direct-mode contract tests
 ```
 
-UI is ONE design: the light zinc + purple Uptime look restored from b6d39c7
-(owner decision 2026-11). Tokens in `frontend/src/app/globals.css`; build pages
-from `frontend/src/components/ui/` and the shell in `components/shell/` (the
-not-audited banner is on every page by the root layout). This repo is PUBLIC: never
-commit F37 Lineca here.
+UI: Uptime is a separate app with its OWN design — GenLayer-inspired but lightly
+branded, NOT the GenLayer Design System (no `gl-*` classes, no design-system CSS).
+Tokens in `frontend/src/app/globals.css`; build pages from
+`frontend/src/components/ui/` and the shell in `components/shell/` (the
+not-audited banner is on every page by the root layout). This repo is PUBLIC:
+never commit F37 Lineca here.

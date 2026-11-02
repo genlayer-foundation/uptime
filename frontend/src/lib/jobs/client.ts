@@ -3,14 +3,16 @@
 // With NEXT_PUBLIC_JOBS_MOCK=1 every call is answered by the in-memory dev
 // mock (./mock.ts) instead of the network, so the jobs pages are reviewable
 // before the backend lands. The flag is inlined at build time; without it the
-// mock module is never loaded.
+// mock module is never loaded. It is honoured ONLY under `next dev`: any build
+// (`next build`, Vercel preview or production) inlines NODE_ENV="production",
+// so mock data is impossible there even if the variable is set.
 //
 // Response shapes the shared contract does not pin down are parsed
 // tolerantly: a list may come back bare (`Job[]`) or wrapped (`{ jobs }`).
 
 import type { Assertion, Job, Network, Run, Schedule, Step } from "./types";
 
-export const JOBS_MOCK = process.env.NEXT_PUBLIC_JOBS_MOCK === "1";
+export const JOBS_MOCK = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_JOBS_MOCK === "1";
 
 export type Me = { ready: boolean; wallet: string | null; studioAllowed: boolean };
 
@@ -126,6 +128,8 @@ export const jobsApi = {
       return { ready: d.ready ?? true, wallet: d.wallet ?? d.address ?? null, studioAllowed: !!d.studioAllowed };
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return { ready: true, wallet: null, studioAllowed: false };
+      // No jobs backend deployed on this server: sign-in is simply unavailable.
+      if (e instanceof ApiError && e.status === 404) return { ready: false, wallet: null, studioAllowed: false };
       throw e;
     }
   },
@@ -162,3 +166,18 @@ export const jobsApi = {
 };
 
 export type JobsApi = typeof jobsApi;
+
+/**
+ * Whether this server has the jobs backend. Answered by probing GET /api/me:
+ * a 404 means the API routes are not deployed (the "coming soon" state).
+ * Any other answer, including 401 or a 5xx, means the backend exists.
+ */
+export async function jobsBackendDeployed(): Promise<boolean> {
+  if (JOBS_MOCK) return true;
+  try {
+    const res = await fetch("/api/me", { credentials: "same-origin" });
+    return res.status !== 404;
+  } catch {
+    return true; // network trouble is not "not deployed"; let the page report it
+  }
+}

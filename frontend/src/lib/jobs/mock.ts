@@ -109,7 +109,7 @@ function seed(): State {
     {
       id: "job_public_view",
       owner: "0x1111111111111111111111111111111111111111",
-      name: "Heartbeat canary (Foundation)",
+      name: "Bradbury Heartbeat canary (Foundation)",
       network: "bradbury",
       preset: "heartbeat",
       schedule: { everyMinutes: 60 },
@@ -294,7 +294,7 @@ function rows(runs: Run[]): RunRow[] {
 const PRESETS: Preset[] = [
   {
     id: "heartbeat",
-    name: "Heartbeat benchmark",
+    name: "Bradbury Heartbeat",
     description: "Canary deploy, a web fetch and two graded LLM questions every hour. Run by the Foundation.",
     networks: ["bradbury"],
     availability: { bradbury: { ok: false, reason: "Run by the Foundation" }, studio: { ok: false, reason: "Bradbury only" } },

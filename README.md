@@ -2,11 +2,13 @@
 > **NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.**
 > None of the contracts in this repo (`contracts/`) have been audited. They target GenLayer testnets only.
 
-# Heartbeat — GenLayer correctness over time
+# Uptime by GenLayer
 
-Every hour, the same questions go to GenLayer's **Bradbury** testnet, and the answers are graded against a key the network never sees. The prompts never change, so when the numbers move, the network has changed.
+A paid cron for GenLayer: schedule any call, deploy or read, pay for it in GEN, and track the results over time.
 
-This repo used to be the uptime/SLA monitor. That's gone. It now does only this.
+## Example job: Bradbury Heartbeat
+
+The first job running on Uptime is **Bradbury Heartbeat**. Every hour, the same questions go to GenLayer's **Bradbury** testnet, and the answers are graded against a key the network never sees. The prompts never change, so when the numbers move, the network has changed. Dashboard: `/examples/bradbury-heartbeat`.
 
 ## What a tick does
 

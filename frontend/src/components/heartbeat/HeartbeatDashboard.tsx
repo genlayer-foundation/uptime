@@ -125,14 +125,14 @@ export function HeartbeatDashboard() {
       </div>
 
       {error ? (
-        <Alert tone="warn" className="mb-6" title="Heartbeat data is unavailable">
+        <Alert tone="warn" className="mb-6" title="Bradbury Heartbeat data is unavailable">
           {error.message} The page will retry every minute.
         </Alert>
       ) : empty ? (
         <Alert tone="info" className="mb-6" title="No probes recorded in this window">
           {shown?.contract
             ? "Results appear here after the next hourly tick is reconciled."
-            : "The heartbeat contract is not deployed yet. Results appear here once the hourly cron starts probing it."}
+            : "The Bradbury Heartbeat contract is not deployed yet. Results appear here once the hourly cron starts probing it."}
         </Alert>
       ) : null}
 
