@@ -17,11 +17,11 @@ const dmMono = DM_Mono({
 });
 
 const description =
-  "A cron job you pay for in GEN. Schedule any call, deploy or read on any GenLayer contract, on Studio or Testnet Bradbury, and track every result.";
+  "The uptime monitor that can't lie. Monitor websites, APIs and smart contracts, with every check verified by independent GenLayer validators and recorded on-chain.";
 
 export const metadata: Metadata = {
   title: {
-    default: "Uptime by GenLayer | Scheduled jobs for Intelligent Contracts",
+    default: "Uptime by GenLayer | Uptime monitoring you can trust",
     template: "%s | Uptime by GenLayer",
   },
   description,

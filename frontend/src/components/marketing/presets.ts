@@ -8,33 +8,33 @@ export interface Preset {
 
 export const PRESETS: Preset[] = [
   {
-    title: "Check a URL",
-    description: "Fetch a page on schedule and record whether it answered, through validator consensus.",
+    title: "Monitor a website",
+    description: "Check that a page is up, on your schedule. Validators each fetch it and must agree on whether it answered.",
     networks: "Studio · Bradbury",
   },
   {
-    title: "Check an API",
-    description: "Call a JSON endpoint and record the status and the value you care about.",
+    title: "Monitor an API",
+    description: "Call a JSON endpoint and record its status and the value you care about, as the validators agreed it.",
     networks: "Studio · Bradbury",
   },
   {
-    title: "Ask a question",
-    description: "Optionally read a page, ask an LLM a question about it, and keep the short answer.",
+    title: "Monitor a smart contract",
+    description: "Read a view on any GenLayer contract, with no transaction, and track how the value moves.",
     networks: "Studio · Bradbury",
   },
   {
-    title: "Call your contract",
-    description: "Send a write to any method on your contract, then optionally read a view to record a value.",
+    title: "Monitor an AI answer",
+    description: "Ask an LLM a question, optionally about a page it reads first, and keep the short answer validators agree on.",
     networks: "Studio · Bradbury",
   },
   {
-    title: "Read a view",
-    description: "Read a view on any contract, no transaction, and track how the value moves.",
+    title: "Call a contract on a schedule",
+    description: "Send a write to any method on your contract, then optionally read a view to record the result.",
     networks: "Studio · Bradbury",
   },
   {
-    title: "Deploy your contract",
-    description: "Deploy the same source on schedule, pinned by hash when the job is created.",
+    title: "Schedule a deploy",
+    description: "Deploy the same contract source on schedule, pinned by hash when you create the job.",
     networks: "Studio · Bradbury",
   },
   {
