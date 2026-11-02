@@ -1,3 +1,4 @@
+import { CardGrid, Stat } from "@/components/ui";
 import type { HeartbeatData } from "./types";
 import { DASH, accuracy, duration, pct, ratio } from "./format";
 
@@ -49,14 +50,10 @@ function kpis(d: HeartbeatData | null): Kpi[] {
 
 export function KpiRow({ data }: { data: HeartbeatData | null }) {
   return (
-    <div className="gl-stat-grid hb-kpis">
+    <CardGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {kpis(data).map((k) => (
-        <div className="gl-stat" key={k.label}>
-          <span className="gl-stat__label">{k.label}</span>
-          <span className={`gl-stat__value${k.value === DASH ? " hb-kpi__value--empty" : ""}`}>{k.value}</span>
-          <span className="hb-kpi__sub">{k.sub}</span>
-        </div>
+        <Stat key={k.label} label={k.label} value={k.value} sub={k.sub} empty={k.value === DASH} />
       ))}
-    </div>
+    </CardGrid>
   );
 }

@@ -32,7 +32,7 @@ Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, grade, fire d
                              │
 public                     /api/heartbeat                    summary + hourly series
                            /api/heartbeat?format=rows        flat rows for Grafana (Infinity)
-                           /                                 dashboard
+                           /examples/bradbury-heartbeat      dashboard
 ```
 
 Latency comes from the chain's own `createdTimestamp` → `lastVoteTimestamp`, so the reconcile cadence affects freshness, not precision.

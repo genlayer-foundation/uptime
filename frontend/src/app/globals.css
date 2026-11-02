@@ -1,116 +1,82 @@
-/* Heartbeat page styles.
-   Tokens and gl-* components come from the GenLayer Design System, vendored
-   under public/gl/ and linked in layout.tsx. Everything here is built from
-   those var(--*) tokens; nothing below should introduce a raw colour. */
+@import "tailwindcss";
 
-/* ---- chart series (validated with the dataviz palette checker) ----
-   Two-series categorical pair, one step per surface:
-   light #2159D2 / #DB6917, dark #387DE8 / #DB6917 on #060606.
-   The sky and orange ramps are the design system's Validator/Builder hues;
-   here they are only a chart palette, not category identity. */
+/* Uptime design: the light, zinc + purple look of the original Uptime site
+   (frontend at b6d39c7), restored as the one design for the whole app.
+   Every colour lives here as a token; components reach them through
+   Tailwind (bg-background, text-muted, border-border, text-purple, ...) and
+   the shared primitives in src/components/ui/. */
 :root {
-  --hb-series-1: var(--gl-sky-lo);
-  --hb-series-2: var(--gl-orange-lo);
-}
-.on-dark {
-  --hb-series-1: var(--gl-sky);
-  --hb-series-2: var(--gl-orange-lo);
-}
+  --background: #ffffff;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --subtle: #a1a1aa;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --purple: #9b6af6;
+  --surface: #fafafa;
+  --code: #18181b;
+  --code-hover: #27272a;
+  --code-fg: #f4f4f5;
 
-/* colors_and_type.css colours bare p / headings with --fg-1 (always black);
-   keep them on the themed surface tokens instead. */
-.hb :is(h1, h2, h3, h4, p):not([class]) { color: var(--c-fg); }
-.hb :is(h1, h2, h3, h4, p) { margin: 0; }
+  /* status */
+  --success: #10b981;
+  --success-fg: #059669;
+  --success-border: #a7f3d0;
+  --danger: #ef4444;
+  --danger-fg: #dc2626;
+  --danger-border: #fecaca;
+  --warn: #f59e0b;
+  --warn-fg: #b45309;
+  --warn-border: #fde68a;
 
-.hb-nav__title {
-  font-family: var(--font-display); font-weight: 500; font-size: var(--fs-body-lg);
-  letter-spacing: var(--track-snug); color: var(--c-fg);
-  padding-left: var(--space-4); border-left: var(--c-hairline) solid var(--c-border);
-}
+  /* the not-audited banner */
+  --banner-bg: #fef3c7;
+  --banner-fg: #78350f;
+  --banner-border: #f59e0b;
 
-/* ---- header ---- */
-.hb-head { padding: var(--space-12) 0 var(--space-8); display: flex; flex-direction: column; gap: var(--space-4); }
-.hb-head h1 {
-  font-size: var(--fs-display-3); line-height: var(--lh-tight); letter-spacing: var(--track-tight);
-}
-.hb-head__lede { color: var(--c-fg-muted); font-size: var(--fs-body-lg); max-width: 64ch; line-height: var(--lh-normal); }
-.hb-head__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-6); font-size: var(--fs-sm); color: var(--c-fg-muted); }
-.hb-head__meta .mono { word-break: break-all; }
-
-.hb-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-6); }
-.hb-toolbar__info { font-size: var(--fs-sm); color: var(--c-fg-subtle); }
-
-/* ---- sections ---- */
-.hb-section { display: flex; flex-direction: column; gap: var(--space-5); margin-bottom: var(--space-8); }
-.hb-alert-wrap { margin-bottom: var(--space-6); }
-
-/* ---- KPI grid: gl-stat-grid is fixed at 4 columns; we have 6 ---- */
-.hb-kpis.gl-stat-grid { grid-template-columns: repeat(3, 1fr); }
-/* opaque cells: the grid's hairline background must not show through the
-   translucent dark card surface */
-.hb-kpis.gl-stat-grid .gl-stat { background: linear-gradient(var(--c-card), var(--c-card)), var(--c-bg); }
-.hb-kpi__sub { font-size: var(--fs-xs); color: var(--c-fg-subtle); }
-.hb-kpi__value--empty { color: var(--c-fg-subtle); }
-
-/* ---- charts ---- */
-.hb-charts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
-.hb-chart { height: 240px; width: 100%; }
-.hb-chart-empty {
-  height: 240px; display: flex; align-items: center; justify-content: center; text-align: center;
-  color: var(--c-fg-subtle); font-size: var(--fs-sm);
-  border: var(--c-hairline) dashed var(--c-border); border-radius: var(--radius-md);
-  padding: var(--space-6);
-}
-.hb-chart .recharts-cartesian-axis-tick-value { fill: var(--c-fg-subtle); font-size: var(--fs-xs); font-family: var(--font-body); }
-.hb-chart .recharts-cartesian-grid line { stroke: var(--c-border); }
-.hb-chart .recharts-cartesian-axis-line { stroke: var(--c-border); }
-
-.hb-tip {
-  background: var(--c-bg); border: var(--c-hairline) solid var(--c-border-strong);
-  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
-  font-size: var(--fs-xs); color: var(--c-fg); box-shadow: var(--shadow-card-hi);
-  display: flex; flex-direction: column; gap: var(--space-1); min-width: 160px;
-}
-.hb-tip__time { color: var(--c-fg-subtle); }
-.hb-tip__row { display: flex; align-items: center; gap: var(--space-2); }
-.hb-tip__row .val { margin-left: auto; font-family: var(--font-mono); }
-
-/* ---- tables ---- */
-.hb-scroll { overflow-x: auto; }
-.hb-scroll .gl-table { min-width: 640px; }
-.hb-table-2 { display: grid; grid-template-columns: 1fr; gap: var(--space-5); }
-.hb-q__kind { color: var(--c-fg-subtle); font-size: var(--fs-xs); }
-.hb-muted { color: var(--c-fg-subtle); }
-.hb-answer { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-xs); }
-.hb-empty-row td { text-align: center; color: var(--c-fg-subtle); padding: var(--space-10) var(--space-4); }
-.hb-tx { font-family: var(--font-mono); font-size: var(--fs-xs); display: inline-flex; align-items: center; gap: var(--space-1); }
-
-/* ---- footer ---- */
-.hb-footer { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-8); align-items: center; }
-.hb-footer a { display: inline-flex; align-items: center; gap: var(--space-2); }
-.hb-footer .spacer { flex: 1; }
-.hb-footer.gl-footer { padding: var(--space-10) 0 var(--space-16); margin-top: var(--space-8); }
-
-@media (max-width: 960px) {
-  .hb-charts { grid-template-columns: 1fr; }
-  .hb-kpis.gl-stat-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 600px) {
-  .hb .gl-wrap, .hb .gl-nav__inner { padding: 0 var(--space-4); }
-  .hb-head { padding: var(--space-8) 0 var(--space-6); }
-  .hb-kpis.gl-stat-grid .gl-stat { padding: var(--space-4); }
-  .hb-kpis .gl-stat__value { font-size: var(--fs-h2); }
-  .hb .gl-card__header, .hb .gl-card__body { padding-left: var(--space-4); padding-right: var(--space-4); }
+  /* chart series: purple + amber */
+  --series-1: var(--purple);
+  --series-2: var(--warn);
 }
 
-/* ---- dev-only data-source bar (rendered only under `next dev`) ---- */
-.hb-devbar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4);
-  margin-top: var(--space-6); padding: var(--space-3) var(--space-4);
-  border: var(--c-hairline) dashed var(--c-border-strong); border-radius: var(--radius-md);
-  background: var(--c-card); font-size: var(--fs-sm);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-purple: var(--purple);
+  --color-surface: var(--surface);
+  --color-code: var(--code);
+  --color-code-hover: var(--code-hover);
+  --color-code-fg: var(--code-fg);
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-success-border: var(--success-border);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-border: var(--danger-border);
+  --color-warn: var(--warn);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-border: var(--warn-border);
+  --color-banner-bg: var(--banner-bg);
+  --color-banner-fg: var(--banner-fg);
+  --color-banner-border: var(--banner-border);
+  --font-sans: var(--font-dm-sans);
+  --font-mono: var(--font-dm-mono);
 }
-.hb-devbar__label {
-  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-fg-subtle);
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, "DM Sans", system-ui, sans-serif);
 }
-.hb-devbar__note { color: var(--c-fg-muted); }
+
+code, pre, .font-mono {
+  font-family: var(--font-mono, "DM Mono", ui-monospace, monospace);
+}
+
+/* recharts: axis ticks and grid from the tokens */
+.chart .recharts-cartesian-axis-tick-value { fill: var(--subtle); font-size: 10px; }
+.chart .recharts-cartesian-grid line { stroke: var(--border); }

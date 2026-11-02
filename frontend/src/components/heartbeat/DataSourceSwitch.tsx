@@ -4,6 +4,7 @@
 // by `next dev`; the server ignores the choice in any other build (see
 // lib/heartbeat/source.ts), so this is convenience, not the guard.
 
+import { Badge, Segmented, type Tone } from "@/components/ui";
 import type { DataSource } from "./types";
 
 export const DEV_BUILD = process.env.NODE_ENV === "development";
@@ -19,10 +20,10 @@ const CHOICES: Array<{ value: DataSource; label: string }> = [
   { value: "production", label: "Production" },
 ];
 
-const BADGE: Record<DataSource, { tone: string; label: string; note: string }> = {
-  demo: { tone: "gl-badge--warn", label: "Demo data", note: "Synthetic, generated locally. Not a measurement." },
-  production: { tone: "gl-badge--success", label: "Production data", note: "Proxied from uptime.genlayer.foundation." },
-  local: { tone: "gl-badge--validator", label: "Local KV", note: "Read from the KV store this dev server is configured with." },
+const BADGE: Record<DataSource, { tone: Tone; label: string; note: string }> = {
+  demo: { tone: "warn", label: "Demo data", note: "Synthetic, generated locally. Not a measurement." },
+  production: { tone: "success", label: "Production data", note: "Proxied from uptime.genlayer.foundation." },
+  local: { tone: "purple", label: "Local KV", note: "Read from the KV store this dev server is configured with." },
 };
 
 export function DataSourceSwitch({
@@ -39,25 +40,17 @@ export function DataSourceSwitch({
     onChange(s);
   };
   return (
-    <div className="hb-devbar" role="region" aria-label="Development data source">
-      <span className="hb-devbar__label">Dev · data source</span>
-      <div className="gl-seg" role="group" aria-label="Data source">
-        {CHOICES.map((c) => (
-          <button
-            key={c.value}
-            type="button"
-            className={`gl-seg__item${c.value === shown ? " gl-seg__item--active" : ""}`}
-            aria-pressed={c.value === shown}
-            onClick={() => pick(c.value)}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+    <div
+      role="region"
+      aria-label="Development data source"
+      className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-dashed border-border-strong bg-surface px-4 py-3 text-sm"
+    >
+      <span className="text-xs font-medium uppercase tracking-wider text-muted">Dev · data source</span>
+      <Segmented label="Data source" options={CHOICES} value={shown} onChange={pick} />
       {badge ? (
         <>
-          <span className={`gl-badge ${badge.tone}`}>{badge.label}</span>
-          <span className="hb-devbar__note">{badge.note}</span>
+          <Badge tone={badge.tone}>{badge.label}</Badge>
+          <span className="text-xs text-muted">{badge.note}</span>
         </>
       ) : null}
     </div>
