@@ -6,7 +6,7 @@
 // job's owner wallet; a mismatch is fatal for the job.
 
 import { decodeEventLog, type Log } from "viem";
-import { isStudioAllowed, STUDIO_ALLOWLIST } from "../allowlist";
+import { isStudioAllowed, studioAllowlist } from "../allowlist";
 import type { FundingCheck } from "../gate";
 import type { JobRow } from "../internal";
 import type { LineOutcome, Repo } from "../repo";
@@ -77,11 +77,11 @@ export function fundingDecision(j: JobRow, pool: PoolView | "unconfigured", allo
   return { ok: true };
 }
 
-export function makeFundingCheck(reader: PoolReader | null, allowlist = STUDIO_ALLOWLIST) {
+export function makeFundingCheck(reader: PoolReader | null, allowlist?: ReadonlySet<string>) {
   return async (j: JobRow): Promise<FundingCheck> => {
     try {
       const v = reader ? await reader.read(j.poolId as `0x${string}`) : "unconfigured";
-      return fundingDecision(j, v, allowlist, runCostWei());
+      return fundingDecision(j, v, allowlist ?? studioAllowlist(), runCostWei());
     } catch (e) {
       return { ok: false, reason: `Pool unreadable: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}` };
     }

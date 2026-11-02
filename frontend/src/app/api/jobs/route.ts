@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/jobs/allowlist";
 import { hasDatabase } from "@/lib/jobs/db";
 import { toPublicRun } from "@/lib/jobs/executor";
 import { toJob, toStatus, type JobRow } from "@/lib/jobs/internal";
@@ -19,6 +20,7 @@ async function withMeta(repo: Repo, rows: JobRow[]) {
 
 // GET            the signed-in wallet's jobs
 // GET ?public=1  public example jobs, no sign-in needed
+// GET ?all=1     every job (operators in UPTIME_ADMIN_WALLETS only; 403 otherwise)
 // Response: { jobs: Job[], meta: { [id]: { status, lastRun: Run | null } } }
 export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("public") === "1") {
@@ -29,6 +31,10 @@ export async function GET(request: Request) {
   const auth = requireUser(request);
   if ("response" in auth) return auth.response;
   const { repo } = await serviceDeps();
+  if (new URL(request.url).searchParams.get("all") === "1") {
+    if (!isAdmin(auth.session.wallet)) return jsonError(403, "operators only");
+    return NextResponse.json(await withMeta(repo, await repo.listAllJobs(500)));
+  }
   return NextResponse.json(await withMeta(repo, await repo.listJobs(auth.session.wallet)));
 }
 

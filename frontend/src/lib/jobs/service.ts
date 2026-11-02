@@ -78,7 +78,13 @@ function mutable(j: JobRow): Outcome<JobRow> | null {
   return null;
 }
 
-export async function pauseJob(deps: ServiceDeps, wallet: string, id: string): Promise<Outcome<JobRow>> {
+// Owner, or an operator (UPTIME_ADMIN_WALLETS) for ANY job, system jobs included.
+export async function pauseJob(deps: ServiceDeps, wallet: string, id: string, opts: { admin?: boolean } = {}): Promise<Outcome<JobRow>> {
+  if (opts.admin) {
+    const j = isId(id) ? await deps.repo.getJob(id) : null;
+    if (!j) return fail(404, "job not found");
+    return found(await deps.repo.updateJob(id, { state: "paused", stateReason: `paused by operator ${wallet.toLowerCase()}` }));
+  }
   const got = await getOwned(deps, wallet, id);
   if (!got.ok) return got;
   const no = mutable(got.value);

@@ -139,6 +139,25 @@ describe.skipIf(!url)("API against Postgres", () => {
     expect((await (await jobs.GET(req("/api/jobs"))).json()).jobs).toEqual([]);
   });
 
+  it("operators (UPTIME_ADMIN_WALLETS) list all jobs and pause any; others get 403/404", async () => {
+    const jobs = await import("@/app/api/jobs/route");
+    const pause = await import("@/app/api/jobs/[id]/pause/route");
+    const me = await import("@/app/api/me/route");
+    const { job } = (await (await jobs.POST(req("/api/jobs", { method: "POST", body: body("bradbury") }))).json()) as { job: Job };
+    delete process.env.UPTIME_ADMIN_WALLETS;
+    expect((await jobs.GET(req("/api/jobs?all=1"))).status).toBe(403);
+    process.env.UPTIME_ADMIN_WALLETS = `0x${"9".repeat(40)}, ${account.address}`;
+    try {
+      expect((await (await me.GET(req("/api/me"))).json()).isAdmin).toBe(true);
+      const all = await (await jobs.GET(req("/api/jobs?all=1"))).json();
+      expect(all.jobs.map((j: Job) => j.id)).toContain(job.id);
+      const p = await pause.POST(req(`/api/jobs/${job.id}/pause`, { method: "POST" }), ctx(job.id));
+      expect((await p.json()).status).toMatchObject({ state: "paused", reason: `paused by operator ${account.address.toLowerCase()}` });
+    } finally {
+      delete process.env.UPTIME_ADMIN_WALLETS;
+    }
+  });
+
   it("serves presets and public jobs without auth", async () => {
     const presets = await import("@/app/api/presets/route");
     const jobs = await import("@/app/api/jobs/route");

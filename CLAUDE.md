@@ -30,8 +30,11 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 - **Gates are server-side and run twice**: at create/edit/resume
   (`lib/jobs/service.ts`) AND before every run (`lib/jobs/gate.ts` from the
   executor). Never gate only in the UI.
-- **The Studio allowlist** `frontend/config/studio-allowlist.json` is committed,
-  changed by reviewed PR only, and fails closed (empty = nobody).
+- **Wallet lists live in env, never in the repo**: `STUDIO_ALLOWLIST` (Labs +
+  Foundation wallets allowed on Studio) and `UPTIME_ADMIN_WALLETS` (operators:
+  view all jobs, pause any). Comma-separated, normalized, read at call time;
+  unset or empty = nobody (fail closed). Everyone else runs on Bradbury and pays
+  from their own pool.
 - **Pool ids are first-come on-chain**: always compare the pool's on-chain
   owner with the job owner before running or charging.
 - **Pool charging stays OFF** (`POOL_CHARGING_ENABLED`) until the pool is

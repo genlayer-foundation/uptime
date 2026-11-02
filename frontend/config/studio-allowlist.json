@@ -1,5 +1,0 @@
-{
-  "_readme": "Wallets allowed to create and run uptimes on GenLayer Studio. Fixed, committed, changed only by reviewed PR. Fail closed: an empty list means NOBODY can use Studio. Enforced server-side at create/resume/update AND by the scheduler on every run. Entry shape: {\"address\": \"0x...\", \"name\": \"...\", \"org\": \"Foundation\" | \"Labs\"}.",
-  "_placeholder": "PLACEHOLDER - EMPTY ON PURPOSE. Ivan to supply his wallet address (and the Labs list) before Studio is usable.",
-  "wallets": []
-}

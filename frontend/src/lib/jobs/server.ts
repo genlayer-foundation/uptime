@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { CANARY_SOURCE } from "@/lib/heartbeat/canary";
 import { runTick } from "@/lib/heartbeat/runner";
-import { STUDIO_ALLOWLIST } from "./allowlist";
+import { studioAllowlist } from "./allowlist";
 import { getSession, requestHost, sessionSecret, type Session } from "./auth/session";
 import { genlayerClient, relayerAddress, type ChainClient } from "./chain";
 import { hasDatabase } from "./db";
@@ -22,7 +22,7 @@ const now = () => Math.floor(Date.now() / 1000);
 export async function serviceDeps(): Promise<ServiceDeps> {
   return {
     repo: getRepo(),
-    gate: { allowlist: STUDIO_ALLOWLIST, funding: makeFundingCheck(await evmPoolReader()) },
+    gate: { allowlist: studioAllowlist(), funding: makeFundingCheck(await evmPoolReader()) },
     nowSec: now,
   };
 }

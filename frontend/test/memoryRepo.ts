@@ -62,6 +62,9 @@ export class MemoryRepo implements Repo {
   async listPublicJobs() {
     return [...this.jobs.values()].filter((j) => j.public && j.state !== "deleted").map((j) => this.clone(j));
   }
+  async listAllJobs(limit: number) {
+    return [...this.jobs.values()].filter((j) => j.state !== "deleted").slice(0, limit).map((j) => this.clone(j));
+  }
   async countLiveJobs(owner: string, n: Network) {
     return [...this.jobs.values()].filter((j) => j.owner === owner && j.network === n && j.state !== "deleted").length;
   }

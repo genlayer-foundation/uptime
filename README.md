@@ -169,7 +169,8 @@ API: `POST /api/auth/nonce`, `POST /api/auth/verify` (SIWE / EIP-4361, EOA signa
 
 **Gates, enforced on the server at create/edit/resume AND by the scheduler before every run:**
 
-- **Studio:** the owner must be in `frontend/config/studio-allowlist.json`. It is committed, reviewed by PR, and **EMPTY on purpose** (placeholder for Ivan's wallet). Empty or missing means nobody gets Studio. Quota: `STUDIO_MAX_JOBS_PER_WALLET` (default 10).
+- **Studio** is only for pre-approved GenLayer Labs and Foundation wallets: the owner must be in the env var `STUDIO_ALLOWLIST` (comma-separated addresses, normalized, read at call time). Unset or empty means nobody gets Studio. Quota: `STUDIO_MAX_JOBS_PER_WALLET` (default 10). Everyone else uses Bradbury and pays for their own runs from their own pool.
+- **Operators:** wallets in `UPTIME_ADMIN_WALLETS` (same format, fail-closed) may list every job (`GET /api/jobs?all=1`), read any job and its runs, and pause any job, system jobs included. `GET /api/me` reports `isAdmin`. The pool contract's admin is separate: the `ADMIN` env of `contracts/evm/script/DeployUptimePool.s.sol`.
 - **Bradbury:** a job starts as a draft. Before every run the scheduler reads its pool: the on-chain owner must be the job's owner (pool ids are first-come), the pool and the scheduler allowance must not be paused, and `available(poolId, 1)` must cover the next tx. Without a pool contract configured, only allowlisted wallets may run on Bradbury (the relayer pays).
 - **Pool id** = the job UUID's 16 bytes left-padded to bytes32: job `1b4e28ba-2fa1-41d2-883f-0016d3cca427` → pool `0x000000000000000000000000000000001b4e28ba2fa141d2883f0016d3cca427` (`frontend/src/lib/jobs/ids.ts`).
 - **Settlement** (`/api/cron/settle`, hourly) is **OFF unless `POOL_CHARGING_ENABLED=1`**. When on: one `charge` per period as role 1, one line per step run, `settlementId` above the on-chain `lastSettlement(1)`, `eth_call` first, then the per-line outcome from the receipt's `Charged` / `ChargeSkipped` events. Skipped lines retry up to 3 times. A sent charge whose receipt cannot be read keeps its lines locked, so it is never charged twice.
@@ -183,7 +184,8 @@ createdb uptime_dev
 cd frontend
 export DATABASE_URL=postgres://localhost/uptime_dev      # (docker: postgres://postgres@localhost/uptime_dev)
 npm run db:migrate                                       # applies migrations/*.sql once each
-# .env.local: DATABASE_URL, SESSION_SECRET (>= 32 chars), CRON_SECRET, RELAYER_KEY_STUDIO / RELAYER_KEY_BRADBURY
+# .env.local: DATABASE_URL, SESSION_SECRET (>= 32 chars), CRON_SECRET, RELAYER_KEY_STUDIO / RELAYER_KEY_BRADBURY,
+#   optionally STUDIO_ALLOWLIST / UPTIME_ADMIN_WALLETS (comma-separated wallets)
 npm run dev
 curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/dispatch    # what the 5-min cron does
 curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/reconcile

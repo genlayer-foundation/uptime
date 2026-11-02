@@ -3,7 +3,7 @@
 // executor's step chaining and tracking, and pool settlement.
 import { encodeAbiParameters, encodeEventTopics } from "viem";
 import { describe, expect, it, vi } from "vitest";
-import { parseAllowlist, STUDIO_ALLOWLIST } from "@/lib/jobs/allowlist";
+import { isAdmin, parseWalletList, studioAllowlist } from "@/lib/jobs/allowlist";
 import type { ChainClient, ChainTx } from "@/lib/jobs/chain";
 import { dispatchDue, ensureHeartbeatJob, reconcile, toPublicRun, type ExecutorDeps } from "@/lib/jobs/executor";
 import type { GateDeps } from "@/lib/jobs/gate";
@@ -73,14 +73,31 @@ const job = (network: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-describe("committed allowlist", () => {
-  it("parses entries, drops junk, fails closed", () => {
-    expect(parseAllowlist(null).size).toBe(0);
-    expect(parseAllowlist({ wallets: "nope" }).size).toBe(0);
-    expect([...parseAllowlist({ wallets: [{ address: ALICE }, "0x12", MALLORY] })]).toEqual([ALICE, MALLORY]);
+describe("env wallet lists (STUDIO_ALLOWLIST, UPTIME_ADMIN_WALLETS)", () => {
+  it("parse comma-separated addresses, normalize, drop junk, fail closed", () => {
+    expect(parseWalletList(undefined).size).toBe(0);
+    expect(parseWalletList("").size).toBe(0);
+    expect(parseWalletList(" , nope,0x12 ").size).toBe(0);
+    expect([...parseWalletList(` ${ALICE.replace("a11ce", "A11CE")} ,0x12,${MALLORY},`)]).toEqual([ALICE, MALLORY]);
   });
-  it("starts EMPTY: nobody can use Studio until Ivan adds a wallet", () => {
-    expect(STUDIO_ALLOWLIST.size).toBe(0);
+  it("read the env at call time; unset = nobody", () => {
+    const keep = { s: process.env.STUDIO_ALLOWLIST, a: process.env.UPTIME_ADMIN_WALLETS };
+    try {
+      delete process.env.STUDIO_ALLOWLIST;
+      delete process.env.UPTIME_ADMIN_WALLETS;
+      expect(studioAllowlist().size).toBe(0);
+      expect(isAdmin(ALICE)).toBe(false);
+      process.env.STUDIO_ALLOWLIST = ALICE;
+      process.env.UPTIME_ADMIN_WALLETS = MALLORY;
+      expect(studioAllowlist().has(ALICE)).toBe(true);
+      expect(isAdmin(MALLORY.toUpperCase().replace("0X", "0x"))).toBe(true);
+      expect(isAdmin(null)).toBe(false);
+    } finally {
+      if (keep.s === undefined) delete process.env.STUDIO_ALLOWLIST;
+      else process.env.STUDIO_ALLOWLIST = keep.s;
+      if (keep.a === undefined) delete process.env.UPTIME_ADMIN_WALLETS;
+      else process.env.UPTIME_ADMIN_WALLETS = keep.a;
+    }
   });
 });
 
@@ -90,9 +107,10 @@ describe("API gate", () => {
     expect(await createJob(deps, MALLORY, job("studio"))).toEqual({ ok: false, status: 403, error: "This wallet is not on the Studio allowlist" });
     expect(repo.jobs.size).toBe(0);
   });
-  it("refuses Studio for everyone with the committed (empty) allowlist", async () => {
+  it("refuses Studio for everyone when STUDIO_ALLOWLIST is unset", async () => {
     const { deps } = setup();
-    const out = await createJob({ ...deps, gate: { ...deps.gate, allowlist: STUDIO_ALLOWLIST } }, ALICE, job("studio"));
+    delete process.env.STUDIO_ALLOWLIST;
+    const out = await createJob({ ...deps, gate: { ...deps.gate, allowlist: studioAllowlist() } }, ALICE, job("studio"));
     expect(out).toMatchObject({ ok: false, status: 403 });
   });
   it("accepts Studio from an allowlisted wallet, active; Bradbury from anyone, as a draft", async () => {
@@ -120,6 +138,17 @@ describe("API gate", () => {
     expect(await resumeJob(delisted, ALICE, made.value.id)).toMatchObject({ ok: false, status: 403 });
     expect(await editJob(delisted, ALICE, made.value.id, { name: "x" })).toMatchObject({ ok: false, status: 403 });
   });
+  it("lets an operator pause any job, system jobs included; others get 404", async () => {
+    const { deps, repo } = setup();
+    const made = await createJob(deps, ALICE, job("studio"));
+    if (!made.ok) throw new Error("setup");
+    expect(await pauseJob(deps, MALLORY, made.value.id)).toMatchObject({ status: 404 });
+    const out = await pauseJob(deps, MALLORY, made.value.id, { admin: true });
+    expect(out.ok && out.value).toMatchObject({ state: "paused", stateReason: `paused by operator ${MALLORY}` });
+    await repo.updateJob(made.value.id, { state: "active" });
+    expect(await pauseJob(deps, ALICE, "not-a-uuid", { admin: true })).toMatchObject({ status: 404 });
+  });
+
   it("hides other wallets' jobs (404) and soft-deletes", async () => {
     const { deps, repo } = setup();
     const made = await createJob(deps, ALICE, job("studio"));

@@ -67,6 +67,7 @@ export interface Repo {
   getJob(id: string): Promise<JobRow | null>;
   listJobs(owner: string): Promise<JobRow[]>;
   listPublicJobs(): Promise<JobRow[]>;
+  listAllJobs(limit: number): Promise<JobRow[]>; // operators only
   countLiveJobs(owner: string, network: Network): Promise<number>;
   findSystemJob(network: Network, preset: string): Promise<JobRow | null>;
   updateJob(id: string, patch: JobPatch): Promise<JobRow | null>;
@@ -269,6 +270,11 @@ export class PgRepo implements Repo {
 
   async listPublicJobs() {
     const r = await this.pool.query("SELECT * FROM jobs WHERE public AND state <> 'deleted' ORDER BY system DESC, created_at");
+    return this.jobsWithSchedules(r.rows);
+  }
+
+  async listAllJobs(limit: number) {
+    const r = await this.pool.query("SELECT * FROM jobs WHERE state <> 'deleted' ORDER BY created_at DESC LIMIT $1", [limit]);
     return this.jobsWithSchedules(r.rows);
   }
 

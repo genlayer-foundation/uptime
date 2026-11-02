@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isStudioAllowed } from "@/lib/jobs/allowlist";
+import { isAdmin, isStudioAllowed } from "@/lib/jobs/allowlist";
 import { getSession, sessionSecret } from "@/lib/jobs/auth/session";
 import { relayerAddress } from "@/lib/jobs/chain";
 import { hasDatabase } from "@/lib/jobs/db";
@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 
 // Who is signed in, and what the server will let them do.
 //   ready          sign-in is possible at all (DATABASE_URL + SESSION_SECRET)
-//   studioAllowed  the server accepts Studio jobs from this wallet
+//   studioAllowed  the server accepts Studio jobs from this wallet (STUDIO_ALLOWLIST)
+//   isAdmin        operator: may list all jobs and pause any (UPTIME_ADMIN_WALLETS)
 //   relayers       the address each network's runs are signed by ({{relayer}}),
 //                  which owner-gated contracts must authorize
 //   pool           the Bradbury UptimePool address (null = not deployed yet)
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     ready: ok,
     wallet: s?.wallet ?? null,
     studioAllowed: s ? isStudioAllowed(s.wallet) : false,
+    isAdmin: s ? isAdmin(s.wallet) : false,
     relayers: { studio: relayerAddress("studio"), bradbury: relayerAddress("bradbury") },
     pool: { bradbury: poolAddress() },
   });
