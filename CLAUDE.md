@@ -23,6 +23,25 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 - Cron routes fail closed without `CRON_SECRET`.
 - Pushing `main` deploys to Vercel production.
 
+### Jobs backend
+
+- **`frontend/src/lib/jobs/types.ts` is a shared contract** (backend, jobs UI,
+  shell). Change it only by agreement.
+- **Gates are server-side and run twice**: at create/edit/resume
+  (`lib/jobs/service.ts`) AND before every run (`lib/jobs/gate.ts` from the
+  executor). Never gate only in the UI.
+- **Wallet lists live in env, never in the repo**: `STUDIO_ALLOWLIST` (Labs +
+  Foundation wallets allowed on Studio) and `UPTIME_ADMIN_WALLETS` (operators:
+  view all jobs, pause any). Comma-separated, normalized, read at call time;
+  unset or empty = nobody (fail closed). Everyone else runs on Bradbury and pays
+  from their own pool.
+- **Pool ids are first-come on-chain**: always compare the pool's on-chain
+  owner with the job owner before running or charging.
+- **Pool charging stays OFF** (`POOL_CHARGING_ENABLED`) until the pool is
+  deployed and reviewed. A sent charge with an unknown outcome is never retried.
+- Migrations are append-only `frontend/migrations/NNN_*.sql`, applied by
+  `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's.
+
 ## Verify
 
 ```bash
@@ -30,6 +49,7 @@ genvm-lint check contracts/heartbeat.py
 .venv/bin/pytest test/direct -q
 (cd contracts/evm && forge test)
 cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next build
+# SQL suite too: TEST_DATABASE_URL=postgres://localhost/uptime_test npx vitest run
 ```
 
 ## Layout
@@ -39,8 +59,14 @@ contracts/heartbeat.py          probes + frozen question set
 contracts/canary.py             deployed fresh each tick
 frontend/public/heartbeat/      fixtures the contract fetches
 frontend/src/lib/heartbeat/     runner (tick/reconcile), KV store, answer key, summary
-frontend/src/app/api/cron/      heartbeat (hourly) + reconcile (10 min)
+frontend/src/app/api/cron/      heartbeat (hourly, legacy) + dispatch (5 min) + reconcile (10 min) + settle (hourly)
 frontend/src/app/api/heartbeat  public JSON (summary, or ?format=rows for Grafana)
+frontend/src/lib/jobs/          jobs backend: types (shared), spec, schedule/cron, repo (pg),
+                                executor, gate, service, auth (SIWE), pool, presets, export
+frontend/src/lib/pool/abi.ts    UptimePool ABI (client-safe)
+frontend/src/app/api/{auth,me,jobs,presets}  jobs API
+frontend/migrations/            SQL migrations; scripts/migrate.mjs applies them
+frontend/test/                  vitest (unit + optional Postgres suite)
 test/direct/                    direct-mode contract tests
 ```
 
