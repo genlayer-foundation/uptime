@@ -61,6 +61,12 @@ export async function GET(request: Request) {
   let pending: ProbeRecord[];
   if (source === "demo") {
     ({ results, pending } = demoSnapshot(since, nowSec));
+  } else if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    // Not configured on this server yet: say so instead of an empty 500.
+    return NextResponse.json(
+      { error: "Bradbury Heartbeat is not recording on this server yet (no results store configured)." },
+      { status: 503 }
+    );
   } else {
     [results, pending] = await Promise.all([getResults(since), getPending()]);
   }
