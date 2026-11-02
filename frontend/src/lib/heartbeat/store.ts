@@ -1,88 +1,51 @@
-import { Redis } from "@upstash/redis";
-import type { Grade } from "./questions";
+// Where the Bradbury Heartbeat keeps its records. One data store: the app's
+// Postgres (DATABASE_URL, store-pg.ts). Upstash KV (store-kv.ts) is only a
+// fallback, used when
+//   - DATABASE_URL is unset, or
+//   - DATABASE_URL is set but migration 011 is not applied yet (so a deploy
+//     that lands before `npm run db:migrate` keeps recording into KV).
+// On the first call against a migrated database the KV history is copied into
+// Postgres once (store-pg.ts importOnce); from then on KV is not touched.
+import { hasDatabase } from "@/lib/jobs/db";
+import * as kv from "./store-kv";
+import * as pg from "./store-pg";
+import type { ProbeRecord } from "./types";
 
-export type ProbeKind = "deploy" | "fetch" | "llm" | "appeal";
+export type { HeartbeatSnapshot, ProbeKind, ProbeRecord, VoteCounts } from "./types";
 
-export interface VoteCounts {
-  agree: number;
-  disagree: number;
-  timeout: number;
-  other: number;
+type Backend = Pick<typeof kv, "nextTick" | "addPending" | "getPending" | "resolve" | "getResults">;
+
+// Something to read or write: Postgres, KV, or neither (the API answers 503).
+export function storeConfigured(): boolean {
+  return hasDatabase() || kv.kvConfigured();
 }
 
-export interface ProbeRecord {
-  id: string; // `${tick}:${kind}:${qid ?? ""}`
-  tick: number;
-  kind: ProbeKind;
-  qid?: string;
-  qkind?: string;
-  txHash?: `0x${string}`;
-  submittedAt: number; // unix seconds, wall clock
-  // Set on llm probes chosen to be appealed once they are ACCEPTED.
-  appealDue?: boolean;
-  // appeal records: the llm probe being appealed, and its answer before
-  appealOf?: string;
-  answerBefore?: string;
-
-  // Filled in by reconcile.
-  status?: string; // final statusName, or SUBMIT_FAILED / TIMEOUT
-  error?: string;
-  resolvedAt?: number;
-  latencySec?: number; // chain lastVoteTimestamp - createdTimestamp
-  rounds?: number;
-  votes?: VoteCounts;
-  answer?: string;
-  grade?: Grade;
-  upheld?: boolean; // appeal records: answer unchanged and still correct
-}
-
-const PENDING = "hb:pending"; // hash id → record
-const RESULTS = "hb:results"; // list of resolved records, newest last
-const TICK = "hb:tick";
-const MAX_RESULTS = 20000; // ~1 year at ~5 probes an hour
-
-function redis(): Redis {
-  return new Redis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-}
-
-function parse<T>(v: unknown): T {
-  return typeof v === "string" ? JSON.parse(v) : (v as T);
+async function backend(): Promise<Backend> {
+  if (hasDatabase()) {
+    if (await pg.pgReady(kv.kvConfigured() ? kv.snapshot : null)) return pg;
+    if (kv.kvConfigured()) return kv;
+    throw new Error("Heartbeat tables missing: run `npm run db:migrate` (migrations/011_heartbeat.sql)");
+  }
+  if (kv.kvConfigured()) return kv;
+  throw new Error("No Heartbeat store configured (DATABASE_URL, or KV_REST_API_URL + KV_REST_API_TOKEN)");
 }
 
 export async function nextTick(): Promise<number> {
-  return await redis().incr(TICK);
+  return (await backend()).nextTick();
 }
 
 export async function addPending(rec: ProbeRecord): Promise<void> {
-  await redis().hset(PENDING, { [rec.id]: JSON.stringify(rec) });
+  return (await backend()).addPending(rec);
 }
 
 export async function getPending(): Promise<ProbeRecord[]> {
-  const all = await redis().hgetall<Record<string, unknown>>(PENDING);
-  return Object.values(all ?? {}).map((v) => parse<ProbeRecord>(v));
+  return (await backend()).getPending();
 }
 
 export async function resolve(rec: ProbeRecord): Promise<void> {
-  const r = redis();
-  await r.rpush(RESULTS, JSON.stringify(rec));
-  await r.ltrim(RESULTS, -MAX_RESULTS, -1);
-  await r.hdel(PENDING, rec.id);
+  return (await backend()).resolve(rec);
 }
 
 export async function getResults(sinceSec: number): Promise<ProbeRecord[]> {
-  // Newest are at the tail; walk back in pages until we pass `sinceSec`.
-  const r = redis();
-  const page = 500;
-  const out: ProbeRecord[] = [];
-  for (let end = -1; ; end -= page) {
-    const items = await r.lrange<unknown>(RESULTS, end - page + 1, end);
-    if (items.length === 0) break;
-    const recs = items.map((v) => parse<ProbeRecord>(v));
-    out.unshift(...recs.filter((x) => x.submittedAt >= sinceSec));
-    if (recs[0].submittedAt < sinceSec || items.length < page) break;
-  }
-  return out;
+  return (await backend()).getResults(sinceSec);
 }

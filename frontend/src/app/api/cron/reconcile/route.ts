@@ -13,7 +13,7 @@ function msg(e: unknown) {
 }
 
 // Two reconcilers, independent so one failing never blocks the other: the
-// Bradbury Heartbeat's own (KV: grading, appeals; response shape unchanged)
+// Bradbury Heartbeat's own (lib/heartbeat/store: grading, appeals; response shape unchanged)
 // and the generic job executor (Postgres), reported under `jobs`.
 export async function GET(request: Request) {
   if (!authorized(request)) {

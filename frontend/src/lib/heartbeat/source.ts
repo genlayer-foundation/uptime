@@ -1,6 +1,6 @@
 // Where GET /api/heartbeat reads its records from.
 //
-//   local       Upstash KV, the real store (the ONLY source in a deployed app)
+//   local       the real store: Postgres, KV as fallback (store.ts; the ONLY source in a deployed app)
 //   demo        a deterministic synthetic history, generated in-process
 //   production  the public endpoint of the deployed app, proxied (no secrets)
 //
