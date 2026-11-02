@@ -1,10 +1,12 @@
 import { createClient, createAccount } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { bradburyPhase2 } from "../chains";
 
-// The heartbeat runs on Bradbury only.
+// The Bradbury Heartbeat example job runs on Bradbury only, through the
+// explicit Phase 2 chain config (lib/chains.ts): genlayer-js's own
+// testnetBradbury still carries the sunset Phase 1 consensus addresses.
 export const NETWORK = {
   name: "Bradbury",
-  chain: testnetBradbury,
+  chain: bradburyPhase2,
   explorerUrl: "https://explorer-bradbury.genlayer.com",
 };
 

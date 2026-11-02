@@ -5,8 +5,16 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/dispatch",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/reconcile",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/settle",
+      "schedule": "15 * * * *"
     }
   ]
 }

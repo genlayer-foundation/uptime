@@ -137,4 +137,61 @@ The scheduler signs every run with the relayer key (`RELAYER_KEY_*`), so the use
 
 ### Bradbury Phase 2 chain config
 
-`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. Use `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain`) instead. It holds the Phase 2 addresses, verified against the live AddressManager. The app is not wired to it yet. Its import point is `frontend/src/lib/genlayer/client.ts`.
+`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. Only addresses are overridden; whether the 0.26.5 ABIs match Phase 2 is still unverified (a relayer smoke write is the check).
+
+## Jobs backend (a generic paid cron)
+
+A **job** is one network plus one or more **steps**, each an ordinary GenLayer action, on a schedule. Presets (check a URL, check an API, ask, call a contract, deploy, deploy-then-call, and the Bradbury Heartbeat example) are just prefilled jobs. The shared shapes are `frontend/src/lib/jobs/types.ts`; other workstreams code against that file.
+
+```jsonc
+// POST /api/jobs
+{
+  "name": "Deploy hourly, read it every 5 min",
+  "network": "bradbury",                       // or "studio" (allowlisted wallets only)
+  "schedule": { "everyMinutes": 60 },          // or { "cron": "0 * * * *" } (UTC); min 5 min either way
+  "steps": [
+    { "id": "deploy", "kind": "deploy", "preset": "canary", "args": ["{{slot}}"] },
+    { "id": "check", "kind": "read", "contract": "$deploy.address", "method": "get_tick", "args": [],
+      "schedule": { "everyMinutes": 5 } }       // a step with its own schedule runs on its own
+  ],
+  "assertions": [{ "step": "check", "op": "gt", "expected": 0 }]
+}
+```
+
+- **Step kinds.** `write` (any write method, any args, optional `value` in wei), `deploy` (`code`, or `preset: "canary"`), `read` (a view: no tx, records the value and RPC latency).
+- **Order and chaining.** Steps without their own schedule run in order on the job schedule. A write or deploy is submitted and the next step starts once reconcile sees it decided. `"$<deployStep>.address"` is the contract that deploy created in the same run, else its latest accepted deploy.
+- **Placeholders** in string args: `{{job_id}}`, `{{run_id}}` (`<group>:<slot>`, stable across retries), `{{slot}}` (unix seconds; a bare `"{{slot}}"` becomes an integer), `{{relayer}}` (the address that signs runs; the preset contracts file results under it).
+- **Tracking.** Per step run: tx hash, status (`PENDING`, `ACCEPTED`, `FINALIZED`, `UNDETERMINED`, `TIMEOUT`, `SUBMIT_FAILED`, `ERROR`), recorded result (deploys: `{ address }`; reads: the returned value; writes: the execution outcome, since the node's tx view does not reliably expose return values, so read them with a `read` step), time to ACCEPTED from chain timestamps, rounds, votes, and `gasGen`. **`gasGen` is a flat estimate** (`UPTIME_RUN_COST_WEI` per tx on Bradbury) until real fees are measured.
+- **Pass/fail.** A run passes when every step succeeded and every assertion (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `exists`, with an optional dot `path` into the result) on a step of that run holds.
+- **Export.** `GET /api/jobs/:id/runs?format=rows` gives one flat row per step run, in the `/api/heartbeat?format=rows` shape (time in ms, status, latency_sec, rounds, votes_*, answer, tx, error), for Grafana Infinity.
+
+API: `POST /api/auth/nonce`, `POST /api/auth/verify` (SIWE / EIP-4361, EOA signatures), `POST /api/auth/logout`, `GET /api/me`; `GET`/`POST /api/jobs` (`?public=1` lists public example jobs without sign-in); `GET`/`PATCH`/`DELETE /api/jobs/:id`; `POST /api/jobs/:id/pause|resume`; `GET /api/jobs/:id/runs?limit=&format=json|rows`; `GET /api/presets?network=`.
+
+**Gates, enforced on the server at create/edit/resume AND by the scheduler before every run:**
+
+- **Studio:** the owner must be in `frontend/config/studio-allowlist.json`. It is committed, reviewed by PR, and **EMPTY on purpose** (placeholder for Ivan's wallet). Empty or missing means nobody gets Studio. Quota: `STUDIO_MAX_JOBS_PER_WALLET` (default 10).
+- **Bradbury:** a job starts as a draft. Before every run the scheduler reads its pool: the on-chain owner must be the job's owner (pool ids are first-come), the pool and the scheduler allowance must not be paused, and `available(poolId, 1)` must cover the next tx. Without a pool contract configured, only allowlisted wallets may run on Bradbury (the relayer pays).
+- **Pool id** = the job UUID's 16 bytes left-padded to bytes32: job `1b4e28ba-2fa1-41d2-883f-0016d3cca427` → pool `0x000000000000000000000000000000001b4e28ba2fa141d2883f0016d3cca427` (`frontend/src/lib/jobs/ids.ts`).
+- **Settlement** (`/api/cron/settle`, hourly) is **OFF unless `POOL_CHARGING_ENABLED=1`**. When on: one `charge` per period as role 1, one line per step run, `settlementId` above the on-chain `lastSettlement(1)`, `eth_call` first, then the per-line outcome from the receipt's `Charged` / `ChargeSkipped` events. Skipped lines retry up to 3 times. A sent charge whose receipt cannot be read keeps its lines locked, so it is never charged twice.
+
+### Run it locally (Postgres)
+
+```bash
+# Postgres 14+: Postgres.app, Homebrew (`brew services start postgresql@16`) or
+#   docker run -d --name uptime-pg -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16
+createdb uptime_dev
+cd frontend
+export DATABASE_URL=postgres://localhost/uptime_dev      # (docker: postgres://postgres@localhost/uptime_dev)
+npm run db:migrate                                       # applies migrations/*.sql once each
+# .env.local: DATABASE_URL, SESSION_SECRET (>= 32 chars), CRON_SECRET, RELAYER_KEY_STUDIO / RELAYER_KEY_BRADBURY
+npm run dev
+curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/dispatch    # what the 5-min cron does
+curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/reconcile
+
+npm test                                                 # unit tests; the Postgres suite needs:
+createdb uptime_test && TEST_DATABASE_URL=postgres://localhost/uptime_test npm test   # DROPS that DB's schema
+```
+
+Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the `PRIVATE_KEY` wallet, hourly at :00), dispatched through the same runner and KV store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
+
+Production data is planned on Neon via the Vercel Marketplace. Nothing is provisioned yet: run `npm run db:migrate` against its `DATABASE_URL` once it exists. Neon's URL carries `sslmode=require`, which `pg` honours.
