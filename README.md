@@ -54,6 +54,20 @@ genlayer deploy --contract contracts/heartbeat.py --args "https://uptime.genlaye
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
+### Local development: demo / production / local data
+
+`npm run dev` needs no secrets to show a full dashboard. `/api/heartbeat` reads from one of three sources:
+
+| Source | What it serves | Needs |
+|---|---|---|
+| `demo` (dev default) | a deterministic synthetic 30-day history (`src/lib/heartbeat/demo.ts`): canary deploys, fetches, 2 rotating questions per tick, appeals every 6th tick, wrong answers, injections, borderline splits, timeouts, submit failures and a 6-hour outage | nothing |
+| `production` | proxies the same query to the public `https://uptime.genlayer.foundation/api/heartbeat` | nothing (public, read-only) |
+| `local` | the real KV path | `KV_REST_API_URL`, `KV_REST_API_TOKEN` |
+
+Pick one with `HEARTBEAT_DATA_SOURCE=demo|production|local` in `.env.local`, or with the dev-only **Demo / Production** switch at the top of the page (it sets an `hb-source` cookie). `?source=` on the API URL overrides both. A badge on the page always names the source on screen, and dev responses carry an `X-Heartbeat-Source` header. If production is unreachable or not deployed, the page shows the unavailable state, naming that source.
+
+The switch exists only under `next dev`. In any build (`next build`, Vercel preview or production) the server always reads KV and ignores the env var, cookie and query (`src/lib/heartbeat/source.ts`).
+
 `CRON_SECRET` is **required**. The cron routes refuse every call without it, because a tick spends gas and appeal bonds.
 
 ## Cost

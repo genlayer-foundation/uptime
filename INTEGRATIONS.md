@@ -8,6 +8,7 @@ Outward-facing surface of the Heartbeat. Env vars by NAME only.
 |---|---|---|---|---|---|---|
 | GenLayer Bradbury RPC (`genlayer-js` `testnetBradbury`) | JSON-RPC | `PRIVATE_KEY` (tx signer, contract owner) | deploy canary, `probe_fetch`, `probe_llm`, `appealTransaction` | hourly tick; appeal every `HEARTBEAT_APPEAL_EVERY` ticks | record `SUBMIT_FAILED` with the error | `frontend/src/lib/heartbeat/runner.ts` (`runTick`, `appeal`) |
 | GenLayer Bradbury RPC | JSON-RPC | none | `getTransaction`, `readContract get_probe` | every 10 min | record stays pending; `TIMEOUT` after 6h | `frontend/src/lib/heartbeat/runner.ts` (`runReconcile`) |
+| Heartbeat public endpoint `https://uptime.genlayer.foundation/api/heartbeat` (**`next dev` only**) | HTTPS GET | none | proxies `/api/heartbeat` when the dev data source is `production` (`HEARTBEAT_DATA_SOURCE`, `hb-source` cookie or `?source=`); never reachable in a build | per dashboard load / 60s poll, 10s timeout | 502 `{ error, source }`, dashboard shows the unavailable state | `frontend/src/app/api/heartbeat/route.ts` (`proxyProduction`), guard in `frontend/src/lib/heartbeat/source.ts` (`sourceSwitchAllowed`) |
 | Upstash Redis | HTTPS REST | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | `hb:pending`, `hb:results`, `hb:tick` | every cron + every API read | cron/API return 500 | `frontend/src/lib/heartbeat/store.ts` |
 
 ## Inbound

@@ -102,3 +102,15 @@
   .hb-kpis .gl-stat__value { font-size: var(--fs-h2); }
   .hb .gl-card__header, .hb .gl-card__body { padding-left: var(--space-4); padding-right: var(--space-4); }
 }
+
+/* ---- dev-only data-source bar (rendered only under `next dev`) ---- */
+.hb-devbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4);
+  margin-top: var(--space-6); padding: var(--space-3) var(--space-4);
+  border: var(--c-hairline) dashed var(--c-border-strong); border-radius: var(--radius-md);
+  background: var(--c-card); font-size: var(--fs-sm);
+}
+.hb-devbar__label {
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-fg-subtle);
+}
+.hb-devbar__note { color: var(--c-fg-muted); }

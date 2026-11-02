@@ -6,14 +6,21 @@ import { KpiRow } from "./KpiRow";
 import { TrendCharts } from "./TrendCharts";
 import { Breakdown } from "./Breakdown";
 import { RecentProbes } from "./RecentProbes";
-import { WINDOWS, type HeartbeatData } from "./types";
+import { DataSourceSwitch, DEV_BUILD } from "./DataSourceSwitch";
+import { WINDOWS, type DataSource, type HeartbeatData } from "./types";
 
 const POLL_MS = 60_000;
 const REPO = "https://github.com/genlayer-foundation/uptime";
 
-function useHeartbeat(hours: number) {
+// `source` is sent only by the dev-only switch; the server ignores it outside
+// `next dev`, and without it the server picks the default.
+function query(hours: number, source: DataSource | null): string {
+  return `hours=${hours}${source ? `&source=${source}` : ""}`;
+}
+
+function useHeartbeat(hours: number, source: DataSource | null) {
   const [data, setData] = useState<HeartbeatData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; source?: DataSource } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -22,8 +29,13 @@ function useHeartbeat(hours: number) {
       ctrl?.abort();
       ctrl = new AbortController();
       try {
-        const res = await fetch(`/api/heartbeat?hours=${hours}`, { signal: ctrl.signal, cache: "no-store" });
-        if (!res.ok) throw new Error(`The data endpoint answered ${res.status}.`);
+        const res = await fetch(`/api/heartbeat?${query(hours, source)}`, { signal: ctrl.signal, cache: "no-store" });
+        if (!res.ok) {
+          // The route explains itself in { error, source } when it can.
+          const body = (await res.json().catch(() => null)) as { error?: string; source?: DataSource } | null;
+          if (live) setError({ message: body?.error ?? `The data endpoint answered ${res.status}.`, source: body?.source });
+          return;
+        }
         const json = (await res.json()) as HeartbeatData;
         if (live) {
           setData(json);
@@ -31,7 +43,7 @@ function useHeartbeat(hours: number) {
         }
       } catch (e) {
         if (!live || (e instanceof DOMException && e.name === "AbortError")) return;
-        setError(e instanceof Error ? e.message : "The data endpoint could not be reached.");
+        setError({ message: e instanceof Error ? e.message : "The data endpoint could not be reached." });
       }
     };
     load();
@@ -41,7 +53,7 @@ function useHeartbeat(hours: number) {
       ctrl?.abort();
       clearInterval(id);
     };
-  }, [hours]);
+  }, [hours, source]);
 
   return { data, error };
 }
@@ -63,8 +75,11 @@ function ThemeToggle() {
 
 export function HeartbeatDashboard() {
   const [hours, setHours] = useState<number>(168);
-  const { data, error } = useHeartbeat(hours);
-  const shown = data && data.hours === hours ? data : null;
+  const [source, setSource] = useState<DataSource | null>(null);
+  const { data, error } = useHeartbeat(hours, source);
+  // Never show one source's numbers under another source's label.
+  const shown = data && data.hours === hours && (!source || data.source === source) ? data : null;
+  const shownSource = DEV_BUILD ? (error?.source ?? source ?? data?.source) : undefined;
   const loading = !shown && !error;
   const empty = !!shown && Object.values(shown.byKind).every((s) => s.total === 0);
   const network = data?.network ?? "Bradbury";
@@ -88,6 +103,8 @@ export function HeartbeatDashboard() {
       </nav>
 
       <main className="gl-wrap">
+        <DataSourceSwitch shown={shownSource} onChange={setSource} />
+
         <header className="hb-head">
           <div>
             <span className="gl-eyebrow">
@@ -101,17 +118,19 @@ export function HeartbeatDashboard() {
             questions with known answers, so we can watch whether consensus stays correct over time.
           </p>
           <div className="hb-head__meta">
-            {data?.contract ? (
+            {shown?.source === "demo" ? (
+              <span>Synthetic demo contract, not on any network</span>
+            ) : shown?.contract ? (
               <span>
                 Contract{" "}
-                <a className="mono" href={`${data.explorerUrl}/address/${data.contract}`} target="_blank" rel="noreferrer">
-                  {data.contract}
+                <a className="mono" href={`${shown.explorerUrl}/address/${shown.contract}`} target="_blank" rel="noreferrer">
+                  {shown.contract}
                 </a>
               </span>
-            ) : (
+            ) : shown ? (
               <span>Contract not deployed yet</span>
-            )}
-            {data ? <span>{data.pending} probes awaiting a decision</span> : null}
+            ) : null}
+            {shown ? <span>{shown.pending} probes awaiting a decision</span> : null}
           </div>
         </header>
 
@@ -132,8 +151,8 @@ export function HeartbeatDashboard() {
           <span className="hb-toolbar__info" aria-live="polite">
             {loading
               ? "Loading…"
-              : data
-                ? `Updated ${new Date(data.generatedAt * 1000).toLocaleTimeString()} · refreshes every minute`
+              : shown
+                ? `Updated ${new Date(shown.generatedAt * 1000).toLocaleTimeString()} · refreshes every minute`
                 : ""}
           </span>
         </div>
@@ -144,7 +163,7 @@ export function HeartbeatDashboard() {
               <TriangleAlert className="gl-alert__icon" size={18} aria-hidden />
               <div>
                 <strong>Heartbeat data is unavailable</strong>
-                {error} The page will retry every minute.
+                {error.message} The page will retry every minute.
               </div>
             </div>
           </div>
@@ -179,7 +198,7 @@ export function HeartbeatDashboard() {
         </section>
 
         <footer className="gl-footer hb-footer">
-          <a href={`/api/heartbeat?format=rows&hours=${hours}`}>
+          <a href={`/api/heartbeat?format=rows&${query(hours, DEV_BUILD ? (shownSource ?? null) : null)}`}>
             <Database size={16} aria-hidden />
             Raw data for Grafana →
           </a>
