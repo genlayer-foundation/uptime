@@ -14,21 +14,33 @@ import { armedMissing, MAX_RECIPIENTS_PER_WALLET, readConfig, tokenSecret, VERIF
 import { counterGate, type MailerDeps } from "./policy";
 import { verificationMessage } from "./templates";
 import { checkUnsubscribeToken, checkVerifyToken, unsubscribeUrl, verifyUrl } from "./tokens";
+import { LIMITS, validateRecipientCap, validateRuleSettings, type FieldErrors } from "./limits";
 import type { AlertRule, Recipient, SuppressionReason } from "./types";
 
 const VERIFY_RESEND_MIN = 10;
 
-export type Result<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
+export type Result<T> = { ok: true; value: T } | { ok: false; status: number; error: string; fields?: FieldErrors };
 
 export interface RecipientView {
   id: number;
   email: string;
   state: "pending" | "verified";
   createdAt: string;
+  /** Emails per day to this address, all jobs together (the owner's own cap or the default). */
+  dailyCap: number;
+  /** True when dailyCap is the default, not a value the owner set. */
+  dailyCapDefault: boolean;
 }
 
 export function view(r: Recipient): RecipientView {
-  return { id: r.id, email: r.email, state: r.verifiedAt ? "verified" : "pending", createdAt: r.createdAt.toISOString() };
+  return {
+    id: r.id,
+    email: r.email,
+    state: r.verifiedAt ? "verified" : "pending",
+    createdAt: r.createdAt.toISOString(),
+    dailyCap: r.dailyCap ?? LIMITS.perRecipientPerDay.default,
+    dailyCapDefault: r.dailyCap == null,
+  };
 }
 
 export async function listRecipients(deps: MailerDeps, wallet: string): Promise<RecipientView[]> {
@@ -61,7 +73,7 @@ export async function addRecipient(
   if (recipient.verificationSentAt && now.getTime() - recipient.verificationSentAt.getTime() < VERIFY_RESEND_MIN * 60_000) {
     return pending;
   }
-  const blocked = await counterGate(deps.repo, cfg, now, { email, ownerWallet: wallet, network: null });
+  const blocked = await counterGate(deps.repo, cfg, now, { email, ownerWallet: wallet, network: null, recipientDailyCap: recipient.dailyCap });
   if (blocked) return { ok: false, status: 429, error: "too many emails right now, try again later" };
 
   const row = await deps.repo.claimEmail(
@@ -118,6 +130,15 @@ export async function removeRecipient(deps: MailerDeps, wallet: string, id: numb
   return deps.repo.removeRecipient(id, wallet, deps.now());
 }
 
+/** The owner sets how many emails per day one of their addresses may get (null = default). */
+export async function setRecipientCap(deps: MailerDeps, wallet: string, id: number, cap: unknown): Promise<Result<RecipientView>> {
+  const v = validateRecipientCap(cap);
+  if (!v.ok) return { ok: false, status: 400, error: v.error };
+  if (!(await deps.repo.setRecipientCap(id, wallet, v.value, deps.now()))) return { ok: false, status: 404, error: "not found" };
+  const r = await deps.repo.getRecipient(id);
+  return r ? { ok: true, value: view(r) } : { ok: false, status: 404, error: "not found" };
+}
+
 /** One-click unsubscribe. Does exactly one thing: suppress that address. Says nothing back. */
 export async function unsubscribe(deps: MailerDeps, q: { e: unknown; t: unknown }): Promise<void> {
   const secret = tokenSecret();
@@ -151,34 +172,26 @@ export async function sweepBounces(deps: MailerDeps): Promise<{ seen: number; ad
   return { seen: rows.length, added };
 }
 
-/** Save which of the owner's VERIFIED addresses get a job's alerts. */
+/**
+ * Save a job's alert rule: which of the owner's CONFIRMED addresses get it,
+ * which triggers fire, and the owner's own limits (lib/mailer/limits.ts).
+ */
 export async function setJobRule(
   deps: MailerDeps,
   wallet: string,
   jobOwner: string | null,
   jobId: string,
-  input: { recipientIds?: unknown; enabled?: unknown; failAfter?: unknown }
+  input: Record<string, unknown>
 ): Promise<Result<AlertRule>> {
   if (!jobOwner || normalizeWallet(jobOwner) !== wallet) return { ok: false, status: 404, error: "job not found" };
-  const ids = Array.isArray(input.recipientIds) ? input.recipientIds.map(Number) : [];
-  if (ids.length > MAX_RECIPIENTS_PER_WALLET || ids.some((n) => !Number.isSafeInteger(n) || n <= 0)) {
-    return { ok: false, status: 400, error: "recipientIds must be up to 3 of your addresses" };
-  }
+  const v = validateRuleSettings(input);
+  if (!v.ok) return { ok: false, status: 400, error: Object.values(v.errors)[0] ?? "invalid rule", fields: v.errors };
   const mine = new Map((await deps.repo.listRecipients(wallet)).map((r) => [r.id, r]));
-  if (ids.some((id) => !mine.get(id)?.verifiedAt)) {
-    return { ok: false, status: 400, error: "every recipient must be one of your confirmed addresses" };
+  if (v.value.recipientIds.some((id) => !mine.get(id)?.verifiedAt)) {
+    const error = "every recipient must be one of your confirmed addresses";
+    return { ok: false, status: 400, error, fields: { recipientIds: error } };
   }
-  const failAfter = input.failAfter === undefined ? 1 : Number(input.failAfter);
-  if (!Number.isInteger(failAfter) || failAfter < 1 || failAfter > 100) {
-    return { ok: false, status: 400, error: "failAfter must be 1-100" };
-  }
-  const rule: AlertRule = {
-    jobId,
-    ownerWallet: wallet,
-    enabled: input.enabled === undefined ? true : input.enabled === true,
-    failAfter,
-    recipientIds: [...new Set(ids)],
-  };
+  const rule: AlertRule = { ...v.value, jobId, ownerWallet: wallet };
   await deps.repo.setRule(rule, deps.now());
   return { ok: true, value: rule };
 }

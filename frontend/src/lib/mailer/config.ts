@@ -6,6 +6,7 @@
 // (no row, no chain read, no provider call). Enabled but missing any
 // precondition => NOT ARMED, which also does nothing and names what is missing.
 
+import { PRICE_ENV, readPrices } from "../pricing";
 import { isValidEmail } from "./address";
 
 /** Name of the env var holding the provider credential (Postmark server token). */
@@ -14,7 +15,7 @@ export const PROVIDER_TOKEN_ENV = "MAILER_PROVIDER_TOKEN";
 export const MAILER_KEY_ENV = "MAILER_KEY";
 
 /** Verified addresses per wallet (D18). Fixed, not configurable. */
-export const MAX_RECIPIENTS_PER_WALLET = 3;
+export { MAX_RECIPIENTS_PER_WALLET } from "./limits";
 /** Confirmation links expire after this long. */
 export const VERIFY_TTL_SEC = 24 * 3600;
 /** Max length of the job name as it appears in an email (§11.4.3). */
@@ -22,16 +23,14 @@ export const JOB_NAME_MAX = 60;
 
 export type ProviderName = "none" | "postmark";
 
+/**
+ * OPERATOR limits. The per-job cap, the job cooldown and the per-mailbox daily
+ * cap are the OWNER's, set self-serve per job / per address (lib/mailer/limits.ts).
+ */
 export interface MailerLimits {
-  /** Min minutes between two alerts for the same job (§11.1: one per 15 min). */
-  jobCooldownMin: number;
-  /** Alert emails per job per rolling 24 h. */
-  perJobPerDay: number;
-  /** Min minutes between two emails to the same mailbox (any job, any kind). */
+  /** Min minutes between two failure alerts to the same mailbox (any job). Recovery and digest are exempt. */
   recipientCooldownMin: number;
-  /** Emails per mailbox per rolling 24 h. */
-  perRecipientPerDay: number;
-  /** Emails per rolling 24 h across everyone: protects the sending domain. */
+  /** Emails per rolling 24 h across everyone: protects the sending domain. The global ceiling. */
   globalPerDay: number;
   /** Studio has no pool: free emails per owner wallet per rolling 24 h (D19). */
   studioPerWalletPerDay: number;
@@ -63,7 +62,6 @@ function int(name: string, dflt: number, min: number, max: number): number {
 
 export function readConfig(): MailerConfig {
   const provider = env("MAILER_PROVIDER") === "postmark" ? "postmark" : "none";
-  const price = env("MAILER_EMAIL_PRICE_WEI");
   return {
     enabled: env("MAILER_ENABLED") === "1" || env("MAILER_ENABLED") === "true",
     provider,
@@ -73,12 +71,11 @@ export function readConfig(): MailerConfig {
     stream: env("MAILER_STREAM") ?? "outbound",
     apiBase: env("MAILER_API_BASE") ?? null,
     publicUrl: env("MAILER_PUBLIC_URL")?.replace(/\/+$/, "") ?? null,
-    priceWei: price && /^\d+$/.test(price) ? BigInt(price) : null,
+    // One price for the UI and the charge: lib/pricing.ts.
+    priceWei: readPrices().emailWei,
     limits: {
-      jobCooldownMin: int("MAILER_JOB_COOLDOWN_MIN", 15, 1, 1440),
-      perJobPerDay: int("MAILER_MAX_PER_JOB_DAY", 12, 1, 1000),
-      recipientCooldownMin: int("MAILER_RECIPIENT_COOLDOWN_MIN", 10, 0, 1440),
-      perRecipientPerDay: int("MAILER_MAX_PER_RECIPIENT_DAY", 20, 1, 1000),
+      // 5 = the shortest job cooldown an owner can pick, so one job is never throttled below its own setting.
+      recipientCooldownMin: int("MAILER_RECIPIENT_COOLDOWN_MIN", 5, 0, 1440),
       globalPerDay: int("MAILER_GLOBAL_DAILY_CEILING", 500, 1, 100000),
       studioPerWalletPerDay: int("MAILER_STUDIO_DAILY_QUOTA", 20, 0, 1000),
     },
@@ -123,7 +120,7 @@ export function armedMissing(cfg: MailerConfig): string[] {
 /** Extra preconditions for a Bradbury alert, which is charged before it is sent. */
 export function bradburyMissing(cfg: MailerConfig): string[] {
   const missing: string[] = [];
-  if (!cfg.priceWei || cfg.priceWei <= BigInt(0)) missing.push("MAILER_EMAIL_PRICE_WEI");
+  if (!cfg.priceWei || cfg.priceWei <= BigInt(0)) missing.push(PRICE_ENV.email);
   if (!env(MAILER_KEY_ENV)) missing.push(MAILER_KEY_ENV);
   if (!poolAddress()) missing.push("UPTIME_POOL_BRADBURY");
   return missing;

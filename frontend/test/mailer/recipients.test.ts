@@ -5,7 +5,7 @@ import { interpretChargeLogs, POOL_MAILER_ABI } from "@/lib/mailer/charger";
 import { memoryAlertsRepo } from "@/lib/mailer/memoryRepo";
 import type { MailerDeps } from "@/lib/mailer/policy";
 import { mapPostmarkReason, postmarkProvider, type MailProvider } from "@/lib/mailer/provider";
-import { addRecipient, confirmRecipient, setJobRule, sweepBounces, unsubscribe } from "@/lib/mailer/recipients";
+import { addRecipient, confirmRecipient, setJobRule, setRecipientCap, sweepBounces, unsubscribe } from "@/lib/mailer/recipients";
 import { safeJobName } from "@/lib/mailer/templates";
 import { unsubscribeToken } from "@/lib/mailer/tokens";
 import type { Message } from "@/lib/mailer/templates";
@@ -211,5 +211,37 @@ describe("charge receipt interpretation", () => {
   it("a Charged event for a different amount fails", () => {
     const l = log("Charged", { uptimeId: poolId, role: 2, settlementId: BigInt(7) }, encodeAbiParameters([{ type: "uint256" }], [BigInt(1)]));
     expect(interpretChargeLogs([l], pool, req)).toEqual({ outcome: "failed", reason: "charged_amount_mismatch" });
+  });
+});
+
+describe("self-serve settings", () => {
+  async function confirmed() {
+    const s = setup();
+    const { recipient } = await s.repo.upsertRecipient(OWNER, "ana@example.com", clock);
+    await s.repo.confirmRecipient(recipient.id, clock);
+    return { ...s, id: recipient.id };
+  }
+
+  it("setJobRule stores the owner's triggers and limits exactly", async () => {
+    const { deps, repo, id } = await confirmed();
+    const res = await setJobRule(deps, OWNER, OWNER, "j1", { recipientIds: [id], perJobPerDay: 25, cooldownMin: 30, digest: true, onRecovery: false });
+    expect(res.ok).toBe(true);
+    expect(await repo.getRule("j1")).toMatchObject({ enabled: true, perJobPerDay: 25, cooldownMin: 30, digest: true, onRecovery: false, onFailure: true });
+  });
+
+  it("setJobRule refuses out-of-range limits with a per-field error, and stores nothing", async () => {
+    const { deps, repo, id } = await confirmed();
+    const res = await setJobRule(deps, OWNER, OWNER, "j1", { recipientIds: [id], perJobPerDay: 51, cooldownMin: 4 });
+    expect(res).toMatchObject({ ok: false, status: 400 });
+    expect(!res.ok && Object.keys(res.fields ?? {}).sort()).toEqual(["cooldownMin", "perJobPerDay"]);
+    expect(await repo.getRule("j1")).toBeNull();
+  });
+
+  it("setRecipientCap: 1-100 on your own address, null resets, others are not found", async () => {
+    const { deps, id } = await confirmed();
+    expect(await setRecipientCap(deps, OWNER, id, 7)).toMatchObject({ ok: true, value: { dailyCap: 7, dailyCapDefault: false } });
+    expect(await setRecipientCap(deps, OWNER, id, null)).toMatchObject({ ok: true, value: { dailyCap: 20, dailyCapDefault: true } });
+    expect(await setRecipientCap(deps, OWNER, id, 101)).toMatchObject({ ok: false, status: 400 });
+    expect(await setRecipientCap(deps, OTHER, id, 5)).toMatchObject({ ok: false, status: 404 });
   });
 });

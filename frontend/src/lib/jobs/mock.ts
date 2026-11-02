@@ -14,12 +14,22 @@ import type { Assertion, Job, Run, Step, StepRun } from "./types";
 import type { Preset, PresetsResponse, RunRow } from "./client";
 import { evaluate } from "@/components/jobs/assert";
 import { firingsBetween } from "@/components/jobs/schedule";
+import { alertsMockRoute } from "@/lib/alerts/mock";
 
 const KEY = "jobs-mock-v1";
 const SAMPLE_OWNER = "0x0000000000000000000000000000000000005a3e";
 const DAY = 86_400_000;
 
-type PoolState = { owner: string; paused: boolean; balanceWei: string; perRunWei: string; perDayWei: string };
+type PoolState = {
+  owner: string;
+  paused: boolean;
+  balanceWei: string;
+  perRunWei: string;
+  perDayWei: string;
+  /** Mailer (role 2) allowance, once the owner set one from the Alerts section. */
+  mailerPerDayWei?: string;
+  mailerPerChargeWei?: string;
+};
 type State = { wallet: string | null; jobs: Job[]; pools: Record<string, PoolState> };
 
 const WEBPROBE = "0x7E1a0b5c3D9f2A4e6B8c0D1E2f3A4b5C6d7E8f90";
@@ -408,6 +418,13 @@ export const mockPool = {
     p.paused = paused;
     save();
   },
+  setMailerAllowance(id: string, perDayWei: bigint, perChargeWei: bigint) {
+    const p = mockPool.get(id);
+    if (!p) throw new Error("UnknownPool()");
+    p.mailerPerDayWei = perDayWei.toString();
+    p.mailerPerChargeWei = perChargeWei.toString();
+    save();
+  },
 };
 
 // ---------------------------------------------------------------- routes
@@ -464,6 +481,14 @@ export async function mockFetch(input: string, init: RequestInit = {}): Promise<
     }
   }
   if (p[0] === "me") return json(200, { ready: true, wallet: s.wallet, studioAllowed: !!s.wallet });
+
+  if (p[0] === "alerts") {
+    const owns = (jobId: string) => {
+      const j = s.jobs.find((x) => x.id === jobId);
+      return !!j && !!s.wallet && j.owner.toLowerCase() === s.wallet.toLowerCase();
+    };
+    return alertsMockRoute(method, p.slice(1), body, s.wallet, owns);
+  }
 
   if (p[0] === "presets") {
     const res: PresetsResponse = { minIntervalSec: 300, pool: { bradbury: null }, presets: PRESETS };

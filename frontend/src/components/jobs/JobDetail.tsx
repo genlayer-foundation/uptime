@@ -14,6 +14,7 @@ import { dateTime, download, pct, passRate, runLatencyMs, runsSince, seconds, sh
 import { describeSchedule, nextRun } from "./schedule";
 import { RunCharts } from "./RunCharts";
 import { PoolPanel } from "./PoolPanel";
+import { JobAlerts } from "@/components/alerts/JobAlerts";
 
 const WINDOWS = [
   { value: 1, label: "24h" },
@@ -215,6 +216,12 @@ export function JobDetail({ id }: { id: string }) {
                 This job was created without a pool, so the scheduler has nothing to charge.
               </Alert>
             )}
+          </Section>
+        )}
+
+        {isOwner && (
+          <Section id="alerts" title="Alerts" subtitle="Email when this job fails, an assertion fails or it recovers, plus an optional daily digest. Your limits, your addresses.">
+            <JobAlerts job={job} wallet={me?.wallet ?? null} />
           </Section>
         )}
 
