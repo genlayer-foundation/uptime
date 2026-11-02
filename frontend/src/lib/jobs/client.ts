@@ -72,6 +72,11 @@ function transport(): Promise<Fetch> {
   return mockFetch;
 }
 
+/** One API call through the same transport (and mock) as the jobs pages. */
+export async function apiCall<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return call<T>(method, path, body);
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const f = await transport();
   const res = await f(path, {

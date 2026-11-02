@@ -17,6 +17,8 @@ import { describeSchedule, runsPerDay, scheduleError } from "./schedule";
 import { depositPool, newPoolId, parseGen, poolContract, setReportedPoolAddress } from "./pool";
 import { describeAssertion } from "./assert";
 import { gen } from "./format";
+import { LIMITS } from "@/lib/mailer/limits";
+import { alertsMaxPerDayWei, daysCovered, estimateJobPerDayWei, estimateRunWei, formatGen, readPrices } from "@/lib/pricing";
 
 const PAGES = ["Start", "Network", "Steps", "Schedule", "Assertions", "Funding", "Review"] as const;
 type Page = (typeof PAGES)[number];
@@ -364,6 +366,11 @@ export function JobWizard() {
                           Deposit <span className="font-mono">{draft.funding.depositGen} GEN</span> · caps{" "}
                           <span className="font-mono">{draft.funding.perRunGen} GEN</span>/run, <span className="font-mono">{draft.funding.perDayGen} GEN</span>/day
                           <p className="mt-1 break-all font-mono text-xs text-muted">pool id {poolId}</p>
+                          {rpd != null && (
+                            <p className="mt-1 text-xs text-muted">
+                              Estimated run cost about <span className="font-mono">{formatGen(estimateJobPerDayWei(readPrices(), rpd, txSteps))}</span>/day. Not audited — testnet only.
+                            </p>
+                          )}
                         </>
                       ) : (
                         <span className="text-warn-fg">The pool contract is not deployed: the job is created unfunded.</span>
@@ -433,7 +440,12 @@ function FundingForm({
   const dep = tryGen(f.depositGen);
   const day = tryGen(f.perDayGen);
   const run = tryGen(f.perRunGen);
-  const lasts = dep != null && day ? `${Number((dep * 100n) / day) / 100} days at the full daily cap` : undefined;
+  const prices = readPrices();
+  const perRunEst = estimateRunWei(prices, txSteps);
+  const perDayEst = rpd != null ? estimateJobPerDayWei(prices, rpd, txSteps) : null;
+  const alertsMax = alertsMaxPerDayWei(prices, { perJobPerDay: LIMITS.perJobPerDay.default, digest: false, recipients: 1 });
+  const estDays = dep != null && perDayEst ? daysCovered(dep, perDayEst) : null;
+  const lasts = dep != null && day ? `${daysCovered(dep, day)} days at the full daily cap${estDays != null ? `, about ${estDays} at the estimate` : ""}` : undefined;
   return (
     <div className="grid gap-5">
       <p className="text-sm text-muted">
@@ -445,6 +457,31 @@ function FundingForm({
           <code>NEXT_PUBLIC_UPTIME_POOL_BRADBURY</code> is unset. You can still create the job; it stays unfunded and does not run until a pool exists.
         </Alert>
       )}
+
+      <div className="grid gap-2 rounded-lg border border-border bg-surface p-4 text-sm">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted">Estimate</p>
+        <p>
+          This job costs about <span className="font-mono font-medium">{perDayEst != null ? formatGen(perDayEst) : "—"}</span> a day at this schedule
+          {rpd != null ? (
+            <>
+              {" "}
+              ({Math.round(rpd * 10) / 10} runs/day × <span className="font-mono">{formatGen(perRunEst)}</span> per run)
+            </>
+          ) : null}
+          .
+        </p>
+        <p className="text-xs text-muted">
+          Each run is charged a flat <span className="font-mono">{formatGen(prices.runFeeWei)}</span> plus the gas it actually used. The gas part of the estimate assumes{" "}
+          <span className="font-mono">{formatGen(prices.gasPerTxEstimateWei)}</span> per transaction × {txSteps} transaction{txSteps === 1 ? "" : "s"} per run; Bradbury fees are not
+          measured yet, so the real figure may differ.
+        </p>
+        <p>
+          Email alerts, if you turn them on later: up to <span className="font-mono font-medium">{formatGen(alertsMax)}</span> a day ({LIMITS.perJobPerDay.default} alerts ×{" "}
+          <span className="font-mono">{formatGen(prices.emailWei)}</span>, the default limit; you choose 1–{LIMITS.perJobPerDay.max} on the job page). They draw from this pool under
+          their own allowance, which you grant separately.
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Deposit (GEN)" htmlFor={`${id}-dep`} error={e.deposit} help={lasts}>
           <Input id={`${id}-dep`} aria-invalid={!!e.deposit} className="font-mono" value={f.depositGen} onChange={(x) => setF({ depositGen: x.target.value })} />
@@ -456,11 +493,16 @@ function FundingForm({
           <Input id={`${id}-day`} aria-invalid={!!e.perDay} className="font-mono" value={f.perDayGen} onChange={(x) => setF({ perDayGen: x.target.value })} />
         </Field>
       </div>
-      <p className="text-xs text-muted">
-        {rpd != null ? `About ${Math.round(rpd)} runs/day, ${Math.round(rpd * txSteps)} transactions/day. ` : ""}
-        The fee per transaction on Bradbury Phase 2 has not been measured yet, so there is no cost estimate: set caps you are fine losing on a testnet.
-        {run != null && rpd ? ` At the per-run cap every run would be ${gen(run * BigInt(Math.ceil(rpd)))} a day, before the daily cap stops it.` : ""}
-      </p>
+      {run != null && run < perRunEst && (
+        <Alert tone="warn" title="The per-run cap is below the estimated cost of one run">
+          Runs charged above {gen(run)} are refused, so this job may never run. The estimate is {formatGen(perRunEst)} per run.
+        </Alert>
+      )}
+      {day != null && perDayEst != null && day < perDayEst && (
+        <Alert tone="warn" title="The daily cap is below the estimate">
+          At about {formatGen(perDayEst)} a day, runs stop for the rest of the day once {gen(day)} is spent.
+        </Alert>
+      )}
       <p className="text-xs text-muted">
         Your wallet signs <code className="text-foreground">deposit(uptimeId, [scheduler], [terms])</code> with the deposit as value when you create the job. Later, from the
         job page: <code className="text-foreground">topUp</code>, <code className="text-foreground">withdraw</code>, <code className="text-foreground">setPaused</code>.

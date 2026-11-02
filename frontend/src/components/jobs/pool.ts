@@ -10,7 +10,7 @@
 import { keccak256, parseEther, toHex, type Address, type Hex } from "viem";
 import { JOBS_MOCK } from "@/lib/jobs/client";
 import { poolAddress } from "@/lib/chains";
-import { ROLE_SCHEDULER, UPTIME_POOL_ABI } from "./poolAbi";
+import { ROLE_MAILER, ROLE_SCHEDULER, UPTIME_POOL_ABI } from "./poolAbi";
 import { ensureBradbury, publicClient, requestAccount, walletClient } from "./wallet";
 
 export type PoolInfo = {
@@ -161,4 +161,82 @@ export async function setPoolPaused(poolId: string, paused: boolean): Promise<Wr
     return { hash: "mock" };
   }
   return send("setPaused", [poolId as Hex, paused]);
+}
+
+// ------------------------------------------------------------- mailer allowance
+
+/** `setAllowance` from UptimePool.sol (owner only); not in the generated ABI excerpt. */
+const SET_ALLOWANCE_ABI = [
+  {
+    type: "function",
+    name: "setAllowance",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "uptimeId", type: "bytes32" },
+      { name: "role", type: "uint8" },
+      {
+        name: "terms",
+        type: "tuple",
+        components: [
+          { name: "periodAmount", type: "uint128" },
+          { name: "periodDuration", type: "uint64" },
+          { name: "startDate", type: "uint64" },
+          { name: "expiry", type: "uint64" },
+          { name: "maxPerCharge", type: "uint128" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const;
+
+export type MailerAllowance = { active: boolean; perDayWei: bigint; perChargeWei: bigint; paused: boolean };
+
+/** The mailer's (role 2) allowance on a pool: the on-chain cap on what alerts can cost per day. */
+export async function readMailerAllowance(poolId: string): Promise<MailerAllowance | null> {
+  if (JOBS_MOCK) {
+    const p = (await mock()).get(poolId);
+    if (!p) return null;
+    return p.mailerPerDayWei
+      ? { active: true, perDayWei: BigInt(p.mailerPerDayWei), perChargeWei: BigInt(p.mailerPerChargeWei ?? "0"), paused: false }
+      : { active: false, perDayWei: 0n, perChargeWei: 0n, paused: false };
+  }
+  const address = poolContract();
+  if (!address) return null;
+  const [terms, , , paused, active] = (await publicClient.readContract({
+    address,
+    abi: UPTIME_POOL_ABI,
+    functionName: "getAllowance",
+    args: [poolId as Hex, ROLE_MAILER],
+  })) as readonly [{ periodAmount: bigint; maxPerCharge: bigint }, bigint, bigint, boolean, boolean];
+  return { active, perDayWei: terms.periodAmount, perChargeWei: terms.maxPerCharge, paused };
+}
+
+/**
+ * Grant or replace the mailer's allowance, signed by the OWNER's wallet. The
+ * terms come from lib/pricing.ts `mailerAllowanceTerms`, so the on-chain cap
+ * equals the alert limits saved for the job.
+ */
+export async function setMailerAllowance(
+  poolId: string,
+  terms: { periodAmount: bigint; periodDuration: bigint; startDate: bigint; expiry: bigint; maxPerCharge: bigint }
+): Promise<Write> {
+  if (JOBS_MOCK) {
+    (await mock()).setMailerAllowance(poolId, terms.periodAmount, terms.maxPerCharge);
+    return { hash: "mock" };
+  }
+  const address = poolContract();
+  if (!address) throw new Error("The UptimePool is not deployed yet (NEXT_PUBLIC_UPTIME_POOL_BRADBURY is unset).");
+  const account = await requestAccount();
+  await ensureBradbury();
+  const { request } = await publicClient.simulateContract({
+    address,
+    abi: SET_ALLOWANCE_ABI,
+    functionName: "setAllowance",
+    args: [poolId as Hex, ROLE_MAILER, terms],
+    account,
+  } as never);
+  const hash = await walletClient().writeContract(request as never);
+  await publicClient.waitForTransactionReceipt({ hash });
+  return { hash };
 }
