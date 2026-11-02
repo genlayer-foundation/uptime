@@ -3,11 +3,12 @@
 // `configureMailer`). `memoryAlertsRepo` is the reference implementation and
 // what the tests run against.
 
-import type { AlertRule, EmailKind, EmailRow, Network, Outcome, Recipient, SuppressionReason } from "./types";
+import type { AlertRule, AlertTrigger, EmailKind, EmailRow, Network, Outcome, Recipient, SuppressionReason } from "./types";
 
 export interface EmailClaim {
   claimKey: string; // unique: a second claim with the same key returns null
   kind: EmailKind;
+  trigger?: AlertTrigger | null;
   jobId: string | null;
   runId: string | null;
   recipientId: number | null;
@@ -40,6 +41,8 @@ export interface AlertsRepo {
   markVerificationSent(id: number, now: Date): Promise<void>;
   confirmRecipient(id: number, now: Date): Promise<boolean>;
   removeRecipient(id: number, wallet: string, now: Date): Promise<boolean>;
+  /** The owner's own daily cap for one of their addresses (null = default). False if not theirs. */
+  setRecipientCap(id: number, wallet: string, cap: number | null, now: Date): Promise<boolean>;
 
   // suppression: address-level, one-way. There is no unsuppress.
   isSuppressed(email: string): Promise<boolean>;
@@ -48,6 +51,8 @@ export interface AlertsRepo {
   // per-job alert rule
   getRule(jobId: string): Promise<AlertRule | null>;
   setRule(rule: AlertRule, now: Date): Promise<void>;
+  /** Enabled rules with the daily digest on (the digest cron's work list). */
+  listDigestRules(): Promise<AlertRule[]>;
 
   // email ledger
   claimEmail(c: EmailClaim, now: Date): Promise<EmailRow | null>;
@@ -58,4 +63,6 @@ export interface AlertsRepo {
   ): Promise<void>;
   countEmails(f: EmailFilter): Promise<number>;
   lastEmailAt(f: EmailFilter): Promise<Date | null>;
+  /** The newest matching row (recovery reads the trigger of a job's last SENT alert). */
+  lastEmail(f: EmailFilter): Promise<EmailRow | null>;
 }

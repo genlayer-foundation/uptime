@@ -47,6 +47,7 @@ export function memoryAlertsRepo() {
         verificationSentAt: null,
         verifiedAt: null,
         removedAt: null,
+        dailyCap: null,
       };
       recipients.push(r);
       return { recipient: { ...r }, created: true };
@@ -69,6 +70,13 @@ export function memoryAlertsRepo() {
       return true;
     },
 
+    async setRecipientCap(id, wallet, cap) {
+      const r = recipients.find((x) => x.id === id && x.ownerWallet === wallet && !x.removedAt);
+      if (!r) return false;
+      r.dailyCap = cap;
+      return true;
+    },
+
     async isSuppressed(email) {
       return suppressions.has(email);
     },
@@ -86,12 +94,17 @@ export function memoryAlertsRepo() {
       rules.set(rule.jobId, { ...rule, recipientIds: [...rule.recipientIds] });
     },
 
+    async listDigestRules() {
+      return [...rules.values()].filter((r) => r.enabled && r.digest).map((r) => ({ ...r, recipientIds: [...r.recipientIds] }));
+    },
+
     async claimEmail(c, now) {
       if (emails.some((e) => e.claimKey === c.claimKey)) return null;
       const row: EmailRow = {
         id: emails.length + 1,
         claimKey: c.claimKey,
         kind: c.kind,
+        trigger: c.trigger ?? null,
         jobId: c.jobId,
         runId: c.runId,
         recipientId: c.recipientId,
@@ -120,8 +133,12 @@ export function memoryAlertsRepo() {
       return emails.filter(match(f)).length;
     },
     async lastEmailAt(f) {
+      return (await repo.lastEmail(f))?.createdAt ?? null;
+    },
+    async lastEmail(f) {
       const hits = emails.filter(match(f));
-      return hits.length ? hits.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)).createdAt : null;
+      // Ties on createdAt go to the later row (higher id).
+      return hits.length ? { ...hits.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)) } : null;
     },
   };
   return repo;

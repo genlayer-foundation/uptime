@@ -1,8 +1,11 @@
-// Which of the owner's CONFIRMED addresses get this job's failure alerts.
+// A job's self-serve alert rule: which of the owner's CONFIRMED addresses get
+// it, which triggers fire (failure, assertion, recovery, digest) and the
+// owner's own limits (alerts/day, cooldown, failAfter; lib/mailer/limits.ts).
 // Ownership comes from the backend's job lookup (configureMailer `jobOwner`);
 // without it the route answers 503.
 import { setJobRule } from "@/lib/mailer/recipients";
 import { depsOr503, json, readJson } from "@/lib/mailer/http";
+import { defaultRuleSettings } from "@/lib/mailer/limits";
 import { jobOwnerLookup } from "@/lib/mailer/runtime";
 import { sessionWallet } from "@/lib/mailer/session";
 
@@ -27,7 +30,7 @@ export async function GET(request: Request, ctx: Ctx) {
   if (o instanceof Response) return o;
   if (!o.owner || o.owner.toLowerCase() !== o.wallet) return json({ error: "job not found" }, 404);
   const rule = await o.deps.repo.getRule(o.jobId);
-  return json({ rule: rule ?? { jobId: o.jobId, enabled: false, failAfter: 1, recipientIds: [] } });
+  return json({ rule: rule ?? { ...defaultRuleSettings(), jobId: o.jobId } });
 }
 
 export async function PUT(request: Request, ctx: Ctx) {
@@ -36,5 +39,5 @@ export async function PUT(request: Request, ctx: Ctx) {
   const body = await readJson(request);
   if (!body) return json({ error: "expected a JSON body" }, 400);
   const res = await setJobRule(o.deps, o.wallet, o.owner, o.jobId, body);
-  return res.ok ? json({ rule: res.value }) : json({ error: res.error }, res.status);
+  return res.ok ? json({ rule: res.value }) : json({ error: res.error, fields: res.fields }, res.status);
 }

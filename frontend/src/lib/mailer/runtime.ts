@@ -3,7 +3,7 @@
 // lookup the rules route needs) once at startup:
 //
 //   import { configureMailer } from "@/lib/mailer";
-//   configureMailer({ repo: pgAlertsRepo(pool), studioAllowed: isStudioAllowed, jobOwner });
+//   configureMailer({ repo: pgAlertsRepo(pool), studioAllowed: isStudioAllowed, jobOwner, digestSource });
 //
 // Until then every entry point FAILS CLOSED: notifyRunFailed returns
 // { status: "not_wired" } and the API routes answer 503.
@@ -13,6 +13,7 @@ import { evmPoolCharger, type PoolCharger } from "./charger";
 import type { MailerDeps } from "./policy";
 import { postmarkProvider, type MailProvider } from "./provider";
 import type { AlertsRepo } from "./repo";
+import type { AlertJob, AlertRun } from "./types";
 
 export interface MailerWiring {
   repo: AlertsRepo;
@@ -21,6 +22,8 @@ export interface MailerWiring {
   studioAllowed?: (wallet: string) => boolean | Promise<boolean>;
   /** Owner wallet of a job, or null if the job does not exist. Used by the rules route. */
   jobOwner?: (jobId: string) => Promise<string | null>;
+  /** A job and its runs since `since`, for the daily digest. Without it the digest cron answers 503. */
+  digestSource?: (jobId: string, since: Date) => Promise<{ job: AlertJob; runs: AlertRun[] } | null>;
   now?: () => Date;
   log?: (line: string) => void;
 }
@@ -58,4 +61,8 @@ export function mailerDeps(): MailerDeps | null {
 
 export function jobOwnerLookup(): ((jobId: string) => Promise<string | null>) | null {
   return wiring?.jobOwner ?? null;
+}
+
+export function digestSourceLookup(): MailerWiring["digestSource"] | null {
+  return wiring?.digestSource ?? null;
 }

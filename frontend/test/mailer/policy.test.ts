@@ -7,7 +7,8 @@ import { memoryAlertsRepo } from "@/lib/mailer/memoryRepo";
 import { notifyRunFailedWith, type MailerDeps } from "@/lib/mailer/policy";
 import type { MailProvider } from "@/lib/mailer/provider";
 import type { Message } from "@/lib/mailer/templates";
-import type { AlertJob, AlertRun } from "@/lib/mailer/types";
+import { defaultRuleSettings } from "@/lib/mailer/limits";
+import type { AlertJob, AlertRule, AlertRun } from "@/lib/mailer/types";
 
 const OWNER = "0x00000000000000000000000000000000000000aa";
 const OTHER = "0x00000000000000000000000000000000000000bb";
@@ -20,7 +21,7 @@ function env() {
   vi.stubEnv("MAILER_FROM", "alerts@uptime.example");
   vi.stubEnv("MAILER_TOKEN_SECRET", "x".repeat(40));
   vi.stubEnv("MAILER_PUBLIC_URL", "https://uptime.example");
-  vi.stubEnv("MAILER_EMAIL_PRICE_WEI", "1000");
+  vi.stubEnv("NEXT_PUBLIC_UPTIME_PRICE_EMAIL_GEN", "0.000000000000001"); // 1000 wei
   vi.stubEnv("MAILER_KEY", `0x${"22".repeat(32)}`);
   vi.stubEnv("UPTIME_POOL_BRADBURY", `0x${"33".repeat(20)}`);
 }
@@ -53,6 +54,15 @@ function fakeCharger(result: (req: ChargeRequest) => ChargeResult = () => ({ out
   return c;
 }
 
+/** A full rule: the owner's defaults, switched on, plus overrides. */
+const rule = (over: Partial<AlertRule> & { recipientIds: number[] }): AlertRule => ({
+  ...defaultRuleSettings(),
+  enabled: true,
+  jobId: "j1",
+  ownerWallet: OWNER,
+  ...over,
+});
+
 let clock = new Date("2026-11-02T12:00:00Z");
 const advance = (min: number) => (clock = new Date(clock.getTime() + min * 60_000));
 
@@ -75,7 +85,7 @@ async function setup(opts: { charger?: ReturnType<typeof fakeCharger>; recipient
     await repo.confirmRecipient(recipient.id, clock);
     ids.push(recipient.id);
   }
-  await repo.setRule({ jobId: "j1", ownerWallet: OWNER, enabled: true, failAfter: 1, recipientIds: ids }, clock);
+  await repo.setRule(rule({ jobId: "j1", failAfter: 1, recipientIds: ids }), clock);
   return { repo, provider, charger, deps, ids, logs };
 }
 
@@ -124,22 +134,29 @@ describe("switches", () => {
     expect(provider.sent).toHaveLength(0);
   });
 
-  it("Bradbury is not armed without a price", async () => {
-    vi.stubEnv("MAILER_EMAIL_PRICE_WEI", "");
+  it("Bradbury is not armed when the operator prices email at 0", async () => {
+    vi.stubEnv("NEXT_PUBLIC_UPTIME_PRICE_EMAIL_GEN", "0");
     const { deps, charger } = await setup();
     const res = await notifyRunFailedWith(deps, job(), failedRun());
-    expect(res.status === "not_armed" && res.missing).toContain("MAILER_EMAIL_PRICE_WEI");
+    expect(res.status === "not_armed" && res.missing).toContain("NEXT_PUBLIC_UPTIME_PRICE_EMAIL_GEN");
     expect(charger.calls).toHaveLength(0);
+  });
+
+  it("charges the price from lib/pricing (default 0.01 GEN when unset)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_UPTIME_PRICE_EMAIL_GEN", "");
+    const { deps, charger } = await setup();
+    await notifyRunFailedWith(deps, job(), failedRun());
+    expect(charger.calls[0].amountWei).toBe(10n ** 16n);
   });
 });
 
 describe("failure detection and rules", () => {
-  it("ignores a passing run and an undecided one", async () => {
+  it("a passing run with no prior alert sends nothing; an undecided one is not decided", async () => {
     const { deps, provider } = await setup();
-    expect((await notifyRunFailedWith(deps, job(), failedRun({ pass: true }))).status).toBe("not_a_failure");
+    expect((await notifyRunFailedWith(deps, job(), failedRun({ pass: true }))).status).toBe("not_down");
     expect(
       (await notifyRunFailedWith(deps, job(), failedRun({ pass: null, steps: [{ status: "PENDING" }] }))).status
-    ).toBe("not_a_failure");
+    ).toBe("not_decided");
     expect(provider.sent).toHaveLength(0);
   });
 
@@ -152,7 +169,7 @@ describe("failure detection and rules", () => {
 
   it("waits for failAfter consecutive failures", async () => {
     const { deps, repo, ids } = await setup();
-    await repo.setRule({ jobId: "j1", ownerWallet: OWNER, enabled: true, failAfter: 3, recipientIds: ids }, clock);
+    await repo.setRule(rule({ jobId: "j1", failAfter: 3, recipientIds: ids }), clock);
     expect((await notifyRunFailedWith(deps, job(), failedRun(), { consecutiveFailures: 2 })).status).toBe("below_threshold");
     expect((await notifyRunFailedWith(deps, job(), failedRun(), { consecutiveFailures: 3 })).status).toBe("done");
   });
@@ -167,7 +184,7 @@ describe("failure detection and rules", () => {
     const { recipient: unverified } = await repo.upsertRecipient(OWNER, "pending@example.com", clock);
     const { recipient: foreign } = await repo.upsertRecipient(OTHER, "foreign@example.com", clock);
     await repo.confirmRecipient(foreign.id, clock);
-    await repo.setRule({ jobId: "j1", ownerWallet: OWNER, enabled: true, failAfter: 1, recipientIds: [unverified.id, foreign.id] }, clock);
+    await repo.setRule(rule({ jobId: "j1", failAfter: 1, recipientIds: [unverified.id, foreign.id] }), clock);
     const res = await notifyRunFailedWith(deps, job(), failedRun());
     expect(res.status === "done" && res.decisions.map((d) => d.reason)).toEqual(["not_verified", "not_verified"]);
     expect(provider.sent).toHaveLength(0);
@@ -265,7 +282,7 @@ describe("cooldowns and caps (checked before the chain)", () => {
 
   it("per-recipient cooldown applies across jobs", async () => {
     const { deps, repo, ids, provider, charger } = await setup();
-    await repo.setRule({ jobId: "j2", ownerWallet: OWNER, enabled: true, failAfter: 1, recipientIds: ids }, clock);
+    await repo.setRule(rule({ jobId: "j2", failAfter: 1, recipientIds: ids }), clock);
     await notifyRunFailedWith(deps, job(), failedRun(), { config: cfg({ recipientCooldownMin: 30 }) });
     advance(1);
     const res = await notifyRunFailedWith(deps, job({ id: "j2" }), failedRun(), { config: cfg({ recipientCooldownMin: 30 }) });
@@ -274,29 +291,59 @@ describe("cooldowns and caps (checked before the chain)", () => {
     expect(charger.calls).toHaveLength(1);
   });
 
-  it("per-job daily cap", async () => {
-    const { deps, provider } = await setup();
-    const c = cfg({ perJobPerDay: 2, jobCooldownMin: 1, recipientCooldownMin: 0 });
+  it("per-job daily cap is the owner's rule.perJobPerDay", async () => {
+    const { deps, provider, repo, ids } = await setup();
+    await repo.setRule(rule({ recipientIds: ids, perJobPerDay: 2, cooldownMin: 5 }), clock);
+    const c = cfg({ recipientCooldownMin: 0 });
     for (let i = 0; i < 4; i++) {
       await notifyRunFailedWith(deps, job(), failedRun(), { config: c });
-      advance(2);
+      advance(6);
     }
     expect(provider.sent).toHaveLength(2);
   });
 
-  it("per-recipient daily cap", async () => {
-    const { deps, provider } = await setup();
-    const c = cfg({ perRecipientPerDay: 3, jobCooldownMin: 1, recipientCooldownMin: 0 });
+  it("the default per-job cap is 10 a day", async () => {
+    const { deps, provider, repo, ids } = await setup();
+    await repo.setRule(rule({ recipientIds: ids, cooldownMin: 5 }), clock);
+    for (let i = 0; i < 14; i++) {
+      await notifyRunFailedWith(deps, job(), failedRun(), { config: cfg({ recipientCooldownMin: 0 }) });
+      advance(6);
+    }
+    expect(provider.sent).toHaveLength(10);
+  });
+
+  it("job cooldown is the owner's rule.cooldownMin", async () => {
+    const { deps, provider, repo, ids } = await setup();
+    await repo.setRule(rule({ recipientIds: ids, cooldownMin: 60 }), clock);
+    await notifyRunFailedWith(deps, job(), failedRun());
+    advance(30);
+    expect(await notifyRunFailedWith(deps, job(), failedRun())).toEqual({ status: "throttled", reason: "job_cooldown" });
+    advance(31);
+    await notifyRunFailedWith(deps, job(), failedRun());
+    expect(provider.sent).toHaveLength(2);
+  });
+
+  it("per-recipient daily cap: the address's own cap, else the default 20", async () => {
+    const { deps, provider, repo, ids } = await setup();
+    await repo.setRule(rule({ recipientIds: ids, cooldownMin: 5, perJobPerDay: 50 }), clock);
+    await repo.setRecipientCap(ids[0], OWNER, 3, clock);
+    const c = cfg({ recipientCooldownMin: 0 });
     for (let i = 0; i < 5; i++) {
       await notifyRunFailedWith(deps, job(), failedRun(), { config: c });
-      advance(2);
+      advance(6);
     }
     expect(provider.sent).toHaveLength(3);
+    await repo.setRecipientCap(ids[0], OWNER, null, clock);
+    for (let i = 0; i < 30; i++) {
+      await notifyRunFailedWith(deps, job(), failedRun(), { config: c });
+      advance(6);
+    }
+    expect(provider.sent).toHaveLength(20);
   });
 
   it("global ceiling stops everyone, and the chain is not hit", async () => {
     const { deps, provider, charger, repo, ids } = await setup({ recipients: ["a@example.com", "b@example.com"] });
-    await repo.setRule({ jobId: "j1", ownerWallet: OWNER, enabled: true, failAfter: 1, recipientIds: ids }, clock);
+    await repo.setRule(rule({ jobId: "j1", failAfter: 1, recipientIds: ids }), clock);
     const res = await notifyRunFailedWith(deps, job(), failedRun(), { config: cfg({ globalPerDay: 1 }) });
     expect(res.status === "done" && res.decisions.map((d) => d.reason ?? d.outcome)).toEqual(["sent", "global_ceiling"]);
     expect(provider.sent).toHaveLength(1);
@@ -304,8 +351,9 @@ describe("cooldowns and caps (checked before the chain)", () => {
   });
 
   it("windows roll: a cap frees up after 24h", async () => {
-    const { deps, provider } = await setup();
-    const c = cfg({ perJobPerDay: 1 });
+    const { deps, provider, repo, ids } = await setup();
+    const c = cfg();
+    await repo.setRule(rule({ recipientIds: ids, perJobPerDay: 1 }), clock);
     await notifyRunFailedWith(deps, job(), failedRun(), { config: c });
     advance(60);
     await notifyRunFailedWith(deps, job(), failedRun(), { config: c });
@@ -317,11 +365,12 @@ describe("cooldowns and caps (checked before the chain)", () => {
 
 describe("Studio", () => {
   it("is free (no charge) under a per-wallet daily quota", async () => {
-    const { deps, provider, charger } = await setup();
-    const c = cfg({ studioPerWalletPerDay: 2, jobCooldownMin: 1, recipientCooldownMin: 0 });
+    const { deps, provider, charger, repo, ids } = await setup();
+    await repo.setRule(rule({ recipientIds: ids, cooldownMin: 5 }), clock);
+    const c = cfg({ studioPerWalletPerDay: 2, recipientCooldownMin: 0 });
     for (let i = 0; i < 3; i++) {
       await notifyRunFailedWith(deps, job({ network: "studio", poolId: undefined }), failedRun(), { config: c });
-      advance(2);
+      advance(6);
     }
     expect(provider.sent).toHaveLength(2);
     expect(charger.calls).toHaveLength(0);
