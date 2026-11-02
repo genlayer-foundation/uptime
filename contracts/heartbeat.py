@@ -1,5 +1,9 @@
 # { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
 
+# ==============================================================================
+# NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
+# ==============================================================================
+
 # Heartbeat: a fixed set of questions asked of the network on a schedule.
 #
 # The prompts live HERE, in code, so they never change between ticks — any

@@ -1,5 +1,9 @@
 # { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
 
+# ==============================================================================
+# NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
+# ==============================================================================
+
 # Ask: preset 4 ("Ask the web / LLM") of docs/PRODUCT.md §4.
 #
 # Deployed ONCE per network by us; users never deploy it. Optionally reads a page (any URL; a

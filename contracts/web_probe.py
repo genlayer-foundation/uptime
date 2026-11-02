@@ -1,5 +1,9 @@
 # { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
 
+# ==============================================================================
+# NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
+# ==============================================================================
+
 # WebProbe: presets 2 ("Check a URL") and 3 ("Check an API") of docs/PRODUCT.md §4.
 #
 # Deployed ONCE per network by us; users never deploy it. Anyone may call it: every result is

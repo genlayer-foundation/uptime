@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: MIT
+
+// ==============================================================================
+// NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
+// ==============================================================================
+
 pragma solidity 0.8.37;
 
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";

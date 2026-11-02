@@ -1,3 +1,7 @@
+> [!WARNING]
+> **NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.**
+> None of the contracts in this repo (`contracts/`) have been audited. They target GenLayer testnets only.
+
 # Heartbeat — GenLayer correctness over time
 
 Every hour, the same questions go to GenLayer's **Bradbury** testnet, and the answers are graded against a key the network never sees. The prompts never change, so when the numbers move, the network has changed.
@@ -113,8 +117,10 @@ Terms = { uint128 periodAmount, uint64 periodDuration, uint64 startDate (0 = now
 ```bash
 cd contracts/evm && forge test                    # dependencies vendored in lib/, hashes in dependencies.lock.json
 # deploy: prepared, NOT run. Simulates unless --broadcast is added
-ADMIN=0x… SCHEDULER=0x… MAILER=0x… forge script script/DeployUptimePool.s.sol --rpc-url bradbury --force
+SCHEDULER=0x… MAILER=0x… forge script script/DeployUptimePool.s.sol --rpc-url bradbury --force --account <name>
 ```
+
+- **Admin is one plain wallet: the deployer** (the `--account` that signs), not a multisig. `ROTATION_DELAY` defaults to 0, so a spender rotation executes as soon as it is proposed. Override with `ADMIN=0x…` and `ROTATION_DELAY=<seconds>`. Not audited, testnet only.
 
 ### Presets that need no contract
 

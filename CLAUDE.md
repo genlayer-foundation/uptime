@@ -5,9 +5,7 @@ the same probes run; results are graded off-chain and served as JSON (for the
 dashboard and for Grafana). Overview, probe table and setup: `README.md`.
 External surface: `INTEGRATIONS.md`.
 
-This repo was the uptime/SLA monitor until 2026-10. All of that (multi-network
-uptime checks, SLA contracts, ZKSync sync) was removed on purpose — do not
-revive it here.
+Uptime: a paid cron for GenLayer — schedule any call/deploy/read and track results; Bradbury Heartbeat is one example job.
 
 ## Invariants
 
@@ -30,6 +28,7 @@ revive it here.
 ```bash
 genvm-lint check contracts/heartbeat.py
 .venv/bin/pytest test/direct -q
+(cd contracts/evm && forge test)
 cd frontend && npx tsc --noEmit && npx eslint src && npx next build
 ```
 
