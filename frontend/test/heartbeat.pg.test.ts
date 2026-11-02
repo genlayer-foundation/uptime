@@ -1,5 +1,5 @@
-// Bradbury Heartbeat on Postgres: migration 011, the store, the one-time KV
-// import and both /api/heartbeat shapes, against a throwaway local Postgres.
+// Bradbury Heartbeat on Postgres: migrations 011 + 013, the store and both
+// /api/heartbeat shapes, against a throwaway local Postgres.
 // Skipped unless TEST_DATABASE_URL is set. Runs in its own schema (hb_test,
 // via search_path) so it never races api.pg.test.ts, which drops `public`.
 import { spawnSync } from "node:child_process";
@@ -12,10 +12,15 @@ const base = process.env.TEST_DATABASE_URL;
 const SCHEMA = "hb_test";
 const url = base && `${base}${base.includes("?") ? "&" : "?"}options=${encodeURIComponent(`-c search_path=${SCHEMA}`)}`;
 
-const rec = (over: Partial<ProbeRecord> & Pick<ProbeRecord, "id" | "tick" | "kind">): ProbeRecord => ({
+const rec = (over: Partial<ProbeRecord> & Pick<ProbeRecord, "id" | "tick" | "kind" | "type">): ProbeRecord => ({
   submittedAt: 1_800_000_000 + over.tick * 3600,
   ...over,
 });
+
+async function getPoolTruncate() {
+  const { getPool } = await import("@/lib/jobs/db");
+  await getPool().query("TRUNCATE heartbeat_probes");
+}
 
 describe.skipIf(!url)("Heartbeat store on Postgres", () => {
   beforeAll(async () => {
@@ -43,42 +48,33 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
     await expect(store.getPending()).rejects.toThrow(/npm run db:migrate/);
   });
 
-  it("applies 011_heartbeat.sql", () => {
+  it("applies 011_heartbeat.sql and 013_heartbeat_write.sql", () => {
     const r = spawnSync("node", [path.join(__dirname, "..", "scripts", "migrate.mjs")], {
       env: { ...process.env, DATABASE_URL: url },
       encoding: "utf8",
     });
     if (r.status !== 0) throw new Error(r.stderr);
     expect(r.stdout).toMatch(/applied 011_heartbeat\.sql/);
+    expect(r.stdout).toMatch(/applied 013_heartbeat_write\.sql/);
   });
 
-  it("imports the KV history once: list order, pending, and the tick continues", async () => {
-    const { getPool } = await import("@/lib/jobs/db");
-    const { importOnce } = await import("@/lib/heartbeat/store-pg");
-    const a = rec({ id: "40:deploy:", tick: 40, kind: "deploy", status: "ACCEPTED" });
-    const b = rec({ id: "41:llm:q1", tick: 41, kind: "llm", qid: "q1", status: "TIMEOUT" });
-    const b2 = { ...b, status: "ACCEPTED", grade: "correct" as const };
-    const c = rec({ id: "39:fetch:", tick: 39, kind: "fetch", status: "SUBMIT_FAILED" });
-    const p = rec({ id: "42:llm:q2", tick: 42, kind: "llm", qid: "q2" });
-    const snap = { tick: 42, pending: [p, a], results: [a, b, c, b2] };
-    expect(await importOnce(getPool(), async () => snap)).toBe(4);
-    expect(await importOnce(getPool(), async () => { throw new Error("must not read KV twice"); })).toBe(0);
-
+  it("stores every kind, write included, and counts ticks from 1", async () => {
     const store = await import("@/lib/heartbeat/store");
-    // Resolve order is the list's, the duplicate id keeps its later entry.
-    expect(await store.getResults(0)).toEqual([a, c, b2]);
-    expect(await store.getPending()).toEqual([p]);
-    expect(await store.nextTick()).toBe(43);
+    expect(await store.nextTick()).toBe(1);
+    const w = rec({ id: "1:write:", tick: 1, kind: "write", type: "write", status: "ACCEPTED", grade: "correct" });
+    await store.resolve(w);
+    expect(await store.getResults(0)).toEqual([w]);
+    await getPoolTruncate();
   });
 
   it("round-trips records exactly (same text, same key order) through pending and resolve", async () => {
     const store = await import("@/lib/heartbeat/store");
-    const r = rec({ id: "43:llm:q3", tick: 43, kind: "llm", qid: "q3", qkind: "fact", txHash: "0xabc", appealDue: true });
+    const r = rec({ id: "43:llm:r2-answer42", tick: 43, kind: "llm", type: "llm", qid: "r2-answer42", txHash: "0xabc", appealDue: true });
     await store.addPending(r);
     const [got] = (await store.getPending()).filter((x) => x.id === r.id);
     expect(JSON.stringify(got)).toBe(JSON.stringify(r));
     const done = { ...r, status: "ACCEPTED", resolvedAt: r.submittedAt + 90, latencySec: 80, rounds: 1,
-      votes: { agree: 4, disagree: 1, timeout: 0, other: 0 }, answer: "Paris", grade: "correct" as const };
+      votes: { agree: 4, disagree: 1, timeout: 0, other: 0 }, answer: "42", grade: "correct" as const };
     await store.resolve(done);
     expect((await store.getPending()).map((x) => x.id)).not.toContain(r.id);
     const results = await store.getResults(0);
@@ -88,8 +84,7 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
   });
 
   it("serves /api/heartbeat (summary and ?format=rows) from Postgres, same shapes as before", async () => {
-    const { getPool } = await import("@/lib/jobs/db");
-    await getPool().query("TRUNCATE heartbeat_probes");
+    await getPoolTruncate();
     const { demoSnapshot } = await import("@/lib/heartbeat/demo");
     const { summarize } = await import("@/lib/heartbeat/summary");
     const { NETWORK, getContractAddress } = await import("@/lib/genlayer/client");
@@ -123,8 +118,8 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
     const rows = await rowsRes.json();
     expect(rows).toHaveLength(win.length);
     expect(Object.keys(rows[0])).toEqual([
-      "time", "tick", "kind", "qid", "qkind", "status", "grade", "correct", "injected", "upheld",
-      "latency_sec", "rounds", "votes_agree", "votes_disagree", "votes_timeout", "answer", "tx", "error",
+      "time", "tick", "kind", "type", "probe", "status", "grade", "correct", "injected", "appeal_outcome", "upheld",
+      "latency_sec", "finalized_sec", "rounds", "votes_agree", "votes_disagree", "votes_timeout", "answer", "tx", "error",
     ]);
     expect(rows[0].time).toBe(win[0].submittedAt * 1000);
     expect(rows.at(-1).tx).toBe(win.at(-1)!.txHash ?? "");

@@ -2,33 +2,51 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardBody, CardHeader } from "@/components/ui";
-import type { HeartbeatData } from "./types";
-import { accuracy, dayLabel, duration, hourLabel, pct } from "./format";
+import type { HeartbeatData, TestType } from "./types";
+import { dayLabel, duration, hourLabel, pct } from "./format";
 
-interface Row {
-  t: number;
-  accuracy: number | null;
-  agreement: number | null;
-  p50: number | null;
+// The three answer-bearing test types, charted against each other.
+const LINES: Array<{ type: TestType; label: string; color: string }> = [
+  { type: "llm", label: "LLM", color: "var(--series-1)" },
+  { type: "web", label: "Web", color: "var(--series-2)" },
+  { type: "image", label: "Image", color: "var(--series-3)" },
+];
+
+type Row = { t: number } & Record<string, number | null>;
+
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
 }
 
-// One point per hour across the whole window, so missing ticks show as gaps
-// rather than being silently bridged.
-function rows(d: HeartbeatData): Row[] {
-  const byT = new Map(d.series.map((p) => [p.t, p]));
-  const end = Math.floor(d.generatedAt / 3600) * 3600;
-  const start = end - (d.hours - 1) * 3600;
+// Each type runs only some hours (the rotating pool), so points are bucketed:
+// 1 h for a 24 h window, 6 h for 7 d, 1 day for 30 d. Accuracy is summed
+// counts over the bucket; latency is the median of the hourly p50s. Empty
+// buckets stay gaps rather than being bridged.
+function rows(d: HeartbeatData): { rows: Row[]; bucket: number } {
+  const bucket = d.hours <= 24 ? 3600 : d.hours <= 168 ? 6 * 3600 : 24 * 3600;
+  const end = Math.floor(d.generatedAt / bucket) * bucket;
+  const start = Math.floor((d.generatedAt - d.hours * 3600) / bucket) * bucket + bucket;
   const out: Row[] = [];
-  for (let t = start; t <= end; t += 3600) {
-    const llm = byT.get(t)?.llm;
-    out.push({
-      t,
-      accuracy: accuracy(llm) ?? null,
-      agreement: llm?.agreement ?? null,
-      p50: llm?.latencyP50 ?? null,
-    });
+  for (let t = start; t <= end; t += bucket) {
+    const pts = d.series.filter((p) => p.t >= t && p.t < t + bucket);
+    const row: Row = { t };
+    for (const { type } of LINES) {
+      let correct = 0;
+      let graded = 0;
+      const p50s: number[] = [];
+      for (const p of pts) {
+        correct += p[type].correct;
+        graded += p[type].graded;
+        if (p[type].latencyP50 !== undefined) p50s.push(p[type].latencyP50!);
+      }
+      row[`${type}Acc`] = graded > 0 ? correct / graded : null;
+      row[`${type}P50`] = median(p50s);
+    }
+    out.push(row);
   }
-  return out;
+  return { rows: out, bucket };
 }
 
 interface TipEntry {
@@ -93,28 +111,19 @@ function Empty({ text }: { text: string }) {
 }
 
 export function TrendCharts({ data }: { data: HeartbeatData | null }) {
-  const hasData = !!data && data.series.some((p) => p.llm.total > 0);
-  const r = hasData ? rows(data) : [];
-  const short = (data?.hours ?? 24) <= 24;
-  const tickFmt = (t: number) => (short ? hourLabel(t, false) : dayLabel(t));
-  const dot = short ? { r: 3, strokeWidth: 0 } : false;
-  const emptyText = "No LLM probes resolved in this window yet. Points appear once the first hourly tick is reconciled.";
+  const hasData = !!data && data.series.some((p) => LINES.some((l) => p[l.type].total > 0));
+  const { rows: r, bucket } = hasData ? rows(data) : { rows: [], bucket: 3600 };
+  const short = bucket < 24 * 3600;
+  const tickFmt = (t: number) => (short && (data?.hours ?? 24) <= 24 ? hourLabel(t, false) : dayLabel(t));
+  const dot = { r: 3, strokeWidth: 0 };
+  const per = bucket === 3600 ? "per hour" : bucket === 6 * 3600 ? "per 6 hours" : "per day";
+  const emptyText = "No LLM, web or image probes resolved in this window yet. Points appear once the first hourly tick is reconciled.";
+  const legend = <Legend items={LINES.map((l) => ({ label: l.label, color: l.color }))} />;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
-        <CardHeader
-          title="Accuracy and agreement"
-          subtitle="LLM probes, per hour"
-          actions={
-            <Legend
-              items={[
-                { label: "Accuracy", color: "var(--series-1)" },
-                { label: "Agreement", color: "var(--series-2)" },
-              ]}
-            />
-          }
-        />
+        <CardHeader title="Accuracy by test type" subtitle={`Graded on-chain, ${per}`} actions={legend} />
         <CardBody>
           {hasData ? (
             <div className="chart h-60 w-full">
@@ -123,12 +132,10 @@ export function TrendCharts({ data }: { data: HeartbeatData | null }) {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="t" {...AXIS} tickFormatter={tickFmt} minTickGap={32} />
                   <YAxis {...AXIS} domain={[0, 1]} ticks={[0, 0.25, 0.5, 0.75, 1]} tickFormatter={(v: number) => pct(v)} width={48} />
-                  <Tooltip
-                    cursor={{ stroke: "var(--border-strong)" }}
-                    content={(p) => <Tip {...p} fmt={(v) => pct(v, 1)} />}
-                  />
-                  <Line {...LINE} dataKey="accuracy" name="Accuracy" stroke="var(--series-1)" dot={dot ? { ...dot, fill: "var(--series-1)" } : false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--background)" }} />
-                  <Line {...LINE} dataKey="agreement" name="Agreement" stroke="var(--series-2)" dot={dot ? { ...dot, fill: "var(--series-2)" } : false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--background)" }} />
+                  <Tooltip cursor={{ stroke: "var(--border-strong)" }} content={(p) => <Tip {...p} fmt={(v) => pct(v, 1)} />} />
+                  {LINES.map((l) => (
+                    <Line key={l.type} {...LINE} dataKey={`${l.type}Acc`} name={l.label} stroke={l.color} dot={{ ...dot, fill: l.color }} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--background)" }} />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -139,7 +146,7 @@ export function TrendCharts({ data }: { data: HeartbeatData | null }) {
       </Card>
 
       <Card>
-        <CardHeader title="Time to decision, p50" subtitle="LLM probes, submit to last vote, per hour" />
+        <CardHeader title="Time to decision, p50" subtitle={`Submit to last vote, ${per === "per hour" ? "per hour" : `median of hourly p50s, ${per}`}`} actions={legend} />
         <CardBody>
           {hasData ? (
             <div className="chart h-60 w-full">
@@ -148,11 +155,10 @@ export function TrendCharts({ data }: { data: HeartbeatData | null }) {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="t" {...AXIS} tickFormatter={tickFmt} minTickGap={32} />
                   <YAxis {...AXIS} tickFormatter={(v: number) => duration(v)} width={68} domain={[0, "auto"]} />
-                  <Tooltip
-                    cursor={{ stroke: "var(--border-strong)" }}
-                    content={(p) => <Tip {...p} fmt={duration} />}
-                  />
-                  <Line {...LINE} dataKey="p50" name="p50" stroke="var(--series-1)" dot={dot ? { ...dot, fill: "var(--series-1)" } : false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--background)" }} />
+                  <Tooltip cursor={{ stroke: "var(--border-strong)" }} content={(p) => <Tip {...p} fmt={duration} />} />
+                  {LINES.map((l) => (
+                    <Line key={l.type} {...LINE} dataKey={`${l.type}P50`} name={l.label} stroke={l.color} dot={{ ...dot, fill: l.color }} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--background)" }} />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>

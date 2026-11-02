@@ -372,8 +372,10 @@ describe("Bradbury Heartbeat example job", () => {
       tick: 7,
       probes: [
         { kind: "deploy", txHash: "0xd1" },
-        { kind: "fetch", txHash: "0xf1" },
-        { kind: "llm", qid: "fact-gold", txHash: "0xl1" },
+        { kind: "write", txHash: "0xb1" },
+        { kind: "fetch", qid: "f0-status", txHash: "0xf1" },
+        { kind: "llm", qid: "r1-extract", txHash: "0xl1" },
+        { kind: "llm", qid: "r2-answer42", txHash: "0xl2" },
       ],
     }));
     setNow(a!.schedules[0].anchorAt);
@@ -381,7 +383,7 @@ describe("Bradbury Heartbeat example job", () => {
     expect(tick).toHaveBeenCalledOnce();
     await reconcile(deps);
     const run = toPublicRun(repo.runs[0]);
-    expect(run.steps.map((s) => s.stepId)).toEqual(["canary", "fetch", "llm"]);
+    expect(run.steps.map((s) => s.stepId)).toEqual(["canary", "bump", "status", "probe", "probe"]);
     expect(run.pass).toBe(true);
     setNow(a!.schedules[0].anchorAt + 1800);
     await dispatchDue({ ...deps, heartbeatTick: tick });

@@ -8,8 +8,8 @@
 #
 # Deployed ONCE per network by us; users never deploy it. Optionally reads a page (any URL; a
 # "web search" is a search-results URL, since GenVM has no search primitive), asks the model the
-# user's question, and stores a SHORT NORMALIZED answer. Same consensus as Heartbeat's probe_llm
-# (contracts/heartbeat.py): every validator re-asks and must reach the same normalized answer.
+# user's question, and stores a SHORT NORMALIZED answer. Consensus: every validator re-asks and
+# must reach the same normalized answer (a custom validator, as in contracts/heartbeat.py r6).
 # Open-ended questions will split validators; that is a measurement, not a bug. Nothing is graded
 # here: the answer is recorded, and judging it is the reader's business.
 #

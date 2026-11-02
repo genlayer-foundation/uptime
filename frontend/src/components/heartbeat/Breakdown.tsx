@@ -1,26 +1,23 @@
-import { QUESTIONS, type QuestionKind } from "@/lib/heartbeat/questions";
+import { PROBE_SET, TEST_TYPES, type Equivalence } from "@/lib/heartbeat/probes";
 import { Card, CardHeader, Table, TBody, THead, Td, Th, Tr } from "@/components/ui";
 import type { HeartbeatData, Stat } from "./types";
 import { DASH, accuracy, duration, pct } from "./format";
 
-const KIND_NOTES: Record<QuestionKind, string> = {
-  fact: "General knowledge",
-  math: "Arithmetic and word problems",
-  format: "String manipulation",
-  logic: "Short deductions",
-  reading: "Answer exists only on a fictional page we host",
-  injection: "Hostile page asks for a different answer",
-  borderline: "No right answer; measures agreement only",
+const EQ: Record<Equivalence, string> = {
+  none: "deterministic",
+  strict_eq: "strict_eq",
+  comparative: "prompt_comparative",
+  non_comparative: "prompt_non_comparative",
+  custom: "custom validator",
 };
 
-const KINDS = [...new Set(QUESTIONS.map((q) => q.kind))];
-
-function Cells({ s, graded = true }: { s: Stat | undefined; graded?: boolean }) {
+function Cells({ s }: { s: Stat | undefined }) {
   return (
     <>
-      <Td num>{graded ? pct(accuracy(s), 0) : <span className="text-subtle">n/a</span>}</Td>
+      <Td num>{pct(accuracy(s), 0)}</Td>
       <Td num>{pct(s?.agreement, 0)}</Td>
       <Td num>{s?.undetermined ? s.undetermined : s?.total ? 0 : DASH}</Td>
+      <Td num>{s?.errored ? s.errored : s?.total ? 0 : DASH}</Td>
       <Td num>{duration(s?.latencyP50)}</Td>
       <Td num>{s?.total ?? 0}</Td>
     </>
@@ -32,9 +29,10 @@ function Head({ first }: { first: string }) {
     <THead>
       <tr>
         <Th>{first}</Th>
-        <Th num>Accuracy</Th>
+        <Th num>Correct</Th>
         <Th num>Agreement</Th>
         <Th num>Undetermined</Th>
+        <Th num>Errored</Th>
         <Th num>p50</Th>
         <Th num>n</Th>
       </tr>
@@ -42,21 +40,29 @@ function Head({ first }: { first: string }) {
   );
 }
 
+function appealCell(s: Stat | undefined) {
+  if (!s?.total) return <span className="text-subtle">{DASH}</span>;
+  return `${s.upheld}/${s.overturned}/${s.withdrawn}`;
+}
+
 export function Breakdown({ data }: { data: HeartbeatData | null }) {
   return (
     <div className="grid gap-4">
       <Card>
-        <CardHeader title="By question kind" subtitle="Two questions per tick, drawn from a fixed set of 16" />
+        <CardHeader
+          title="By test type"
+          subtitle="Each type is one way real contracts depend on the network. Errored = an agreed contract error, such as fixture drift"
+        />
         <Table>
-          <Head first="Kind" />
+          <Head first="Type" />
           <TBody>
-            {KINDS.map((k) => (
-              <Tr key={k}>
+            {TEST_TYPES.map((t) => (
+              <Tr key={t.type}>
                 <Td>
-                  <div>{k}</div>
-                  <div className="text-xs text-muted">{KIND_NOTES[k]}</div>
+                  <div>{t.label}</div>
+                  <div className="text-xs text-muted">{t.note}</div>
                 </Td>
-                <Cells s={data?.byQuestionKind[k]} graded={k !== "borderline"} />
+                <Cells s={data?.byType[t.type]} />
               </Tr>
             ))}
           </TBody>
@@ -64,19 +70,44 @@ export function Breakdown({ data }: { data: HeartbeatData | null }) {
       </Card>
 
       <Card>
-        <CardHeader title="By question" subtitle="Prompts live in the contract; answers are graded off-chain" />
-        <Table>
-          <Head first="Question" />
+        <CardHeader
+          title="By probe"
+          subtitle="The status fetch runs every tick; the other nine rotate, two per tick. Prompts and answer key live in the contract, which grades each answer. Appeals: upheld / overturned / withdrawn"
+        />
+        <Table minWidth={760}>
+          <THead>
+            <tr>
+              <Th>Probe</Th>
+              <Th>Consensus</Th>
+              <Th num>Correct</Th>
+              <Th num>Agreement</Th>
+              <Th num>Errored</Th>
+              <Th num>p50</Th>
+              <Th num>n</Th>
+              <Th num>Appeals</Th>
+            </tr>
+          </THead>
           <TBody>
-            {QUESTIONS.map((q) => (
-              <Tr key={q.qid}>
-                <Td>
-                  <div className="font-mono text-xs">{q.qid}</div>
-                  <div className="text-xs text-muted">{q.kind}</div>
-                </Td>
-                <Cells s={data?.byQuestion[q.qid]} graded={q.accept.length > 0} />
-              </Tr>
-            ))}
+            {PROBE_SET.map((p) => {
+              const s = data?.byProbe[p.id];
+              return (
+                <Tr key={p.id}>
+                  <Td>
+                    <div className="font-mono text-xs">{p.id}</div>
+                    <div className="text-xs text-muted">
+                      {p.type} · {p.note}
+                    </div>
+                  </Td>
+                  <Td className="text-xs text-muted">{EQ[p.eq]}</Td>
+                  <Td num>{pct(accuracy(s), 0)}</Td>
+                  <Td num>{pct(s?.agreement, 0)}</Td>
+                  <Td num>{s?.errored ? s.errored : s?.total ? 0 : DASH}</Td>
+                  <Td num>{duration(s?.latencyP50)}</Td>
+                  <Td num>{s?.total ?? 0}</Td>
+                  <Td num>{appealCell(data?.appealsByProbe[p.id])}</Td>
+                </Tr>
+              );
+            })}
           </TBody>
         </Table>
       </Card>

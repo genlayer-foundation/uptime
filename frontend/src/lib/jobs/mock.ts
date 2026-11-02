@@ -306,7 +306,7 @@ const PRESETS: Preset[] = [
     id: "heartbeat",
     name: "Bradbury Heartbeat",
     systemOnly: true,
-    description: "Canary deploy, a web fetch and two graded LLM questions every hour. Run by the Foundation.",
+    description: "Canary deploy, a state write, a web fetch and two probes graded on-chain every hour. Run by the Foundation.",
     networks: ["bradbury"],
     availability: { bradbury: { ok: false, reason: "Run by the Foundation" }, studio: { ok: false, reason: "Bradbury only" } },
   },

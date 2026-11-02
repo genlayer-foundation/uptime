@@ -2,16 +2,15 @@
 // Postgres (DATABASE_URL, store-pg.ts). Upstash KV (store-kv.ts) is only a
 // fallback, used when
 //   - DATABASE_URL is unset, or
-//   - DATABASE_URL is set but migration 011 is not applied yet (so a deploy
-//     that lands before `npm run db:migrate` keeps recording into KV).
-// On the first call against a migrated database the KV history is copied into
-// Postgres once (store-pg.ts importOnce); from then on KV is not touched.
+//   - DATABASE_URL is set but migrations 011/013 are not applied yet (so a
+//     deploy that lands before `npm run db:migrate` keeps recording into KV).
+// Nothing is ever copied between the two.
 import { hasDatabase } from "@/lib/jobs/db";
 import * as kv from "./store-kv";
 import * as pg from "./store-pg";
 import type { ProbeRecord } from "./types";
 
-export type { HeartbeatSnapshot, ProbeKind, ProbeRecord, VoteCounts } from "./types";
+export type { ProbeKind, ProbeRecord, VoteCounts } from "./types";
 
 type Backend = Pick<typeof kv, "nextTick" | "addPending" | "getPending" | "resolve" | "getResults">;
 
@@ -22,9 +21,9 @@ export function storeConfigured(): boolean {
 
 async function backend(): Promise<Backend> {
   if (hasDatabase()) {
-    if (await pg.pgReady(kv.kvConfigured() ? kv.snapshot : null)) return pg;
+    if (await pg.pgReady()) return pg;
     if (kv.kvConfigured()) return kv;
-    throw new Error("Heartbeat tables missing: run `npm run db:migrate` (migrations/011_heartbeat.sql)");
+    throw new Error("Heartbeat tables missing: run `npm run db:migrate` (migrations/011_heartbeat.sql, 013_heartbeat_write.sql)");
   }
   if (kv.kvConfigured()) return kv;
   throw new Error("No Heartbeat store configured (DATABASE_URL, or KV_REST_API_URL + KV_REST_API_TOKEN)");

@@ -361,7 +361,7 @@ export async function reconcile(deps: ExecutorDeps, limit = 200): Promise<Reconc
 // ---------------------------------------------------------------------------
 // Bradbury Heartbeat, our public example job.
 
-const HB_STEP: Record<string, string> = { deploy: "canary", fetch: "fetch", llm: "llm", appeal: "appeal" };
+const HB_STEP: Record<string, string> = { deploy: "canary", write: "bump", fetch: "status", llm: "probe", appeal: "appeal" };
 
 async function dispatchHeartbeat(deps: ExecutorDeps, job: JobRow, group: Group, slot: number) {
   const run = await deps.repo.createRun({ id: newId(), jobId: job.id, group: group.key, scheduledFor: slot, state: "RUNNING", cursor: group.steps.length });
@@ -418,8 +418,9 @@ export async function ensureHeartbeatJob(
     schedule,
     steps: [
       { id: "canary", kind: "deploy", preset: "canary", args: ["{{slot}}"] },
-      { id: "fetch", kind: "write", contract, method: "probe_fetch", args: ["{{slot}}"] },
-      { id: "llm", kind: "write", contract, method: "probe_llm", args: ["{{slot}}", "<rotating qid>"] },
+      { id: "bump", kind: "write", contract, method: "bump", args: ["{{slot}}"] },
+      { id: "status", kind: "write", contract, method: "probe_status", args: ["{{slot}}"] },
+      { id: "probe", kind: "write", contract, method: "probe", args: ["{{slot}}", "<rotating probe id>"] },
     ],
     assertions: [],
     state: "active",

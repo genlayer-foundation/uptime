@@ -13,11 +13,20 @@ const Dash = () => <span className="text-subtle">{DASH}</span>;
 
 function Grade({ r }: { r: ProbeRecord }) {
   if (r.kind === "appeal") {
-    return r.upheld ? <Badge tone="success">upheld</Badge> : <Badge tone="danger">overturned</Badge>;
+    if (!r.outcome) return <Dash />;
+    const tone: Tone = r.outcome === "upheld" ? "success" : r.outcome === "withdrawn" ? "neutral" : "danger";
+    return <Badge tone={tone}>{r.outcome}</Badge>;
   }
-  if (!r.grade) return <Dash />;
-  const tone: Tone = r.grade === "correct" ? "success" : r.grade === "ungraded" ? "neutral" : "danger";
-  return <Badge tone={tone}>{r.grade}</Badge>;
+  if (!r.grade) {
+    return r.error && r.status !== "SUBMIT_FAILED" ? (
+      <Badge tone="warn" title={r.error}>
+        {r.error.startsWith("[EXTERNAL] fixture drift") ? "fixture drift" : "error"}
+      </Badge>
+    ) : (
+      <Dash />
+    );
+  }
+  return <Badge tone={r.grade === "correct" ? "success" : "danger"}>{r.grade}</Badge>;
 }
 
 export function RecentProbes({ data }: { data: HeartbeatData | null }) {
@@ -30,8 +39,8 @@ export function RecentProbes({ data }: { data: HeartbeatData | null }) {
         <THead>
           <tr>
             <Th num>Tick</Th>
-            <Th>Kind</Th>
-            <Th>Question</Th>
+            <Th>Type</Th>
+            <Th>Probe</Th>
             <Th>Status</Th>
             <Th>Answer</Th>
             <Th>Grade</Th>
@@ -48,8 +57,8 @@ export function RecentProbes({ data }: { data: HeartbeatData | null }) {
             recent.map((r) => (
               <Tr key={r.id}>
                 <Td num>{r.tick}</Td>
-                <Td>{r.kind}</Td>
-                <Td className="font-mono text-xs">{r.qid ?? <Dash />}</Td>
+                <Td>{r.kind === "appeal" ? `appeal · ${r.type}` : r.type}</Td>
+                <Td className="font-mono text-xs">{r.qid ?? (r.kind === "deploy" ? "canary" : r.kind === "write" ? "bump" : <Dash />)}</Td>
                 <Td>
                   {r.status ? (
                     <Badge tone={statusTone(r.status)} title={r.error}>

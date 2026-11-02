@@ -49,14 +49,15 @@ export function templates(network: Network, c: PresetContracts = presetContracts
     {
       preset: "heartbeat",
       title: "Example: Bradbury Heartbeat",
-      description: "Our own public example job: an hourly canary deploy, a web fetch and graded LLM questions on Testnet Bradbury.",
+      description: "Our own public example job: every hour a canary deploy, a state write, a web fetch and two probes graded on-chain (LLM, web, image) on Testnet Bradbury, plus an appeal every 5th hour.",
       name: "Bradbury Heartbeat",
       network: "bradbury",
       schedule: { everyMinutes: 60 },
       steps: [
         { id: "canary", kind: "deploy", preset: "canary", args: ["{{slot}}"] },
-        { id: "fetch", kind: "write", contract: c.heartbeat ?? ZERO, method: "probe_fetch", args: ["{{slot}}"] },
-        { id: "llm", kind: "write", contract: c.heartbeat ?? ZERO, method: "probe_llm", args: ["{{slot}}", "<rotating qid>"] },
+        { id: "bump", kind: "write", contract: c.heartbeat ?? ZERO, method: "bump", args: ["{{slot}}"] },
+        { id: "status", kind: "write", contract: c.heartbeat ?? ZERO, method: "probe_status", args: ["{{slot}}"] },
+        { id: "probe", kind: "write", contract: c.heartbeat ?? ZERO, method: "probe", args: ["{{slot}}", "<rotating probe id>"] },
       ],
       assertions: [],
       public: true,

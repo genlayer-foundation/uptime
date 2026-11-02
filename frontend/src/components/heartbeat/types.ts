@@ -3,10 +3,11 @@
 import type { ProbeKind, ProbeRecord } from "@/lib/heartbeat/store";
 import type { Stat } from "@/lib/heartbeat/summary";
 import type { DataSource } from "@/lib/heartbeat/source";
+import type { TestType } from "@/lib/heartbeat/probes";
 
-export type { DataSource, ProbeKind, ProbeRecord, Stat };
+export type { DataSource, ProbeKind, ProbeRecord, Stat, TestType };
 
-export type SeriesPoint = { t: number } & Record<ProbeKind, Stat>;
+export type SeriesPoint = { t: number; appeal: Stat } & Record<TestType, Stat>;
 
 export interface HeartbeatData {
   network: string;
@@ -15,8 +16,10 @@ export interface HeartbeatData {
   generatedAt: number;
   hours: number;
   byKind: Record<ProbeKind, Stat>;
-  byQuestionKind: Record<string, Stat>;
-  byQuestion: Record<string, Stat>;
+  byType: Record<TestType, Stat>;
+  byProbe: Record<string, Stat>;
+  appeals: Stat;
+  appealsByProbe: Record<string, Stat>;
   series: SeriesPoint[];
   pending: number;
   recent: ProbeRecord[];
