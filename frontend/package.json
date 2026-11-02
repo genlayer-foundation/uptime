@@ -9,9 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.95.2",
     "@upstash/redis": "^1.37.0",
-    "@vercel/kv": "^3.0.0",
     "genlayer-js": "^0.26.5",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",

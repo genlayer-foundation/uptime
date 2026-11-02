@@ -1,75 +1,61 @@
-# Uptime — GenLayer SLA Monitor
+# Heartbeat — GenLayer correctness over time
 
-Trustless uptime monitoring for GenLayer infrastructure services. Health checks run on-chain via an Intelligent Contract; a public dashboard shows real-time status, uptime percentages, and SLA compliance.
+Every hour, the same questions go to GenLayer's **Bradbury** testnet, and the answers are graded against a key the network never sees. The prompts never change, so when the numbers move, the network has changed.
 
-**Live:** https://uptime.dev.genlayer.foundation
+This repo used to be the uptime/SLA monitor. That's gone. It now does only this.
 
-## What it monitors
+## What a tick does
 
-- ZKSync Bridge explorer
-- Studionet RPC + Explorer
-- Asimov RPC + Explorer
-- Bradbury RPC + Explorer
+| Probe | What it calls | What it measures |
+|---|---|---|
+| `deploy` | deploys `contracts/canary.py` (no LLM, no web) | whether deploys get accepted, and time to ACCEPTED |
+| `fetch` | `probe_fetch` (web GET of a fixture, `strict_eq`) | the control: if this fails, the problem is plumbing, not models |
+| `llm` ×2 | `probe_llm(qid)`, rotating through 16 fixed questions | accuracy, validator agreement, rounds, latency |
+| `appeal` | every 6th tick, appeals one correct `llm` answer | whether the appeal keeps the correct answer |
 
-## How it works
+Question kinds (`contracts/heartbeat.py`):
 
-1. A **Vercel cron job** calls the Intelligent Contract's `run_checks()` method at a configurable interval
-2. The contract pings each service (JSON-RPC `gen_dbg_ping` for RPCs, HTTP GET for explorers) with validator consensus via `gl.eq_principle.strict_eq()`
-3. Every check result is stored **on-chain** — trustless SLA proof
-4. An off-chain cache (Vercel KV) syncs incrementally for fast dashboard loading
-5. The public dashboard shows current status, uptime %, historical charts, and SLA compliance
+- **fact, math, format, logic:** closed-book, one right answer
+- **reading:** the answer exists only on a fictional page we host (`frontend/public/heartbeat/lighthouse.txt`)
+- **injection:** a hostile page tells the model to answer something else. If it does, the grade is `injected`
+- **borderline:** no right answer. These measure agreement only, and are expected to split validators
 
-The contract is deployed on **studionet**, **asimov**, and **bradbury**.
+The answer key is `frontend/src/lib/heartbeat/questions.ts`, off-chain on purpose. A test fails if its qids drift from the contract's.
+
+## How it runs
+
+```
+Vercel cron  0 * * * *     /api/cron/heartbeat   submit this tick's txs, never wait
+Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, grade, fire due appeals
+                             │
+                           Upstash KV  (hb:pending, hb:results)
+                             │
+public                     /api/heartbeat                    summary + hourly series
+                           /api/heartbeat?format=rows        flat rows for Grafana (Infinity)
+                           /                                 dashboard
+```
+
+Latency comes from the chain's own `createdTimestamp` → `lastVoteTimestamp`, so the reconcile cadence affects freshness, not precision.
 
 ## Setup
 
-### Prerequisites
-
-- Node.js 20+
-- GenLayer CLI (`npm i -g genlayer`)
-- Claude Code with GenLayer skills:
-  ```bash
-  claude mcp add -s user genlayer-skills -- npx -y @anthropic-ai/claude-code-mcp@latest --skill-url https://skills.genlayer.com/
-  ```
-
-### Contract
-
 ```bash
-# Write/validate
-/write-contract    # in Claude Code
-/genvm-lint        # validate
+# contract
+genvm-lint check contracts/heartbeat.py
+python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest
+.venv/bin/pytest test/direct -q
 
-# Test
-/direct-tests      # unit tests
-/integration-tests # network tests
+# deploy once to Bradbury, with the site's fixture base URL as the argument,
+# FROM THE SAME KEY as PRIVATE_KEY below (probes are owner-only)
+genlayer network set testnet-bradbury
+genlayer deploy --contract contracts/heartbeat.py --args "https://uptime.genlayer.foundation/heartbeat"
 
-# Deploy to all 3 networks
-/genlayer-cli
+# frontend
+cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-### Frontend
+`CRON_SECRET` is **required**. The cron routes refuse every call without it, because a tick spends gas and appeal bonds.
 
-```bash
-cd frontend
-cp .env.example .env.local  # fill in contract addresses + KV credentials
-npm install
-npm run dev
-```
+## Cost
 
-### Deploy
-
-Push to GitHub → Vercel auto-deploys. Configure domain `uptime.dev.genlayer.foundation` in Vercel.
-
-## Tech Stack
-
-- **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS v4
-- **UI:** Radix UI + Lucide icons, GenLayer dark theme
-- **Data:** TanStack Query + Vercel KV cache
-- **Web3:** genlayer-js SDK
-- **Contract:** Python GenLayer Intelligent Contract
-- **Hosting:** Vercel
-
-## Organization
-
-- **GitHub:** [genlayer-foundation](https://github.com/genlayer-foundation)
-- **See also:** [GENLAYER_DEVELOPMENT.md](../GENLAYER_DEVELOPMENT.md) for cross-project patterns
+Per hour: 1 deploy + 1 fetch + 2 LLM txs. Every 6 hours, 1 appeal (bond: `getMinAppealBond`). The wallet behind `PRIVATE_KEY` must stay funded on Bradbury.

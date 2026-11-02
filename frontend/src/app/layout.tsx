@@ -1,40 +1,34 @@
 import type { Metadata } from "next";
-import { DM_Sans, DM_Mono } from "next/font/google";
-import { Providers } from "@/components/Providers";
-import { Header } from "@/components/Header";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-});
-
-const dmMono = DM_Mono({
-  variable: "--font-dm-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-});
+const description =
+  "An hourly benchmark of Intelligent Contracts on Testnet Bradbury: canary deploys, web fetches and questions with known answers, graded for correctness, validator agreement and time to decision.";
 
 export const metadata: Metadata = {
-  title: "Uptime by GenLayer | Trustless Infrastructure Monitoring",
-  description:
-    "The first uptime monitor that can't lie. Every health check independently verified by multiple validators and stored permanently on-chain.",
-  metadataBase: new URL("https://uptime.dev.genlayer.foundation"),
+  title: "Heartbeat · GenLayer Testnet Bradbury",
+  description,
+  metadataBase: new URL("https://uptime.genlayer.foundation"),
+  icons: { icon: "/gl/assets/GenLayer_Mark_Black.svg" },
   openGraph: {
-    title: "Uptime by GenLayer",
-    description:
-      "Every check verified. Every result on-chain. Trustless uptime monitoring for GenLayer infrastructure.",
-    url: "https://uptime.dev.genlayer.foundation",
-    siteName: "Uptime by GenLayer",
+    title: "Heartbeat · GenLayer",
+    description,
+    url: "https://uptime.genlayer.foundation",
+    siteName: "GenLayer Heartbeat",
     type: "website",
   },
   twitter: {
-    card: "summary_large_image",
-    title: "Uptime by GenLayer",
-    description:
-      "The first uptime monitor that can't lie. Consensus-verified health checks stored on-chain.",
+    card: "summary",
+    title: "Heartbeat · GenLayer",
+    description,
   },
 };
+
+// GenLayer Design System, vendored under public/gl/ from projects/design.
+// Order matters: tokens, then components, then theme chrome. The inline
+// script sets the theme before first paint (default dark); theme.js wires
+// the toggle and persists the choice.
+const noFlash =
+  "(function(){try{var t=localStorage.getItem('gl-theme')||'dark';document.documentElement.classList.toggle('on-dark',t==='dark');}catch(e){document.documentElement.classList.add('on-dark');}})();";
 
 export default function RootLayout({
   children,
@@ -42,15 +36,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${dmSans.variable} ${dmMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <Providers>
-          <Header />
-          <div className="flex-1">{children}</div>
-        </Providers>
+    <html lang="en" className="on-dark" suppressHydrationWarning>
+      <head>
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/gl/colors_and_type.css" />
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/gl/components.css" />
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/gl/theme.css" />
+        <script dangerouslySetInnerHTML={{ __html: noFlash }} />
+      </head>
+      <body>
+        {children}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/gl/theme.js" />
       </body>
     </html>
   );

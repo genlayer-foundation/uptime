@@ -1,0 +1,452 @@
+/* =============================================================
+   GenLayer — Components
+   Reusable, theme-aware component classes. Layer on top of
+   colors_and_type.css (which loads fonts + base tokens).
+
+       <link rel="stylesheet" href="colors_and_type.css">
+       <link rel="stylesheet" href="components.css">
+
+   Every class is prefixed `gl-` so it won't collide with a host
+   project. Components read SURFACE tokens (--c-*) that adapt to
+   context: light by default, dark inside `.on-dark`.
+
+       <section class="on-dark"> … dark components … </section>
+   ============================================================= */
+
+/* ---------- Surface tokens (light defaults) ---------- */
+:root {
+  --c-bg:           var(--gl-fog-hi);
+  --c-card:         var(--gl-paper);
+  --c-card-hover:   var(--gl-fog-hi);
+  --c-border:       var(--gl-line);
+  --c-border-strong:#D8D8DA;
+  --c-fg:           var(--fg-1);
+  --c-fg-muted:     var(--fg-2);
+  --c-fg-subtle:    var(--fg-3);
+  --c-field-bg:     var(--gl-paper);
+  --c-field-border: var(--gl-line);
+  --c-hairline:     1.2px;
+}
+
+/* ---------- Dark surface scope ---------- */
+.on-dark {
+  --c-bg:           #060606;
+  --c-card:         rgba(255,255,255,.025);
+  --c-card-hover:   rgba(255,255,255,.05);
+  --c-border:       rgba(255,255,255,.10);
+  --c-border-strong:rgba(255,255,255,.22);
+  --c-fg:           #ffffff;
+  --c-fg-muted:     rgba(255,255,255,.65);
+  --c-fg-subtle:    rgba(255,255,255,.42);
+  --c-field-bg:     rgba(255,255,255,.04);
+  --c-field-border: rgba(255,255,255,.14);
+  --c-hairline:     1px;
+  color: var(--c-fg);
+}
+
+/* ---------- Shared label ---------- */
+.gl-label {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--c-fg-subtle);
+  margin-bottom: var(--space-2);
+}
+
+/* =============================================================
+   BUTTONS
+   ============================================================= */
+.gl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 var(--space-5);
+  border-radius: var(--radius-xl);            /* signature pill */
+  font-family: var(--font-body); font-weight: 600; font-size: var(--fs-sm);
+  line-height: 1; white-space: nowrap;
+  border: 1.2px solid transparent; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, opacity .15s;
+  text-decoration: none;
+}
+.gl-btn--primary { background: var(--gl-blue); color: #fff; }
+.gl-btn--primary:hover { background: #0d0bcc; text-decoration: none; }
+
+.gl-btn--white { background: #fff; color: #000; }
+.gl-btn--white:hover { background: rgba(255,255,255,.85); text-decoration: none; }
+
+.gl-btn--ghost {
+  background: rgba(127,127,127,.10); color: var(--c-fg);
+  border-color: var(--c-border-strong);
+}
+.on-dark .gl-btn--ghost { background: rgba(255,255,255,.08); }
+.gl-btn--ghost:hover { background: rgba(127,127,127,.18); text-decoration: none; }
+.on-dark .gl-btn--ghost:hover { background: rgba(255,255,255,.14); }
+
+.gl-btn--outline {
+  background: transparent; color: var(--c-fg);
+  border-color: var(--c-border-strong);
+}
+.gl-btn--outline:hover { border-color: var(--c-fg); text-decoration: none; }
+
+.gl-btn--sm { height: 32px; padding: 0 var(--space-4); font-size: var(--fs-xs); gap: 6px; }
+.gl-btn--lg { height: 48px; padding: 0 var(--space-6); font-size: var(--fs-body); }
+.gl-btn[disabled], .gl-btn--disabled { opacity: .4; pointer-events: none; }
+
+/* =============================================================
+   BADGES / CHIPS
+   ============================================================= */
+.gl-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body); font-size: 11px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(127,127,127,.12); color: var(--c-fg-muted);
+}
+.on-dark .gl-badge { background: rgba(255,255,255,.08); }
+.gl-badge .gl-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.gl-badge--builder   { color: var(--gl-orange-lo); background: rgba(238,141,36,.14); }
+.gl-badge--validator { color: var(--gl-sky-lo);    background: rgba(56,125,232,.14); }
+.gl-badge--community { color: var(--gl-purple-lo); background: rgba(155,106,246,.16); }
+.gl-badge--success   { color: var(--state-success); background: rgba(22,163,74,.14); }
+.gl-badge--warn      { color: var(--state-warn);    background: rgba(245,158,11,.16); }
+.gl-badge--danger    { color: var(--state-danger);  background: rgba(224,0,0,.12); }
+.on-dark .gl-badge--builder   { color: var(--gl-orange-hi); }
+.on-dark .gl-badge--validator { color: var(--gl-sky-hi); }
+.on-dark .gl-badge--community { color: var(--gl-purple-hi); }
+.on-dark .gl-badge--success   { color: #4ADE80; }
+
+/* removable filter chip */
+.gl-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 30px; padding: 0 6px 0 12px;
+  border-radius: var(--radius-full);
+  background: var(--c-card); border: var(--c-hairline) solid var(--c-border);
+  font-size: var(--fs-sm); color: var(--c-fg);
+}
+.gl-chip button {
+  width: 18px; height: 18px; border-radius: 999px; border: 0; cursor: pointer;
+  background: rgba(127,127,127,.18); color: var(--c-fg-muted);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1;
+}
+.on-dark .gl-chip button { background: rgba(255,255,255,.12); }
+
+/* =============================================================
+   FORM FIELDS
+   ============================================================= */
+.gl-field { display: flex; flex-direction: column; }
+.gl-input, .gl-select, .gl-textarea {
+  width: 100%;
+  font-family: var(--font-body); font-size: var(--fs-body); color: var(--c-fg);
+  background: var(--c-field-bg);
+  border: var(--c-hairline) solid var(--c-field-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4); height: 42px;
+  transition: border-color .15s, box-shadow .15s;
+  -webkit-appearance: none; appearance: none;
+}
+.gl-textarea { height: auto; min-height: 96px; padding: var(--space-3) var(--space-4); line-height: var(--lh-normal); resize: vertical; }
+.gl-input::placeholder, .gl-textarea::placeholder { color: var(--c-fg-subtle); }
+.gl-input:focus, .gl-select:focus, .gl-textarea:focus {
+  outline: none; border-color: var(--fg-link);
+  box-shadow: 0 0 0 3px rgba(64,131,234,.18);
+}
+.gl-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B6B6B' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right var(--space-4) center;
+  padding-right: var(--space-10); cursor: pointer;
+}
+.on-dark .gl-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ffffff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.gl-help { font-size: var(--fs-xs); color: var(--c-fg-subtle); margin-top: var(--space-2); }
+
+/* search field (icon + input) */
+.gl-search { position: relative; }
+.gl-search .gl-input { padding-left: var(--space-10); }
+.gl-search svg { position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%); width: 16px; height: 16px; stroke: var(--c-fg-subtle); }
+
+/* checkbox + radio */
+.gl-check, .gl-radio {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: var(--fs-body); color: var(--c-fg); cursor: pointer; user-select: none;
+}
+.gl-check input, .gl-radio input { position: absolute; opacity: 0; pointer-events: none; }
+.gl-check .box, .gl-radio .box {
+  width: 18px; height: 18px; flex: 0 0 18px;
+  border: 1.5px solid var(--c-border-strong); background: var(--c-field-bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.gl-check .box { border-radius: 5px; }
+.gl-radio .box { border-radius: 999px; }
+.gl-check .box::after {
+  content: ""; width: 10px; height: 10px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='8' viewBox='0 0 10 8'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='white' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  opacity: 0; transition: opacity .12s;
+}
+.gl-radio .box::after { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #fff; opacity: 0; transition: opacity .12s; }
+.gl-check input:checked + .box, .gl-radio input:checked + .box { background: var(--gl-blue); border-color: var(--gl-blue); }
+.gl-check input:checked + .box::after, .gl-radio input:checked + .box::after { opacity: 1; }
+
+/* toggle switch */
+.gl-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-size: var(--fs-body); color: var(--c-fg); }
+.gl-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.gl-toggle .track {
+  width: 40px; height: 22px; border-radius: 999px;
+  background: rgba(127,127,127,.32); position: relative; transition: background .18s;
+}
+.on-dark .gl-toggle .track { background: rgba(255,255,255,.18); }
+.gl-toggle .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 999px; background: #fff;
+  transition: transform .18s; box-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.gl-toggle input:checked + .track { background: var(--gl-blue); }
+.gl-toggle input:checked + .track::after { transform: translateX(18px); }
+
+/* =============================================================
+   SEGMENTED CONTROL / FILTER BAR / TABS
+   ============================================================= */
+.gl-seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: rgba(127,127,127,.10); border-radius: var(--radius-xl);
+  border: var(--c-hairline) solid var(--c-border);
+}
+.on-dark .gl-seg { background: rgba(255,255,255,.05); }
+.gl-seg__item {
+  border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 500; color: var(--c-fg-muted);
+  height: 32px; padding: 0 var(--space-4); border-radius: var(--radius-xl);
+  transition: background .15s, color .15s;
+}
+.gl-seg__item:hover { color: var(--c-fg); }
+.gl-seg__item--active { background: var(--c-card); color: var(--c-fg); box-shadow: var(--shadow-card); }
+.on-dark .gl-seg__item--active { background: rgba(255,255,255,.12); box-shadow: none; }
+
+.gl-tabs { display: flex; gap: var(--space-6); border-bottom: var(--c-hairline) solid var(--c-border); }
+.gl-tab {
+  border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-size: var(--fs-body); font-weight: 500; color: var(--c-fg-muted);
+  padding: var(--space-3) 0; margin-bottom: -1px;
+  border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+}
+.gl-tab:hover { color: var(--c-fg); }
+.gl-tab--active { color: var(--c-fg); border-bottom-color: var(--gl-blue); }
+
+/* =============================================================
+   CARDS
+   ============================================================= */
+.gl-card {
+  background: var(--c-card);
+  border: var(--c-hairline) solid var(--c-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.on-dark .gl-card { box-shadow: none; }
+.gl-card--flat { box-shadow: none; }
+.gl-card--hover { transition: background .15s, border-color .15s, transform .2s; }
+.gl-card--hover:hover { background: var(--c-card-hover); border-color: var(--c-border-strong); }
+.gl-card__header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: var(--c-hairline) solid var(--c-border);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+}
+.gl-card__title { font-family: var(--font-display); font-weight: 500; font-size: var(--fs-h4); letter-spacing: var(--track-snug); color: var(--c-fg); margin: 0; }
+.gl-card__sub { font-size: var(--fs-sm); color: var(--c-fg-muted); margin: 2px 0 0; }
+.gl-card__body { padding: var(--space-6); color: var(--c-fg-muted); }
+.gl-card__body p { color: var(--c-fg-muted); margin: 0; }
+.gl-card__footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: var(--c-hairline) solid var(--c-border);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+}
+
+/* gradient-bloom feature card (dark) */
+.gl-card--bloom { position: relative; }
+.gl-card--bloom::before {
+  content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; height: 120%;
+  background: radial-gradient(circle, rgba(155,106,246,.35), transparent 60%);
+  filter: blur(40px); pointer-events: none;
+}
+.gl-card--bloom > * { position: relative; }
+
+/* =============================================================
+   STAT CARD / KPI GRID
+   ============================================================= */
+.gl-stat { display: flex; flex-direction: column; gap: var(--space-2); }
+.gl-stat__label { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--c-fg-subtle); }
+.gl-stat__value { font-family: var(--font-display); font-weight: 500; font-size: 40px; letter-spacing: -0.04em; line-height: 1; color: var(--c-fg); }
+.gl-stat__value--grad { background: var(--gl-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gl-stat__delta { font-size: var(--fs-sm); font-weight: 600; }
+.gl-stat__delta--up { color: var(--state-success); }
+.gl-stat__delta--down { color: var(--state-danger); }
+.gl-stat-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+  background: var(--c-border); border: var(--c-hairline) solid var(--c-border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.gl-stat-grid .gl-stat { background: var(--c-card); padding: var(--space-6); }
+
+/* =============================================================
+   TABLE / LEADERBOARD
+   ============================================================= */
+.gl-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); color: var(--c-fg); }
+.gl-table thead th {
+  text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--c-fg-subtle); padding: var(--space-3) var(--space-4);
+  border-bottom: var(--c-hairline) solid var(--c-border); white-space: nowrap;
+}
+.gl-table thead th.sortable { cursor: pointer; }
+.gl-table thead th.sortable::after { content: " ↕"; color: var(--c-fg-subtle); opacity: .5; }
+.gl-table thead th.sorted-desc::after { content: " ↓"; opacity: 1; color: var(--c-fg); }
+.gl-table thead th.sorted-asc::after { content: " ↑"; opacity: 1; color: var(--c-fg); }
+.gl-table th.num, .gl-table td.num { text-align: right; font-family: var(--font-mono); }
+.gl-table tbody td { padding: var(--space-4); border-bottom: var(--c-hairline) solid var(--c-border); vertical-align: middle; }
+.gl-table tbody tr { transition: background .12s; }
+.gl-table tbody tr:hover { background: var(--c-card-hover); }
+.gl-table tbody tr:last-child td { border-bottom: 0; }
+.gl-table .rank { font-family: var(--font-mono); color: var(--c-fg-muted); width: 40px; }
+.gl-table .rank--medal { color: var(--gl-orange); font-weight: 700; }
+.gl-cell-user { display: flex; align-items: center; gap: var(--space-3); }
+.gl-cell-user .addr { font-family: var(--font-mono); color: var(--c-fg-muted); font-size: var(--fs-xs); }
+.gl-cell-user .name { font-weight: 600; color: var(--c-fg); }
+
+/* =============================================================
+   AVATAR
+   ============================================================= */
+.gl-avatar {
+  width: 32px; height: 32px; border-radius: 999px; flex: 0 0 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-body); font-weight: 600; font-size: 12px; color: #fff;
+  background: var(--gl-gradient);
+}
+.gl-avatar--lg { width: 48px; height: 48px; flex-basis: 48px; font-size: 16px; }
+.gl-avatar--sm { width: 24px; height: 24px; flex-basis: 24px; font-size: 10px; }
+
+/* =============================================================
+   PROGRESS / METER
+   ============================================================= */
+.gl-progress { height: 8px; border-radius: 999px; background: rgba(127,127,127,.18); overflow: hidden; }
+.on-dark .gl-progress { background: rgba(255,255,255,.10); }
+.gl-progress__bar { height: 100%; border-radius: 999px; background: var(--gl-blue); }
+.gl-progress__bar--gradient { background: var(--gl-gradient); }
+.gl-progress__bar--builder { background: var(--grad-builder); }
+.gl-progress__bar--validator { background: var(--grad-validator); }
+.gl-progress__bar--community { background: var(--grad-community); }
+
+/* =============================================================
+   ALERT / CALLOUT
+   ============================================================= */
+.gl-alert {
+  display: flex; gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  border: var(--c-hairline) solid var(--c-border);
+  background: var(--c-card); color: var(--c-fg);
+  font-size: var(--fs-sm); line-height: var(--lh-normal);
+}
+.gl-alert .gl-alert__icon { flex: 0 0 18px; margin-top: 1px; }
+.gl-alert strong { display: block; margin-bottom: 2px; }
+.gl-alert--info    { border-left: 3px solid var(--fg-link); }
+.gl-alert--success { border-left: 3px solid var(--state-success); }
+.gl-alert--warn    { border-left: 3px solid var(--state-warn); }
+.gl-alert--danger  { border-left: 3px solid var(--state-danger); }
+
+/* =============================================================
+   PAGINATION
+   ============================================================= */
+.gl-pager { display: inline-flex; gap: 4px; }
+.gl-pager button {
+  min-width: 34px; height: 34px; padding: 0 8px;
+  border-radius: var(--radius-md); cursor: pointer;
+  background: var(--c-card); border: var(--c-hairline) solid var(--c-border);
+  color: var(--c-fg); font-family: var(--font-body); font-size: var(--fs-sm);
+  transition: background .12s, border-color .12s;
+}
+.gl-pager button:hover { background: var(--c-card-hover); }
+.gl-pager button[aria-current="true"] { background: var(--gl-blue); border-color: var(--gl-blue); color: #fff; }
+
+/* =============================================================
+   MISC
+   ============================================================= */
+.gl-divider { border: 0; border-top: var(--c-hairline) solid var(--c-border); margin: var(--space-6) 0; }
+.gl-kbd {
+  font-family: var(--font-mono); font-size: 11px; color: var(--c-fg-muted);
+  background: var(--c-field-bg); border: var(--c-hairline) solid var(--c-border);
+  border-radius: var(--radius-xs); padding: 2px 6px;
+}
+.gl-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--c-fg-muted);
+  padding: 7px 13px; border-radius: 999px;
+  background: var(--c-card); border: var(--c-hairline) solid var(--c-border);
+}
+.gl-eyebrow .gl-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--gl-pink); box-shadow: 0 0 12px var(--gl-pink); }
+
+/* =============================================================
+   CHARTS
+   Lightweight, dependency-free. Geometry is data-driven via inline
+   styles / SVG paths; colors + chrome come from these classes.
+   ============================================================= */
+
+/* legend (shared) */
+.gl-legend { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.gl-legend__item { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--c-fg-muted); }
+.gl-legend__swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 10px; }
+
+/* --- Bar chart --- */
+.gl-bars { display: flex; align-items: flex-end; gap: 10px; height: 180px; }
+.gl-bars--tall { height: 240px; }
+.gl-bar {
+  flex: 1; min-width: 6px; border-radius: 6px 6px 0 0;
+  background: var(--gl-blue); position: relative;
+  transition: filter .15s, transform .15s; transform-origin: bottom;
+}
+.gl-bar:hover { filter: brightness(1.15); }
+.gl-bar--gradient { background: linear-gradient(180deg, var(--gl-pink), var(--gl-blue)); }
+.gl-bar--builder { background: var(--grad-builder); }
+.gl-bar--validator { background: var(--grad-validator); }
+.gl-bar--community { background: var(--grad-community); }
+.gl-bar--muted { background: rgba(127,127,127,.25); }
+.on-dark .gl-bar--muted { background: rgba(255,255,255,.12); }
+.gl-bar[data-value]::after {
+  content: attr(data-value); position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 10px; color: var(--c-fg-muted); white-space: nowrap;
+  opacity: 0; transition: opacity .15s;
+}
+.gl-bar:hover[data-value]::after { opacity: 1; }
+.gl-axis { display: flex; gap: 10px; margin-top: var(--space-3); }
+.gl-axis > * { flex: 1; text-align: center; font-size: var(--fs-xs); color: var(--c-fg-subtle); }
+
+/* --- Line / area chart (inline SVG) ---
+   Author an <svg class="gl-linechart" viewBox="0 0 W H" preserveAspectRatio="none">
+   with a gridline group, an area <path> and a line <path>. */
+.gl-linechart { display: block; width: 100%; height: 220px; overflow: visible; }
+.gl-linechart .grid { stroke: var(--c-border); stroke-width: 1; }
+.gl-linechart .area  { fill: url(#gl-area-grad); }
+.gl-linechart .line  { fill: none; stroke: var(--gl-blue); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.gl-linechart .line--gradient { stroke: url(#gl-line-grad); }
+.gl-linechart .dot   { fill: var(--c-card); stroke: var(--gl-blue); stroke-width: 2.5; }
+
+/* --- Donut / ring (conic-gradient + masked hole) --- */
+.gl-donut {
+  width: 168px; height: 168px; border-radius: 999px; flex: 0 0 168px;
+  /* set background:conic-gradient(...) inline per data */
+  -webkit-mask: radial-gradient(circle, transparent 56%, #000 57%);
+          mask: radial-gradient(circle, transparent 56%, #000 57%);
+}
+.gl-donut-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.gl-donut-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; pointer-events: none;
+}
+.gl-donut-center .v { font-family: var(--font-display); font-weight: 500; font-size: 32px; letter-spacing: -0.03em; line-height: 1; color: var(--c-fg); }
+.gl-donut-center .k { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--c-fg-subtle); margin-top: 4px; }
+
+/* --- Sparkline (tiny inline SVG, sits in stat cards/rows) --- */
+.gl-spark { display: block; width: 96px; height: 32px; overflow: visible; }
+.gl-spark .line { fill: none; stroke: var(--gl-blue); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.gl-spark .line--up { stroke: var(--state-success); }
+.gl-spark .line--down { stroke: var(--state-danger); }

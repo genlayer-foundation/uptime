@@ -1,0 +1,188 @@
+/* =============================================================
+   GenLayer — Colors & Type
+   Source of truth: Brand Guidelines 2025 + Portal codebase (Tailwind)
+   ============================================================= */
+
+/* ----- Fonts ---------------------------------------------------
+   Primary brand fonts:
+     - Space Grotesk (Google Fonts) → display / titles. Geometric
+       sans with a touch of warmth; reads like a free, redistributable
+       cousin of F37 Lineca.
+     - Switzer Variable (Fontshare, free for self-host) → body + small titles.
+   ---------------------------------------------------------- */
+
+/* Space Grotesk — brand display (Google Fonts, free + redistributable). */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
+
+/* Switzer — brand body (self-hosted variable). */
+@font-face {
+  font-family: "Switzer";
+  src: url("fonts/Switzer-Variable.ttf") format("truetype-variations"),
+       url("fonts/Switzer-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Switzer";
+  src: url("fonts/Switzer-VariableItalic.ttf") format("truetype-variations"),
+       url("fonts/Switzer-VariableItalic.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Mono fallback only (brand has no prescribed monospace). */
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  /* ---------- Brand core (from Brand Guidelines §03 Color) ---------- */
+  --gl-black:   #000000;
+  --gl-white:   #FFFFFF;
+  --gl-navy:    #282B5D;
+  --gl-blue:    #110FFF;              /* primary electric blue */
+  --gl-purple:  #9B6AF6;              /* gradient start */
+  --gl-pink:    #E37DF7;              /* gradient end */
+
+  /* Supporting brand hues lifted from Figma (most-used fills) */
+  --gl-orange:  #EE8D24;              /* builder accent */
+  --gl-orange-hi:#F8B93D;
+  --gl-orange-lo:#DB6917;
+  --gl-sky:     #387DE8;              /* validator accent */
+  --gl-sky-hi:  #6DA7F3;
+  --gl-sky-lo:  #2159D2;
+  --gl-purple-hi:#A77FEE;             /* community accent */
+  --gl-purple-lo:#5F33CA;
+
+  /* Neutrals (pulled from Figma + portal tailwind grayscale) */
+  --gl-ink-900: #0F0F0F;              /* near-black page surface */
+  --gl-ink-800: #1F1F1F;
+  --gl-ink-700: #383838;
+  --gl-ink-500: #6B6B6B;
+  --gl-ink-400: #ABABAB;
+  --gl-line:    #E5E5E6;              /* hairline */
+  --gl-line-soft:#F0F0F0;
+  --gl-fog:     #F4F4F4;
+  --gl-fog-hi:  #F8F8F8;
+  --gl-paper:   #FFFFFF;
+
+  /* Semantic surface / text roles */
+  --bg-app:        var(--gl-fog-hi);
+  --bg-card:       var(--gl-paper);
+  --bg-inverse:    var(--gl-ink-900);
+
+  --fg-1:          var(--gl-black);     /* primary text */
+  --fg-2:          var(--gl-ink-500);   /* secondary / muted */
+  --fg-3:          var(--gl-ink-400);   /* tertiary / captions */
+  --fg-inverse:    var(--gl-white);
+  --fg-link:       #4083EA;
+
+  --border:        var(--gl-line);
+  --border-soft:   var(--gl-line-soft);
+
+  /* State */
+  --state-success:#16A34A;
+  --state-warn:   #F59E0B;
+  --state-danger: #E00000;             /* present in Figma */
+
+  /* ---------- Signature gradient (Brand Guidelines §03) ---------- */
+  --gl-gradient: linear-gradient(
+    135deg,
+    var(--gl-pink) 0%,
+    var(--gl-purple) 45%,
+    var(--gl-blue)  100%
+  );
+  /* Category-specific gradients used in Portal UI */
+  --grad-builder:   linear-gradient(168deg,#F8B93D 15%, #EE8D24 50%, #DB6917 85%);
+  --grad-validator: linear-gradient(168deg,#6FA3F8 15%, #4F76F6 50%, #3B5DD6 85%);
+  --grad-community: linear-gradient(90deg, #BE8FF5 0%, #AC6DF3 100%);
+
+  /* ---------- Typography ---------- */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Switzer", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale — display runs large (Space Grotesk), body runs tight (Switzer) */
+  --fs-display-1: clamp(64px, 9vw, 160px);   /* hero "Hackathon" */
+  --fs-display-2: clamp(48px, 6vw, 96px);    /* banner headlines */
+  --fs-display-3: clamp(32px, 4vw, 64px);    /* section heroes */
+  --fs-h1:        40px;                      /* page title */
+  --fs-h2:        32px;
+  --fs-h3:        24px;
+  --fs-h4:        20px;
+  --fs-body-lg:   17px;                      /* article body */
+  --fs-body:      15px;
+  --fs-sm:        14px;
+  --fs-xs:        12px;
+
+  --lh-tight:     1.05;
+  --lh-snug:      1.2;
+  --lh-normal:    1.45;
+  --lh-relaxed:   1.65;
+
+  --track-tight:  -0.04em;    /* display tracking */
+  --track-snug:   -0.02em;
+  --track-normal: 0;
+  --track-wide:   0.02em;
+
+  /* ---------- Spacing / radii / shadow ---------- */
+  --space-1:  4px;  --space-2:  8px;
+  --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px;  --space-10:40px;
+  --space-12:48px;  --space-16:64px;
+  --space-20:80px;  --space-24:96px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;     /* default card radius */
+  --radius-xl: 20px;     /* pill buttons */
+  --radius-full: 999px;
+
+  --shadow-card:    0 4px 12px rgba(0,0,0,0.05);          /* portal card */
+  --shadow-card-hi: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-inset:   inset 0 0 0 1px rgba(255,255,255,0.15);
+  --shadow-glow:    0 0 80px rgba(155,106,246,0.35);      /* gradient glow on dark */
+}
+
+/* ---------- Semantic element styles --------------------------- */
+body {
+  font-family: var(--font-body);
+  color: var(--fg-1);
+  background: var(--bg-app);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 500;             /* Space Grotesk Medium — brand default for titles */
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+  text-wrap: pretty;
+}
+
+h1 { font-size: var(--fs-h1); letter-spacing: var(--track-tight); }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); letter-spacing: var(--track-snug); }
+h4 { font-size: var(--fs-h4); letter-spacing: var(--track-snug); font-weight: 600; }
+
+.display-1 { font-family:var(--font-display); font-weight:700; font-size:var(--fs-display-1); letter-spacing:-0.07em; line-height:.95; }
+.display-2 { font-family:var(--font-display); font-weight:500; font-size:var(--fs-display-2); letter-spacing:var(--track-tight); line-height:1; }
+.display-3 { font-family:var(--font-display); font-weight:500; font-size:var(--fs-display-3); letter-spacing:var(--track-tight); line-height:1.05; }
+
+p         { color: var(--fg-1); }
+.text-muted   { color: var(--fg-2); }
+.text-caption { color: var(--fg-3); font-size: var(--fs-xs); letter-spacing: .02em; }
+
+code, kbd, pre, .mono { font-family: var(--font-mono); font-size: .92em; }
+
+/* Links default to Portal's blue */
+a { color: var(--fg-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Hairline used across surfaces */
+hr { border: 0; border-top: 1.2px solid var(--border); }
