@@ -1,0 +1,23 @@
+# MetaMask Delegation Framework v1.3.0 on GenLayer Bradbury (chain 4221).
+# Nothing here is compiled into the deployed contracts: deployment REPLAYS the exact
+# CREATE2 inputs MetaMask used (manifest/canonical-v1.3.0.json), so the bytecode and
+# addresses are byte-identical to every other chain. Solidity here is only the
+# replay script and the fork smoke test (minimal interfaces, no upstream source).
+# forge-std is shared with ../evm (vendored there, hashes in ../evm/dependencies.lock.json).
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["../evm/lib"]
+solc_version = "0.8.23"
+auto_detect_solc = false
+evm_version = "cancun"
+optimizer = true
+remappings = ["forge-std/=../evm/lib/forge-std/src/"]
+fs_permissions = [{ access = "read", path = "./manifest" }, { access = "read", path = "./test/fixtures" }]
+
+[rpc_endpoints]
+bradbury = "https://rpc-bradbury.genlayer.com"
+fork = "http://127.0.0.1:8545"

@@ -1,0 +1,21 @@
+Third-party material in contracts/delegation
+============================================
+
+manifest/canonical-v1.3.0.json contains compiled bytecode (CREATE2 init code) of:
+
+- MetaMask Delegation Framework v1.3.0 (+ later enforcers listed by upstream as v1.3.0)
+  https://github.com/MetaMask/delegation-framework
+  Dual-licensed MIT AND Apache-2.0. Copyright (c) 2022 ConsenSys Software Inc.
+  Init code extracted from the upstream repository's broadcast/ deployment records.
+  Includes OpenZeppelin Contracts (MIT) and SCL / FreshCryptoLib (MIT, SCL_RIP7212).
+
+- ERC-4337 EntryPoint v0.7.0, eth-infinitism/account-abstraction
+  https://github.com/eth-infinitism/account-abstraction
+  GPL-3.0. Creation bytecode of the verified contract at
+  0x0000000071727De22E5E9d8BAf0edAc6f37da032 (eth.blockscout.com).
+
+test/fixtures/ERC1967Proxy.creation.hex: OpenZeppelin Contracts 5.0.2 ERC1967Proxy
+creation code (MIT), as compiled by the delegation-framework v1.3.0 build.
+
+No upstream source code is vendored. test/Interfaces.sol is a hand-written ABI subset.
+Scripts and tests in this directory: MIT.

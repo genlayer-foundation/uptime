@@ -1,0 +1,4 @@
+out/
+cache/
+# fork dry-run records carry chain id 4221 and would read as real deployments
+broadcast/
