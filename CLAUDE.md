@@ -44,5 +44,8 @@ frontend/src/app/api/heartbeat  public JSON (summary, or ?format=rows for Grafan
 test/direct/                    direct-mode contract tests
 ```
 
-UI uses the GenLayer Design System (`../design`). This repo is PUBLIC: never
+UI is ONE design: the light zinc + purple Uptime look restored from b6d39c7
+(owner decision 2026-11). Tokens in `frontend/src/app/globals.css`; build pages
+from `frontend/src/components/ui/` and the shell in `components/shell/` (the
+not-audited banner is on every page by the root layout). This repo is PUBLIC: never
 commit F37 Lineca here.
