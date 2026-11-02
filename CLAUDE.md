@@ -40,7 +40,8 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 - **Pool charging stays OFF** (`POOL_CHARGING_ENABLED`) until the pool is
   deployed and reviewed. A sent charge with an unknown outcome is never retried.
 - Migrations are append-only `frontend/migrations/NNN_*.sql`, applied by
-  `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's.
+  `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's, 011 the Heartbeat's results
+  (KV is only a fallback without `DATABASE_URL` or before 011; see README "Store").
 
 ## Verify
 
@@ -58,7 +59,7 @@ cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next 
 contracts/heartbeat.py          probes + frozen question set
 contracts/canary.py             deployed fresh each tick
 frontend/public/heartbeat/      fixtures the contract fetches
-frontend/src/lib/heartbeat/     runner (tick/reconcile), KV store, answer key, summary
+frontend/src/lib/heartbeat/     runner (tick/reconcile), store (Postgres; KV fallback), answer key, summary
 frontend/src/app/api/cron/      heartbeat (hourly, legacy) + dispatch (5 min) + reconcile (10 min) + settle (hourly)
 frontend/src/app/api/heartbeat  public JSON (summary, or ?format=rows for Grafana)
 frontend/src/lib/jobs/          jobs backend: types (shared), spec, schedule/cron, repo (pg),

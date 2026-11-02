@@ -1,6 +1,6 @@
 // DEMO data source: a synthetic heartbeat history for local development.
 //
-// Produces the exact ProbeRecord shapes the KV store holds, so summary.ts, the
+// Produces the exact ProbeRecord shapes the store holds, so summary.ts, the
 // API route (both formats) and the dashboard run unchanged on it. Never used
 // outside `next dev` (see source.ts).
 //

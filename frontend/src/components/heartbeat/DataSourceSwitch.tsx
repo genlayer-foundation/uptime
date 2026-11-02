@@ -23,7 +23,7 @@ const CHOICES: Array<{ value: DataSource; label: string }> = [
 const BADGE: Record<DataSource, { tone: Tone; label: string; note: string }> = {
   demo: { tone: "warn", label: "Demo data", note: "Synthetic, generated locally. Not a measurement." },
   production: { tone: "success", label: "Production data", note: "Proxied from uptime.genlayer.foundation." },
-  local: { tone: "purple", label: "Local KV", note: "Read from the KV store this dev server is configured with." },
+  local: { tone: "purple", label: "Local store", note: "Read from the Postgres (or KV fallback) this dev server is configured with." },
 };
 
 export function DataSourceSwitch({

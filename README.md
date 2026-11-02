@@ -31,10 +31,11 @@ The answer key is `frontend/src/lib/heartbeat/questions.ts`, off-chain on purpos
 ## How it runs
 
 ```
-Vercel cron  0 * * * *     /api/cron/heartbeat   submit this tick's txs, never wait
+Vercel cron  */5 * * * *   /api/cron/dispatch    submit this tick's txs (hourly at :00), never wait
+                           (/api/cron/heartbeat, hourly, does it instead when DATABASE_URL is unset)
 Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, grade, fire due appeals
                              │
-                           Upstash KV  (hb:pending, hb:results)
+                           Postgres  heartbeat_probes, heartbeat_state  (migrations/011_heartbeat.sql)
                              │
 public                     /api/heartbeat                    summary + hourly series
                            /api/heartbeat?format=rows        flat rows for Grafana (Infinity)
@@ -42,6 +43,8 @@ public                     /api/heartbeat                    summary + hourly se
 ```
 
 Latency comes from the chain's own `createdTimestamp` → `lastVoteTimestamp`, so the reconcile cadence affects freshness, not precision.
+
+**Store.** Results live in the app's Postgres (`DATABASE_URL`), the same database as the jobs backend (`src/lib/heartbeat/store.ts`). Upstash KV (`KV_REST_API_URL`, `KV_REST_API_TOKEN`) is only a fallback: it is used when `DATABASE_URL` is unset, or while migration 011 has not been applied yet. The first call against a migrated database copies the KV history (results, pending, tick counter) into Postgres once, so tick numbers continue; KV is only read, never changed, and can be removed once that import has run (`heartbeat_state` row `kv_imported`).
 
 ## Setup
 
@@ -68,11 +71,11 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 |---|---|---|
 | `demo` (dev default) | a deterministic synthetic 30-day history (`src/lib/heartbeat/demo.ts`): canary deploys, fetches, 2 rotating questions per tick, appeals every 6th tick, wrong answers, injections, borderline splits, timeouts, submit failures and a 6-hour outage | nothing |
 | `production` | proxies the same query to the public `https://uptime.genlayer.foundation/api/heartbeat` | nothing (public, read-only) |
-| `local` | the real KV path | `KV_REST_API_URL`, `KV_REST_API_TOKEN` |
+| `local` | the real store: Postgres, or KV as the fallback (see **Store** above) | `DATABASE_URL` (+ `npm run db:migrate`), or `KV_REST_API_URL`, `KV_REST_API_TOKEN` |
 
 Pick one with `HEARTBEAT_DATA_SOURCE=demo|production|local` in `.env.local`, or with the dev-only **Demo / Production** switch at the top of the page (it sets an `hb-source` cookie). `?source=` on the API URL overrides both. A badge on the page always names the source on screen, and dev responses carry an `X-Heartbeat-Source` header. If production is unreachable or not deployed, the page shows the unavailable state, naming that source.
 
-The switch exists only under `next dev`. In any build (`next build`, Vercel preview or production) the server always reads KV and ignores the env var, cookie and query (`src/lib/heartbeat/source.ts`).
+The switch exists only under `next dev`. In any build (`next build`, Vercel preview or production) the server always reads the real store and ignores the env var, cookie and query (`src/lib/heartbeat/source.ts`).
 
 `CRON_SECRET` is **required**. The cron routes refuse every call without it, because a tick spends gas and appeal bonds.
 
@@ -194,6 +197,6 @@ npm test                                                 # unit tests; the Postg
 createdb uptime_test && TEST_DATABASE_URL=postgres://localhost/uptime_test npm test   # DROPS that DB's schema
 ```
 
-Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the `PRIVATE_KEY` wallet, hourly at :00), dispatched through the same runner and KV store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
+Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the `PRIVATE_KEY` wallet, hourly at :00), dispatched through the same runner and the same Postgres store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
 
 Production data is planned on Neon via the Vercel Marketplace. Nothing is provisioned yet: run `npm run db:migrate` against its `DATABASE_URL` once it exists. Neon's URL carries `sslmode=require`, which `pg` honours.

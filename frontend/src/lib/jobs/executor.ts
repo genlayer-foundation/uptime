@@ -30,7 +30,7 @@ export interface ExecutorDeps {
   // Deploy presets, by name (deploy steps with `preset` instead of `code`).
   deployPresets: Record<string, string>;
   // Bradbury Heartbeat example job: submit one tick through the existing
-  // runner, which grades it in its own KV store (public dashboard unchanged).
+  // runner, which grades it in its own store (heartbeat_probes) (public dashboard unchanged).
   heartbeatTick?: () => Promise<{ tick: number; probes: { kind: string; qid?: string; txHash?: string; status?: string; error?: string }[] }>;
   // Bradbury pass-through cost per tx, in wei (0 = free).
   runCostWei?: () => bigint;
