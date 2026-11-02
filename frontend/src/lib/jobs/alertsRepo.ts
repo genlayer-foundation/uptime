@@ -1,5 +1,7 @@
 // Postgres AlertsRepo for the mailer (lib/mailer/repo.ts), over the tables in
-// migrations/010_alerts.sql. Semantics follow lib/mailer/memoryRepo.ts, the
+// migrations/010_alerts.sql plus the self-serve columns of
+// migrations/012_alerts_selfserve.sql (per-address daily cap, per-job triggers
+// and limits, the digest kind and trigger_kind). Semantics follow lib/mailer/memoryRepo.ts, the
 // mailer's reference implementation.
 
 import type { Pool } from "pg";
@@ -18,6 +20,7 @@ function toRecipient(r: Row): Recipient {
     verificationSentAt: d(r.verification_sent_at),
     verifiedAt: d(r.verified_at),
     removedAt: d(r.removed_at),
+    dailyCap: r.daily_cap == null ? null : Number(r.daily_cap),
   };
 }
 
@@ -32,12 +35,29 @@ function toEmail(r: Row): EmailRow {
     email: r.email as string,
     ownerWallet: r.owner_wallet as string,
     network: (r.network as EmailRow["network"]) ?? null,
+    trigger: (r.trigger_kind as EmailRow["trigger"]) ?? null,
     outcome: r.outcome as EmailRow["outcome"],
     reason: (r.reason as string | null) ?? null,
     priceWei: r.price_wei == null ? null : String(r.price_wei),
     chargeTx: (r.charge_tx as string | null) ?? null,
     providerMessageId: (r.provider_message_id as string | null) ?? null,
     createdAt: d(r.created_at)!,
+  };
+}
+
+function toRule(x: Row): AlertRule {
+  return {
+    jobId: x.job_id as string,
+    ownerWallet: x.owner_wallet as string,
+    enabled: x.enabled as boolean,
+    failAfter: Number(x.fail_after),
+    recipientIds: (x.recipient_ids as unknown[]).map(Number),
+    onFailure: x.on_failure as boolean,
+    onAssertion: x.on_assertion as boolean,
+    onRecovery: x.on_recovery as boolean,
+    digest: x.digest as boolean,
+    perJobPerDay: Number(x.per_job_per_day),
+    cooldownMin: Number(x.cooldown_min),
   };
 }
 
@@ -111,6 +131,14 @@ export function pgAlertsRepo(pool: Pool): AlertsRepo {
       }
     },
 
+    async setRecipientCap(id, wallet, cap) {
+      const r = await pool.query(
+        "UPDATE alert_recipients SET daily_cap = $3 WHERE id = $1 AND owner_wallet = $2 AND removed_at IS NULL RETURNING id",
+        [id, wallet, cap]
+      );
+      return (r.rowCount ?? 0) > 0;
+    },
+
     async isSuppressed(email) {
       const r = await pool.query("SELECT 1 FROM alert_suppressions WHERE email = $1", [email]);
       return (r.rowCount ?? 0) > 0;
@@ -125,34 +153,32 @@ export function pgAlertsRepo(pool: Pool): AlertsRepo {
 
     async getRule(jobId) {
       const r = await pool.query("SELECT * FROM alert_rules WHERE job_id = $1", [jobId]);
-      const x = r.rows[0];
-      if (!x) return null;
-      const rule: AlertRule = {
-        jobId: x.job_id,
-        ownerWallet: x.owner_wallet,
-        enabled: x.enabled,
-        failAfter: Number(x.fail_after),
-        recipientIds: (x.recipient_ids as unknown[]).map(Number),
-      };
-      return rule;
+      return r.rows[0] ? toRule(r.rows[0]) : null;
     },
     async setRule(rule, now) {
       await pool.query(
-        `INSERT INTO alert_rules (job_id, owner_wallet, enabled, fail_after, recipient_ids, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (job_id) DO UPDATE SET owner_wallet = $2, enabled = $3, fail_after = $4, recipient_ids = $5, updated_at = $6`,
-        [rule.jobId, rule.ownerWallet, rule.enabled, rule.failAfter, rule.recipientIds, now]
+        `INSERT INTO alert_rules (job_id, owner_wallet, enabled, fail_after, recipient_ids, updated_at,
+                                  on_failure, on_assertion, on_recovery, digest, per_job_per_day, cooldown_min)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (job_id) DO UPDATE SET owner_wallet = $2, enabled = $3, fail_after = $4, recipient_ids = $5, updated_at = $6,
+           on_failure = $7, on_assertion = $8, on_recovery = $9, digest = $10, per_job_per_day = $11, cooldown_min = $12`,
+        [rule.jobId, rule.ownerWallet, rule.enabled, rule.failAfter, rule.recipientIds, now,
+          rule.onFailure, rule.onAssertion, rule.onRecovery, rule.digest, rule.perJobPerDay, rule.cooldownMin]
       );
+    },
+    async listDigestRules() {
+      const r = await pool.query("SELECT * FROM alert_rules WHERE enabled AND digest ORDER BY job_id");
+      return r.rows.map(toRule);
     },
 
     async claimEmail(c, now) {
       const r = await pool.query(
         `INSERT INTO alert_emails (claim_key, kind, job_id, run_id, recipient_id, email, owner_wallet, network,
-                                   outcome, reason, price_wei, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
+                                   outcome, reason, price_wei, created_at, updated_at, trigger_kind)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13)
          ON CONFLICT (claim_key) DO NOTHING RETURNING *`,
         [c.claimKey, c.kind, c.jobId, c.runId, c.recipientId, c.email, c.ownerWallet, c.network,
-          c.outcome ?? "queued", c.reason ?? null, c.priceWei, now]
+          c.outcome ?? "queued", c.reason ?? null, c.priceWei, now, c.trigger ?? null]
       );
       return r.rows[0] ? toEmail(r.rows[0]) : null;
     },
@@ -177,6 +203,12 @@ export function pgAlertsRepo(pool: Pool): AlertsRepo {
       const w = where(f);
       const r = await pool.query(`SELECT max(created_at) AS t FROM alert_emails WHERE ${w.sql}`, w.vals);
       return d(r.rows[0].t);
+    },
+    async lastEmail(f) {
+      // Ties on created_at go to the later row (higher id), as in memoryRepo.
+      const w = where(f);
+      const r = await pool.query(`SELECT * FROM alert_emails WHERE ${w.sql} ORDER BY created_at DESC, id DESC LIMIT 1`, w.vals);
+      return r.rows[0] ? toEmail(r.rows[0]) : null;
     },
   };
 }

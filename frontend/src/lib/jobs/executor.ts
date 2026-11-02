@@ -34,8 +34,9 @@ export interface ExecutorDeps {
   heartbeatTick?: () => Promise<{ tick: number; probes: { kind: string; qid?: string; txHash?: string; status?: string; error?: string }[] }>;
   // Bradbury pass-through cost per tx, in wei (0 = free).
   runCostWei?: () => bigint;
-  // Called once a run finishes with pass === false (email alerts). Must not throw.
-  onRunFailed?: (job: Job, run: Run, consecutiveFailures: number) => Promise<void>;
+  // Called once EVERY run is decided, pass or fail (email alerts: a failure may
+  // alert, a pass may send the recovery email). Must not throw.
+  onRunDecided?: (job: Job, run: Run, consecutiveFailures: number) => Promise<void>;
   budgetMs?: number;
 }
 
@@ -145,15 +146,15 @@ function txHashOf(v: unknown): `0x${string}` {
 async function finish(deps: ExecutorDeps, job: JobRow, run: RunRow, error: string | null = null) {
   const pass = runPass(run.steps, job.assertions, true);
   await deps.repo.updateRun(run.id, { state: "DONE", pass, error });
-  if (pass === false) await alertFailure(deps, job, run.id);
+  await runDecided(deps, job, run.id);
 }
 
-async function alertFailure(deps: ExecutorDeps, job: JobRow, runId: string) {
-  if (!deps.onRunFailed) return;
+async function runDecided(deps: ExecutorDeps, job: JobRow, runId: string) {
+  if (!deps.onRunDecided) return;
   try {
     const run = await deps.repo.getRun(runId);
-    if (!run) return;
-    await deps.onRunFailed(toJob(job), toPublicRun(run), await deps.repo.consecutiveFailures(job.id));
+    if (!run || run.state !== "DONE") return;
+    await deps.onRunDecided(toJob(job), toPublicRun(run), await deps.repo.consecutiveFailures(job.id));
   } catch {
     // alerts never break the scheduler
   }
@@ -331,7 +332,7 @@ export async function reconcile(deps: ExecutorDeps, limit = 200): Promise<Reconc
       if (run.steps.every((s) => s.status !== "PENDING")) {
         const pass = run.steps.every((s) => OK_STATUSES.has(s.status) && !s.error);
         await repo.updateRun(run.id, { state: "DONE", pass });
-        if (!pass) await alertFailure(deps, job, run.id);
+        await runDecided(deps, job, run.id);
         rep.finished++;
       }
       continue;
@@ -367,6 +368,7 @@ async function dispatchHeartbeat(deps: ExecutorDeps, job: JobRow, group: Group, 
   if (!run) return;
   if (!deps.heartbeatTick) {
     await deps.repo.updateRun(run.id, { state: "DONE", pass: false, error: "heartbeat runner not wired" });
+    await runDecided(deps, job, run.id);
     return;
   }
   try {
@@ -388,9 +390,11 @@ async function dispatchHeartbeat(deps: ExecutorDeps, job: JobRow, group: Group, 
     }
     if (probes.every((p) => p.status === "SUBMIT_FAILED" || !p.txHash)) {
       await deps.repo.updateRun(run.id, { state: "DONE", pass: false, error: "every probe failed to submit" });
+      await runDecided(deps, job, run.id);
     }
   } catch (e) {
     await deps.repo.updateRun(run.id, { state: "DONE", pass: false, error: errMsg(e) });
+    await runDecided(deps, job, run.id);
   }
 }
 

@@ -2,7 +2,7 @@
 // owner turned the digest on. Cron only, CRON_SECRET, fail closed. Idempotent:
 // a second call on the same UTC day sends nothing (claim key per job/day/recipient).
 // Needs the backend's `digestSource` wiring (configureMailer); 503 without it.
-// Not scheduled in vercel.json yet, like /api/alerts/bounces.
+// Scheduled daily at 08:00 UTC (vercel.json).
 import { authorized } from "@/lib/heartbeat/auth";
 import { depsOr503, json } from "@/lib/mailer/http";
 import { sendDigestWith } from "@/lib/mailer/policy";

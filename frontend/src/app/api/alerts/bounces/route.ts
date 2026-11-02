@@ -1,6 +1,6 @@
 // Bounce sweep: an OUTBOUND poll of the provider's suppression list (hard
 // bounces, spam complaints, provider-side unsubscribes), merged into ours.
-// Cron only, CRON_SECRET, fail closed. Not scheduled in vercel.json yet.
+// Cron only, CRON_SECRET, fail closed. Scheduled every 6 h (vercel.json, :30).
 import { authorized } from "@/lib/heartbeat/auth";
 import { depsOr503, json } from "@/lib/mailer/http";
 import { sweepBounces } from "@/lib/mailer/recipients";

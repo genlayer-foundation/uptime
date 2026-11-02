@@ -9,6 +9,7 @@ import { dispatchDue, ensureHeartbeatJob, reconcile, toPublicRun, type ExecutorD
 import type { GateDeps } from "@/lib/jobs/gate";
 import type { JobRow } from "@/lib/jobs/internal";
 import { POOL_ABI } from "@/lib/pool/abi";
+import { readPrices, runChargeWei } from "@/lib/pricing";
 import { fundingDecision, outcomesFromLogs, settle, type PoolCharger, type PoolView } from "@/lib/jobs/pool/pool";
 import { templates } from "@/lib/jobs/presets";
 import { createJob, deleteJob, editJob, pauseJob, resumeJob } from "@/lib/jobs/service";
@@ -278,10 +279,10 @@ describe("executor: steps, chaining, tracking", () => {
     expect(toPublicRun(repo.runs[1]).steps[0].status).toBe("TIMEOUT");
   });
 
-  it("calls the alert hook on failed runs only, with the failure streak", async () => {
+  it("calls the alert hook on every decided run, pass or fail, with the failure streak", async () => {
     const { deps, client, setNow } = setup();
     const onRunFailed = vi.fn(async () => undefined);
-    const d = { ...deps, onRunFailed };
+    const d = { ...deps, onRunDecided: onRunFailed };
     const made = await createJob(d, ALICE, job("studio"));
     if (!made.ok) throw new Error("setup");
     client.writeContract.mockRejectedValueOnce(new Error("boom")).mockRejectedValueOnce(new Error("boom"));
@@ -297,7 +298,9 @@ describe("executor: steps, chaining, tracking", () => {
     setNow(T0 + 600);
     await dispatchDue(d);
     await reconcile(d);
-    expect(onRunFailed).toHaveBeenCalledTimes(2); // a passing run does not alert
+    // A passing run is reported too (it may send the recovery email); the streak resets.
+    expect(onRunFailed).toHaveBeenCalledTimes(3);
+    expect(onRunFailed).toHaveBeenLastCalledWith(expect.objectContaining({ id: made.value.id }), expect.objectContaining({ pass: true }), 0);
   });
 
   it("deploy hourly + call the latest deploy every 5 min ($deploy.address)", async () => {
@@ -479,13 +482,31 @@ describe("settlement", () => {
     const charger: PoolCharger = { lastSettlement: async () => BigInt(41), simulate, charge };
     const first = await settle(repo, T0 + 600, { enabled: true, charger: async () => charger });
     expect(first).toMatchObject({ lines: 1, charged: 0, skipped: 1, onchainId: "42" });
-    expect(charge).toHaveBeenCalledWith([made.value.poolId], [BigInt(5)], BigInt(42));
+    // The amount is pricing.runChargeWei: the run's flat fee plus its gas.
+    expect(charge).toHaveBeenCalledWith([made.value.poolId], [runChargeWei(readPrices(), BigInt(5))], BigInt(42));
     expect(simulate).toHaveBeenCalledBefore(charge);
 
     outcome = { charged: true, reason: "" };
     const second = await settle(repo, T0 + 600, { enabled: true, charger: async () => charger });
     expect(second).toMatchObject({ lines: 1, charged: 1, onchainId: "43" });
     expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => charger })).toMatchObject({ lines: 0 });
+  });
+
+  it("charges the run fee on a run's first tx even without measured gas, and nothing when the fee is 0", async () => {
+    const { deps, repo } = setup();
+    const made = await createJob(deps, MALLORY, job("bradbury"));
+    if (!made.ok) throw new Error("setup");
+    await repo.updateJob(made.value.id, { state: "active" });
+    await dispatchDue(deps); // runCostWei unset: no gas recorded
+    await reconcile(deps);
+    const charge = vi.fn(async () => ({ hash: "0xfeed" as `0x${string}`, outcomes: [{ charged: true }], chargedWei: "0" }));
+    const charger: PoolCharger = { lastSettlement: async () => BigInt(0), simulate: async () => undefined, charge };
+    const free = { emailWei: BigInt(0), runFeeWei: BigInt(0), gasPerTxEstimateWei: BigInt(0) };
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => charger, prices: free })).toMatchObject({ lines: 0 });
+    const prices = { ...free, runFeeWei: BigInt(1000) };
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => charger, prices })).toMatchObject({ lines: 1, charged: 1 });
+    expect(charge).toHaveBeenCalledWith([made.value.poolId], [BigInt(1000)], BigInt(1));
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => charger, prices })).toMatchObject({ lines: 0 });
   });
 
   it("keeps lines locked when a sent charge's outcome is unknown", async () => {

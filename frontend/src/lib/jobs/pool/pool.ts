@@ -11,6 +11,7 @@ import type { FundingCheck } from "../gate";
 import type { JobRow } from "../internal";
 import type { LineOutcome, Repo } from "../repo";
 import type { Network } from "../types";
+import { readPrices, runChargeWei, type Prices } from "@/lib/pricing";
 import { POOL_ABI, poolAddress, poolChargingEnabled, ROLE_SCHEDULER, SKIP_REASONS } from "@/lib/pool/abi";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -81,7 +82,8 @@ export function makeFundingCheck(reader: PoolReader | null, allowlist?: Readonly
   return async (j: JobRow): Promise<FundingCheck> => {
     try {
       const v = reader ? await reader.read(j.poolId as `0x${string}`) : "unconfigured";
-      return fundingDecision(j, v, allowlist ?? studioAllowlist(), runCostWei());
+      // The largest single line a run sends: its first tx's gas plus the run fee.
+      return fundingDecision(j, v, allowlist ?? studioAllowlist(), runChargeWei(readPrices(), runCostWei()));
     } catch (e) {
       return { ok: false, reason: `Pool unreadable: ${(e instanceof Error ? e.message : String(e)).slice(0, 120)}` };
     }
@@ -185,11 +187,17 @@ const MAX_BATCH = 256; // UptimePool.MAX_BATCH
 export async function settle(
   repo: Repo,
   nowSec: number,
-  opts: { enabled?: boolean; charger?: () => Promise<PoolCharger> } = {}
+  opts: { enabled?: boolean; charger?: () => Promise<PoolCharger>; prices?: Prices } = {}
 ): Promise<SettleResult> {
   if (!(opts.enabled ?? poolChargingEnabled())) return { enabled: false };
   const network: Network = "bradbury";
-  const lines = await repo.unsettled(network, nowSec, MAX_BATCH);
+  // Amounts come from lib/pricing.ts, the same module the wizard estimates
+  // with: each run pays its actual gas plus one flat fee (on its first tx line).
+  const prices = opts.prices ?? readPrices();
+  const lines = (await repo.unsettled(network, nowSec, MAX_BATCH, { feeLines: prices.runFeeWei > BigInt(0) })).map((l) => {
+    const gas = BigInt(l.amountWei);
+    return { ...l, amountWei: (l.runFee ? runChargeWei(prices, gas) : gas).toString() };
+  });
   if (lines.length === 0) return { enabled: true, network, lines: 0, totalWei: "0" };
   const total = lines.reduce((s, l) => s + BigInt(l.amountWei), BigInt(0)).toString();
   const charger = await (opts.charger ?? evmCharger)();

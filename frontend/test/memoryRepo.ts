@@ -154,16 +154,21 @@ export class MemoryRepo implements Repo {
     if (!this.billing.has(k)) this.billing.set(k, { attempts: 0 });
     return this.billing.get(k)!;
   }
-  async unsettled(n: Network, until: number, max: number) {
+  async unsettled(n: Network, until: number, max: number, opts: { feeLines?: boolean } = {}) {
     const out: ChargeLine[] = [];
     for (const r of this.runs) {
       const j = this.jobs.get(r.jobId)!;
       if (j.network !== n || j.system) continue;
+      const txIdx = r.steps.filter((s) => s.txHash).map((s) => s.idx);
+      const feeIdx = txIdx.length ? Math.min(...txIdx) : null;
       for (const s of r.steps) {
         const b = this.bill(r.id, s.idx);
-        if (!s.gasWei || BigInt(s.gasWei) === BigInt(0) || b.settledIn || b.outcome === "CHARGED" || b.attempts >= MAX_CHARGE_ATTEMPTS) continue;
+        const gas = s.gasWei ? BigInt(s.gasWei) : BigInt(0);
+        const runFee = s.idx === feeIdx;
+        if (!(gas > BigInt(0) || (opts.feeLines && runFee))) continue;
+        if (b.settledIn || b.outcome === "CHARGED" || b.attempts >= MAX_CHARGE_ATTEMPTS) continue;
         if (s.resolvedAt === null || s.resolvedAt >= until) continue;
-        out.push({ runId: r.id, idx: s.idx, jobId: j.id, poolId: j.poolId, amountWei: s.gasWei });
+        out.push({ runId: r.id, idx: s.idx, jobId: j.id, poolId: j.poolId, amountWei: gas.toString(), runFee });
       }
     }
     return out.slice(0, max);

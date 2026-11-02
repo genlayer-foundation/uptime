@@ -40,7 +40,7 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 - **Pool charging stays OFF** (`POOL_CHARGING_ENABLED`) until the pool is
   deployed and reviewed. A sent charge with an unknown outcome is never retried.
 - Migrations are append-only `frontend/migrations/NNN_*.sql`, applied by
-  `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's, 011 the Heartbeat's results
+  `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's, 011 the Heartbeat's results, 012 the self-serve alert settings
   (KV is only a fallback without `DATABASE_URL` or before 011; see README "Store").
 
 ## Verify

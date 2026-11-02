@@ -11,7 +11,7 @@ import { genlayerClient, relayerAddress, type ChainClient } from "./chain";
 import { hasDatabase } from "./db";
 import { isId } from "./ids";
 import type { ExecutorDeps } from "./executor";
-import { ensureMailerWired, onRunFailed } from "./mailerWiring";
+import { ensureMailerWired, onRunDecided } from "./mailerWiring";
 import { evmPoolReader, makeFundingCheck, runCostWei } from "./pool/pool";
 import { getRepo } from "./repo";
 import type { ServiceDeps } from "./service";
@@ -46,7 +46,7 @@ export async function executorDeps(): Promise<ExecutorDeps> {
       };
     },
     runCostWei,
-    onRunFailed,
+    onRunDecided,
   };
 }
 
