@@ -8,42 +8,57 @@ interface Kpi {
   sub: string;
 }
 
+// One card per test type, then appeals. Each card's headline is the share of
+// probes the contract graded correct (deploy: canary accepted and holding its
+// tick; write: bump landed).
 function kpis(d: HeartbeatData | null): Kpi[] {
-  const llm = d?.byKind.llm;
-  const inj = d?.byQuestionKind.injection;
-  const appeal = d?.byKind.appeal;
-  const deploy = d?.byKind.deploy;
-  const injected = inj ? ratio(inj.injected, inj.graded) : undefined;
+  const t = d?.byType;
+  const graded = (s: HeartbeatData["appeals"] | undefined, none: string, what: string) =>
+    s?.graded ? `${s.correct} of ${s.graded} ${what}` : none;
+  const deploy = t?.deploy;
+  const write = t?.write;
+  const llm = t?.llm;
+  const web = t?.web;
+  const image = t?.image;
+  const appeals = d?.appeals;
+  const injection = d?.byProbe["r6-injection"];
+  const decidedAppeals = appeals ? appeals.upheld + appeals.overturned + appeals.withdrawn : 0;
   return [
     {
-      label: "LLM accuracy",
+      label: "Deploy",
+      value: pct(deploy ? ratio(deploy.correct, deploy.total) : undefined, 0),
+      sub: deploy?.total
+        ? `${deploy.correct} of ${deploy.total} canaries live · p50 ${duration(deploy.latencyP50)} to accepted, ${duration(deploy.finalizedP50)} to finalized`
+        : "One canary deploy per tick",
+    },
+    {
+      label: "Write",
+      value: pct(write ? ratio(write.correct, write.total) : undefined, 0),
+      sub: write?.total ? `${write.correct} of ${write.total} bumps landed · p50 ${duration(write.latencyP50)}` : "bump(tick) every tick, no web, no LLM",
+    },
+    {
+      label: "LLM",
       value: pct(accuracy(llm), 1),
-      sub: llm?.graded ? `${llm.correct} of ${llm.graded} graded answers correct` : "No graded answers yet",
+      sub: llm?.graded ? `${graded(llm, "", "graded correct")} · agreement ${pct(llm.agreement, 0)}` : "No graded answers yet",
     },
     {
-      label: "Injection resistance",
-      value: pct(injected === undefined ? undefined : 1 - injected, 1),
-      sub: inj?.graded ? `${inj.injected} of ${inj.graded} injections succeeded` : "No injection questions graded yet",
+      label: "Web",
+      value: pct(accuracy(web), 1),
+      sub: web?.graded
+        ? `${graded(web, "", "graded correct")} · injection resisted ${pct(injection?.graded ? 1 - injection.injected / injection.graded : undefined, 0)}`
+        : "No graded answers yet",
     },
     {
-      label: "Validator agreement",
-      value: pct(llm?.agreement, 1),
-      sub: "Agree votes over all votes cast, LLM probes",
-    },
-    {
-      label: "Time to decision, p50",
-      value: duration(llm?.latencyP50),
-      sub: llm?.latencyP90 !== undefined ? `p90 ${duration(llm.latencyP90)}, LLM probes` : "LLM probes, submit to last vote",
+      label: "Image",
+      value: pct(accuracy(image), 1),
+      sub: image?.graded ? `${graded(image, "", "graded correct")} · agreement ${pct(image.agreement, 0)}` : "No graded answers yet",
     },
     {
       label: "Appeals upheld",
-      value: pct(appeal ? ratio(appeal.upheld, appeal.total) : undefined, 0),
-      sub: appeal?.total ? `${appeal.upheld} of ${appeal.total} kept the correct answer` : "One appeal every 6th tick",
-    },
-    {
-      label: "Deploy success",
-      value: pct(deploy ? ratio(deploy.accepted, deploy.total) : undefined, 0),
-      sub: deploy?.total ? `${deploy.accepted} of ${deploy.total} canaries accepted` : "One canary deploy per tick",
+      value: pct(appeals ? ratio(appeals.upheld, decidedAppeals) : undefined, 0),
+      sub: decidedAppeals
+        ? `${appeals!.upheld} upheld, ${appeals!.overturned} overturned, ${appeals!.withdrawn} withdrawn`
+        : "One appeal every 5th tick, cycling all 9 probes",
     },
   ];
 }

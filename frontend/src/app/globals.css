@@ -34,9 +34,10 @@
   --banner-fg: #78350f;
   --banner-border: #f59e0b;
 
-  /* chart series: purple + amber */
+  /* chart series: purple + amber + green */
   --series-1: var(--purple);
   --series-2: var(--warn);
+  --series-3: var(--success);
 }
 
 @theme inline {

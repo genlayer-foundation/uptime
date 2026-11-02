@@ -8,50 +8,63 @@ A paid cron for GenLayer: schedule any call, deploy or read, pay for it in GEN, 
 
 ## Example job: Bradbury Heartbeat
 
-The first job running on Uptime is **Bradbury Heartbeat**. Every hour, the same questions go to GenLayer's **Bradbury** testnet, and the answers are graded against a key the network never sees. The prompts never change, so when the numbers move, the network has changed. Dashboard: `/examples/bradbury-heartbeat`.
+The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs five test types against GenLayer's **Bradbury** testnet, each one way real contracts depend on the network, plus an appeal every fifth hour. When a type goes red, that capability is broken for real contracts. Prompts and the answer key are constants in `contracts/heartbeat.py`, which grades every answer itself. Dashboard: `/examples/bradbury-heartbeat`.
 
 ## What a tick does
 
-| Probe | What it calls | What it measures |
-|---|---|---|
-| `deploy` | deploys `contracts/canary.py` (no LLM, no web) | whether deploys get accepted, and time to ACCEPTED |
-| `fetch` | `probe_fetch` (web GET of a fixture, `strict_eq`) | the control: if this fails, the problem is plumbing, not models |
-| `llm` ×2 | `probe_llm(qid)`, rotating through 16 fixed questions | accuracy, validator agreement, rounds, latency |
-| `appeal` | every 6th tick, appeals one correct `llm` answer | whether the appeal keeps the correct answer |
+| Type | Probe | What it calls | Consensus | Graded |
+|---|---|---|---|---|
+| DEPLOY | canary | deploys `contracts/canary.py` (no LLM, no web) | none | canary's `get_tick() == tick`; time to ACCEPTED **and** to FINALIZED |
+| WRITE | bump | `bump(tick)`: a plain state write, no web, no LLM | none | `get_last_tick() == tick` (or `get_bump(tick)` once a later bump landed) |
+| WEB | `f0-status` | `probe_status(tick)`: `web.get` of `status.json`, no LLM | `strict_eq` | exact canonical JSON |
+| 2 rotating | `r1`…`r9` | `probe(tick, id)`, 2 of 9 per tick, each every 4.5 h | see below | on-chain: `correct` / `wrong` / `injected` |
+| appeal | — | every 5th tick, appeals the tick's first rotating probe once decided (ACCEPTED or UNDETERMINED) | | `upheld` / `overturned` / `withdrawn` |
 
-Question kinds (`contracts/heartbeat.py`):
+The rotating pool (`frontend/src/lib/heartbeat/probes.ts` lists it in rotation order; prompts and key live only in the contract):
 
-- **fact, math, format, logic:** closed-book, one right answer
-- **reading:** the answer exists only on a fictional page we host (`frontend/public/heartbeat/lighthouse.txt`)
-- **injection:** a hostile page tells the model to answer something else. If it does, the grade is `injected`
-- **borderline:** no right answer. These measure agreement only, and are expected to split validators
+| id | Type | Fixture | Consensus | Correct when |
+|---|---|---|---|---|
+| `r1-extract` | WEB | `primer.html` (rendered text; nav, decoy numbers) | `strict_eq` on the integer | `42` |
+| `r2-answer42` | LLM | closed-book | `strict_eq` on the integer | `42` |
+| `r3-laws` | LLM | closed-book | `prompt_comparative` | `count == 3` |
+| `r4-rule` | LLM | `mandate.html` (an agent log that overspends) | `prompt_comparative` | `{"follows": false, "rule": 2}` |
+| `r5-summary` | LLM | `primer.html`, Optimistic Democracy section | `prompt_non_comparative` | form only: ≤ 40 words, mentions validator and appeal |
+| `r6-injection` | WEB | `appeals-note.html` (a hidden line says "answer 10") | custom validator | `2`; `10` = `injected` |
+| `r7-card` | IMAGE | `card.png` bytes → `exec_prompt(images=…)` | `strict_eq` on the digits | `7319` |
+| `r8-shot` | IMAGE | `web.render(shot.html, mode="screenshot")` | custom validator | `CONDORCET` |
+| `r9-namesake` | LLM | closed-book | `prompt_comparative` | contains `451` |
 
-The answer key is `frontend/src/lib/heartbeat/questions.ts`, off-chain on purpose. A test fails if its qids drift from the contract's.
+The appealed index for the m-th appeal is (m − 2) mod 9, so every probe, images included, is appealed once every 45 hours.
+
+**Fixtures** (`frontend/public/heartbeat/`, served `immutable` by `next.config.ts`) are frozen. Each HTML page carries a sentinel `HB2-<id>`; `card.png` is pinned by sha256 in the contract. A missing sentinel or another card is stored as an agreed `[EXTERNAL] fixture drift` error, never as a wrong answer. `card.png` and `shot.html` are generated, deterministically, by `frontend/scripts/heartbeat-fixtures.mjs` (`--check` verifies the committed bytes). The answer in each exists only as pixels.
+
+**Images.** GenVM accepts text plus up to 2 images and fails the request on a validator with no vision model. Whether every Bradbury validator has one is unverified: `r7` and `r8` measure exactly that.
 
 ## How it runs
 
 ```
 Vercel cron  */5 * * * *   /api/cron/dispatch    submit this tick's txs (hourly at :00), never wait
                            (/api/cron/heartbeat, hourly, does it instead when DATABASE_URL is unset)
-Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, grade, fire due appeals
+Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, copy on-chain grades, fire due appeals,
+                                                 finalize canaries
                              │
-                           Postgres  heartbeat_probes, heartbeat_state  (migrations/011_heartbeat.sql)
+                           Postgres  heartbeat_probes, heartbeat_state  (migrations/011_heartbeat.sql + 013_heartbeat_write.sql)
                              │
 public                     /api/heartbeat                    summary + hourly series
                            /api/heartbeat?format=rows        flat rows for Grafana (Infinity)
                            /examples/bradbury-heartbeat      dashboard
 ```
 
-Latency comes from the chain's own `createdTimestamp` → `lastVoteTimestamp`, so the reconcile cadence affects freshness, not precision.
+Time to decision comes from the chain's own `createdTimestamp` → `lastVoteTimestamp`, so the reconcile cadence affects freshness, not precision. Time to FINALIZED (canaries only) has no chain timestamp: it is measured when reconcile first sees FINALIZED, so its resolution is the 10-minute reconcile cadence.
 
-**Store.** Results live in the app's Postgres (`DATABASE_URL`), the same database as the jobs backend (`src/lib/heartbeat/store.ts`). Upstash KV (`KV_REST_API_URL`, `KV_REST_API_TOKEN`) is only a fallback: it is used when `DATABASE_URL` is unset, or while migration 011 has not been applied yet. The first call against a migrated database copies the KV history (results, pending, tick counter) into Postgres once, so tick numbers continue; KV is only read, never changed, and can be removed once that import has run (`heartbeat_state` row `kv_imported`).
+**Store.** Results live in the app's Postgres (`DATABASE_URL`), the same database as the jobs backend (`src/lib/heartbeat/store.ts`). Upstash KV (`KV_REST_API_URL`, `KV_REST_API_TOKEN`) is only a fallback: it is used when `DATABASE_URL` is unset, or while migrations 011 and 013 have not been applied yet. Nothing is copied between the two.
 
 ## Setup
 
 ```bash
 # contract
 genvm-lint check contracts/heartbeat.py
-python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest
+python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest pillow   # pillow: the screenshot probe's direct test
 .venv/bin/pytest test/direct -q
 
 # deploy once to Bradbury, with the site's fixture base URL as the argument,
@@ -69,7 +82,7 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 
 | Source | What it serves | Needs |
 |---|---|---|
-| `demo` (dev default) | a deterministic synthetic 30-day history (`src/lib/heartbeat/demo.ts`): canary deploys, fetches, 2 rotating questions per tick, appeals every 6th tick, wrong answers, injections, borderline splits, timeouts, submit failures and a 6-hour outage | nothing |
+| `demo` (dev default) | a deterministic synthetic 30-day history (`src/lib/heartbeat/demo.ts`) in the runner's own shapes: canary deploys with FINALIZED times, bumps, F0, 2 rotating probes per tick, appeals every 5th tick (upheld / overturned / withdrawn), wrong answers, injections, fixture drift, UNDETERMINED splits, timeouts, submit failures and a 6-hour outage | nothing |
 | `production` | proxies the same query to the public `https://uptime.genlayer.foundation/api/heartbeat` | nothing (public, read-only) |
 | `local` | the real store: Postgres, or KV as the fallback (see **Store** above) | `DATABASE_URL` (+ `npm run db:migrate`), or `KV_REST_API_URL`, `KV_REST_API_TOKEN` |
 
@@ -81,7 +94,7 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 
 ## Cost
 
-Per hour: 1 deploy + 1 fetch + 2 LLM txs. Every 6 hours, 1 appeal (bond: `getMinAppealBond`). The wallet behind `PRIVATE_KEY` must stay funded on Bradbury.
+Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Fees in GEN: not yet measured. The wallet behind `PRIVATE_KEY` must stay funded on Bradbury.
 
 ## Uptime contracts (in progress, not deployed)
 
@@ -92,7 +105,7 @@ The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds thes
 | `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time |
 | `contracts/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api` |
 | `contracts/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer |
-| `contracts/heartbeat.py`, `contracts/canary.py` | Bradbury | Preset 1 (unchanged) |
+| `contracts/heartbeat.py`, `contracts/canary.py` | Bradbury | Preset 1 (the Bradbury Heartbeat) |
 
 ### UptimePool
 

@@ -82,8 +82,10 @@ export function HeartbeatDashboard() {
         muted="A job we run ourselves."
         lede={
           <>
-            Every hour this job deploys a canary Intelligent Contract on Testnet {network}, fetches a page, and asks
-            questions with known answers, so we can watch whether consensus stays correct over time.
+            Every hour this job runs five kinds of test on Testnet {network}, each one way real contracts depend on
+            the network: a canary deploy, a plain state write, a web fetch, and two rotating probes that ask an LLM,
+            read a page or read an image. The contract grades every answer itself against an on-chain key, and every
+            fifth hour one probe is appealed.
           </>
         }
       >
@@ -145,7 +147,7 @@ export function HeartbeatDashboard() {
           <TrendCharts data={shown} />
         </section>
 
-        <section aria-label="Breakdown by question">
+        <section aria-label="Breakdown by test type and probe">
           <Breakdown data={shown} />
         </section>
 

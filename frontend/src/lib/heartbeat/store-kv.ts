@@ -1,9 +1,8 @@
-// Upstash KV backend: the original store, now only the fallback for a server
-// without DATABASE_URL, and the source of the one-time import into Postgres
-// (store-pg.ts). Keys: hb:pending (hash id → record), hb:results (list,
+// Upstash KV backend: only the fallback for a server without a migrated
+// DATABASE_URL (store.ts). Keys: hb:pending (hash id → record), hb:results (list,
 // newest last), hb:tick (counter).
 import { Redis } from "@upstash/redis";
-import type { HeartbeatSnapshot, ProbeRecord } from "./types";
+import type { ProbeRecord } from "./types";
 
 const PENDING = "hb:pending";
 const RESULTS = "hb:results";
@@ -58,19 +57,4 @@ export async function getResults(sinceSec: number): Promise<ProbeRecord[]> {
     if (recs[0].submittedAt < sinceSec || items.length < page) break;
   }
   return out;
-}
-
-// The whole KV state, for the import. Read-only: KV is left as it was.
-export async function snapshot(): Promise<HeartbeatSnapshot> {
-  const r = redis();
-  const tick = Number((await r.get<unknown>(TICK)) ?? 0) || 0;
-  const pending = await getPending();
-  const results: ProbeRecord[] = [];
-  const page = 1000;
-  for (let start = 0; ; start += page) {
-    const items = await r.lrange<unknown>(RESULTS, start, start + page - 1);
-    results.push(...items.map((v) => parse<ProbeRecord>(v)));
-    if (items.length < page) break;
-  }
-  return { tick, pending, results };
 }

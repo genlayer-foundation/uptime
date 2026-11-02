@@ -160,8 +160,8 @@ export default function Home() {
                   <div>
                     <h3 className="text-sm font-medium text-foreground">Bradbury Heartbeat</h3>
                     <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted">
-                      Every hour: deploy a canary contract, fetch a page, and ask questions with known answers on Testnet
-                      Bradbury. Graded for correctness, validator agreement and time to decision.
+                      Every hour on Testnet Bradbury: deploy a canary, write state, fetch a page, and run two probes
+                      (LLM, web or image) that the contract grades itself. Plus an appeal every fifth hour.
                     </p>
                   </div>
                 </div>
