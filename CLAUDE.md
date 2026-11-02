@@ -47,6 +47,7 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 
 ```bash
 genvm-lint check contracts/heartbeat.py
+genvm-lint check contracts/mail_escrow.py
 .venv/bin/pytest test/direct -q
 (cd contracts/evm && forge test)
 cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next build
@@ -58,6 +59,7 @@ cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next 
 ```
 contracts/heartbeat.py          probes + frozen question set
 contracts/canary.py             deployed fresh each tick
+contracts/mail_escrow.py        email credit escrow, fee released on DKIM evidence (MAIL_ESCROW.md)
 frontend/public/heartbeat/      fixtures the contract fetches
 frontend/src/lib/heartbeat/     runner (tick/reconcile), store (Postgres; KV fallback), answer key, summary
 frontend/src/app/api/cron/      heartbeat (hourly, legacy) + dispatch (5 min) + reconcile (10 min) + settle (hourly)
