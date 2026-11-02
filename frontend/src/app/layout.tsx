@@ -1,34 +1,44 @@
 import type { Metadata } from "next";
+import { DM_Sans, DM_Mono } from "next/font/google";
+import { NotAuditedBanner } from "@/components/shell/NotAuditedBanner";
+import { Header } from "@/components/shell/Header";
+import { Footer } from "@/components/shell/Footer";
 import "./globals.css";
 
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
+  subsets: ["latin"],
+});
+
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+});
+
 const description =
-  "An hourly benchmark of Intelligent Contracts on Testnet Bradbury: canary deploys, web fetches and questions with known answers, graded for correctness, validator agreement and time to decision.";
+  "A cron job you pay for in GEN. Schedule any call, deploy or read on any GenLayer contract, on Studio or Testnet Bradbury, and track every result.";
 
 export const metadata: Metadata = {
-  title: "Heartbeat · GenLayer Testnet Bradbury",
+  title: {
+    default: "Uptime by GenLayer | Scheduled jobs for Intelligent Contracts",
+    template: "%s | Uptime by GenLayer",
+  },
   description,
   metadataBase: new URL("https://uptime.genlayer.foundation"),
-  icons: { icon: "/gl/assets/GenLayer_Mark_Black.svg" },
   openGraph: {
-    title: "Heartbeat · GenLayer",
+    title: "Uptime by GenLayer",
     description,
     url: "https://uptime.genlayer.foundation",
-    siteName: "GenLayer Heartbeat",
+    siteName: "Uptime by GenLayer",
     type: "website",
   },
   twitter: {
-    card: "summary",
-    title: "Heartbeat · GenLayer",
+    card: "summary_large_image",
+    title: "Uptime by GenLayer",
     description,
   },
 };
-
-// GenLayer Design System, vendored under public/gl/ from projects/design.
-// Order matters: tokens, then components, then theme chrome. The inline
-// script sets the theme before first paint (default dark); theme.js wires
-// the toggle and persists the choice.
-const noFlash =
-  "(function(){try{var t=localStorage.getItem('gl-theme')||'dark';document.documentElement.classList.toggle('on-dark',t==='dark');}catch(e){document.documentElement.classList.add('on-dark');}})();";
 
 export default function RootLayout({
   children,
@@ -36,20 +46,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="on-dark" suppressHydrationWarning>
-      <head>
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/gl/colors_and_type.css" />
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/gl/components.css" />
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/gl/theme.css" />
-        <script dangerouslySetInnerHTML={{ __html: noFlash }} />
-      </head>
-      <body>
-        {children}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/gl/theme.js" />
+    <html
+      lang="en"
+      className={`${dmSans.variable} ${dmMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <div className="sticky top-0 z-50">
+          <NotAuditedBanner />
+          <Header />
+        </div>
+        <div className="flex-1">{children}</div>
+        <Footer />
       </body>
     </html>
   );
