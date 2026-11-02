@@ -295,6 +295,7 @@ const PRESETS: Preset[] = [
   {
     id: "heartbeat",
     name: "Bradbury Heartbeat",
+    systemOnly: true,
     description: "Canary deploy, a web fetch and two graded LLM questions every hour. Run by the Foundation.",
     networks: ["bradbury"],
     availability: { bradbury: { ok: false, reason: "Run by the Foundation" }, studio: { ok: false, reason: "Bradbury only" } },
@@ -481,10 +482,13 @@ export async function mockFetch(input: string, init: RequestInit = {}): Promise<
         if (!s.wallet) return err(401, "sign in first");
         const e = validate(body ?? {});
         if (e) return err(400, e);
+        const id = `job_${hash(`${Date.now()}:${Math.random()}`).toString(36)}`;
         const job: Job = {
           assertions: [],
           ...body,
-          id: `job_${hash(`${Date.now()}:${Math.random()}`).toString(36)}`,
+          id,
+          // Server-assigned, as in the real backend (derived from the job id).
+          ...(body.network === "bradbury" ? { poolId: poolId(id) } : { poolId: undefined }),
           owner: s.wallet,
           paused: !!body.paused,
           createdAt: new Date().toISOString(),

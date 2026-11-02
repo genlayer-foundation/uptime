@@ -7,7 +7,7 @@
 // or what /api/presets reports. Unset = the pool is not deployed, and the UI
 // says so instead of guessing an address.
 
-import { keccak256, parseEther, toHex, type Address, type Hex } from "viem";
+import { parseEther, type Address, type Hex } from "viem";
 import { JOBS_MOCK } from "@/lib/jobs/client";
 import { poolAddress } from "@/lib/chains";
 import { ROLE_SCHEDULER, UPTIME_POOL_ABI } from "./poolAbi";
@@ -34,13 +34,6 @@ export function setReportedPoolAddress(a: string | null | undefined) {
 export function poolContract(): Address | null {
   if (JOBS_MOCK) return "0x000000000000000000000000000000000000600d";
   return reported ?? poolAddress("bradbury") ?? null;
-}
-
-/** A random, unguessable pool id. Ids are first-come on-chain, so never derive it. */
-export function newPoolId(): Hex {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return keccak256(toHex(bytes));
 }
 
 export function parseGen(s: string): bigint {

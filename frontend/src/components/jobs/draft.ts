@@ -168,7 +168,7 @@ export function assertionErrors(a: DraftAssertion, steps: DraftStep[]): string |
   return null;
 }
 
-export function toNewJob(d: Draft, poolId?: string): NewJob {
+export function toNewJob(d: Draft): NewJob {
   return {
     name: d.name.trim(),
     network: d.network,
@@ -176,7 +176,6 @@ export function toNewJob(d: Draft, poolId?: string): NewJob {
     steps: d.steps.map(toStep),
     assertions: d.assertions.map(toAssertion),
     ...(d.preset ? { preset: d.preset } : {}),
-    ...(d.network === "bradbury" && poolId ? { poolId } : {}),
     public: d.public,
   };
 }

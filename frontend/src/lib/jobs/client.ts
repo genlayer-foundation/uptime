@@ -18,6 +18,8 @@ export type Me = { ready: boolean; wallet: string | null; studioAllowed: boolean
 
 export type PresetAvailability = { ok: boolean; reason?: string };
 
+export type PresetTemplate = { steps: Step[]; schedule?: Schedule; assertions?: Assertion[] };
+
 export type Preset = {
   id: string;
   name: string;
@@ -25,9 +27,18 @@ export type Preset = {
   /** Networks the preset runs on; absent = both. */
   networks?: Network[];
   availability?: Partial<Record<Network, PresetAvailability>>;
-  /** A starting job the wizard pre-fills. */
-  template?: { steps: Step[]; schedule?: Schedule; assertions?: Assertion[] };
+  /** Run by the system (e.g. the Bradbury Heartbeat); users cannot create it. */
+  systemOnly?: boolean;
+  /** A starting job the wizard pre-fills (contract addresses of the default network). */
+  template?: PresetTemplate;
+  /** The same template per network: preset contracts live at different addresses. */
+  templates?: Partial<Record<Network, PresetTemplate>>;
 };
+
+/** The preset's template for one network, falling back to the default one. */
+export function presetTemplate(p: Preset, n: Network): PresetTemplate | undefined {
+  return p.templates?.[n] ?? p.template;
+}
 
 export type PresetsResponse = {
   minIntervalSec?: number;
@@ -35,9 +46,9 @@ export type PresetsResponse = {
   presets: Preset[];
 };
 
-/** Fields the client sends to create a job; the server assigns id/owner/createdAt. */
+/** Fields the client sends to create a job; the server assigns id/owner/createdAt and the Bradbury poolId. */
 export type NewJob = Pick<Job, "name" | "network" | "schedule" | "steps" | "assertions"> &
-  Partial<Pick<Job, "poolId" | "preset" | "public" | "paused">>;
+  Partial<Pick<Job, "preset" | "public" | "paused">>;
 
 export type JobPatch = Partial<Pick<Job, "name" | "schedule" | "steps" | "assertions" | "public" | "poolId">>;
 
@@ -168,16 +179,26 @@ export const jobsApi = {
 export type JobsApi = typeof jobsApi;
 
 /**
- * Whether this server has the jobs backend. Answered by probing GET /api/me:
- * a 404 means the API routes are not deployed (the "coming soon" state).
- * Any other answer, including 401 or a 5xx, means the backend exists.
+ * Whether this server can serve the jobs pages, by probing GET /api/me:
+ *   "missing"         404: the jobs API is not deployed on this server
+ *   "not_configured"  the API is there but answers ready:false
+ *                     (DATABASE_URL or SESSION_SECRET not set)
+ *   "ready"           anything else; a network error or 5xx is left for the
+ *                     page itself to report
  */
-export async function jobsBackendDeployed(): Promise<boolean> {
-  if (JOBS_MOCK) return true;
+export type BackendState = "missing" | "not_configured" | "ready";
+
+export async function jobsBackendState(): Promise<BackendState> {
+  if (JOBS_MOCK) return "ready";
   try {
     const res = await fetch("/api/me", { credentials: "same-origin" });
-    return res.status !== 404;
+    if (res.status === 404) return "missing";
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { ready?: boolean } | null;
+      if (body?.ready === false) return "not_configured";
+    }
+    return "ready";
   } catch {
-    return true; // network trouble is not "not deployed"; let the page report it
+    return "ready";
   }
 }

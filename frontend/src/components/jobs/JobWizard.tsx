@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useState } from "react";
 import { ArrowLeft, FileCode2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, Input, PageContainer, PageHeader, cn } from "@/components/ui";
-import { JOBS_MOCK, jobsApi, type Preset } from "@/lib/jobs/client";
+import { JOBS_MOCK, jobsApi, presetTemplate, type Preset } from "@/lib/jobs/client";
 import type { Network } from "@/lib/jobs/types";
 import { useSession } from "./session";
 import { AssertionsEditor } from "./AssertionsEditor";
@@ -14,7 +14,7 @@ import { StepsEditor } from "./StepsEditor";
 import { MockBadge, MoneyNotice, NetworkBadge } from "./ui";
 import { assertionErrors, blankStep, draftFromTemplate, stepErrors, toAssertion, toNewJob, type Draft } from "./draft";
 import { describeSchedule, runsPerDay, scheduleError } from "./schedule";
-import { depositPool, newPoolId, parseGen, poolContract, setReportedPoolAddress } from "./pool";
+import { depositPool, parseGen, poolContract, setReportedPoolAddress } from "./pool";
 import { describeAssertion } from "./assert";
 import { gen } from "./format";
 
@@ -32,6 +32,7 @@ const SUBTITLE: Record<Page, string> = {
 };
 
 function presetOk(p: Preset, n: Network) {
+  if (p.systemOnly) return { ok: false, reason: "Run by the Foundation" };
   if (p.networks && !p.networks.includes(n)) return { ok: false, reason: `${n === "studio" ? "Studio" : "Bradbury"} not supported` };
   return p.availability?.[n] ?? { ok: true };
 }
@@ -88,7 +89,9 @@ export function JobWizard() {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const [poolId] = useState(() => (typeof crypto !== "undefined" ? newPoolId() : ""));
+  // The pool id is the SERVER's (derived from the job id, returned by POST /api/jobs).
+  // The scheduler only funds runs from that pool, so never invent one here.
+  const [createdPoolId, setCreatedPoolId] = useState<string | null>(null);
   const [poolAddr, setPoolAddr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,7 +115,7 @@ export function JobWizard() {
 
   function pick(p: Preset | null) {
     const net: Network = p && !presetOk(p, "bradbury").ok && studioAllowed ? "studio" : "bradbury";
-    const d = p ? draftFromTemplate({ name: p.name, preset: p.id, ...p.template }, net) : draftFromTemplate({ name: "Untitled job" }, net);
+    const d = p ? draftFromTemplate({ name: p.name, preset: p.id, ...presetTemplate(p, net) }, net) : draftFromTemplate({ name: "Untitled job" }, net);
     if (d.steps.length === 0) d.steps = [blankStep("write", [])];
     setDraft(d);
     setShowErrors(false);
@@ -164,14 +167,18 @@ export function JobWizard() {
     }
     setSubmitError(null);
     let id = createdId;
+    let poolId = createdPoolId;
     try {
       if (!id) {
         setSubmitting("Creating the job…");
-        const job = await jobsApi.createJob(toNewJob(draft, poolId));
+        const job = await jobsApi.createJob(toNewJob(draft));
         id = job.id;
+        poolId = job.poolId ?? null;
         setCreatedId(id);
+        setCreatedPoolId(poolId);
       }
       if (draft.network === "bradbury" && poolAddr) {
+        if (!poolId) throw new Error("The server did not assign a pool id to this job.");
         setSubmitting(JOBS_MOCK ? "Funding the pool (simulated)…" : "Confirm the deposit in your wallet…");
         await depositPool(
           poolId,
@@ -190,6 +197,17 @@ export function JobWizard() {
   }
 
   const set = (patch: Partial<Draft>) => draft && setDraft({ ...draft, ...patch });
+
+  // Switching network on a preset job re-fills its steps from that network's
+  // template (preset contracts live at different addresses per network).
+  function setNetwork(n: Network) {
+    if (!draft) return;
+    const p = draft.preset ? presets?.find((x) => x.id === draft.preset) : undefined;
+    const t = p ? presetTemplate(p, n) : undefined;
+    if (!p || !t) return set({ network: n });
+    const d = draftFromTemplate({ name: draft.name, preset: p.id, ...t }, n);
+    setDraft({ ...d, funding: draft.funding, public: draft.public });
+  }
   const rpd = draft ? runsPerDay(draft.schedule) : null;
   const txSteps = draft?.steps.filter((s) => s.kind !== "read").length ?? 0;
   const funded = draft?.network === "bradbury" && !!poolAddr;
@@ -274,7 +292,7 @@ export function JobWizard() {
               {(["bradbury", "studio"] as Network[]).map((n) => {
                 const locked = n === "studio" && !studioAllowed;
                 return (
-                  <Choice key={n} selected={draft.network === n} disabled={locked} onClick={() => set({ network: n })}>
+                  <Choice key={n} selected={draft.network === n} disabled={locked} onClick={() => setNetwork(n)}>
                     <span className="flex gap-1.5">
                       <NetworkBadge network={n} />
                       {n === "bradbury" && <Badge tone="warn">testnet</Badge>}
@@ -363,7 +381,7 @@ export function JobWizard() {
                         <>
                           Deposit <span className="font-mono">{draft.funding.depositGen} GEN</span> · caps{" "}
                           <span className="font-mono">{draft.funding.perRunGen} GEN</span>/run, <span className="font-mono">{draft.funding.perDayGen} GEN</span>/day
-                          <p className="mt-1 break-all font-mono text-xs text-muted">pool id {poolId}</p>
+                          <p className="mt-1 break-all text-xs text-muted">{createdPoolId ? <span className="font-mono">pool id {createdPoolId}</span> : "The pool id is assigned by the server when the job is created."}</p>
                         </>
                       ) : (
                         <span className="text-warn-fg">The pool contract is not deployed: the job is created unfunded.</span>
@@ -374,7 +392,7 @@ export function JobWizard() {
               </dl>
               <details>
                 <summary className="cursor-pointer text-xs text-muted hover:text-foreground">Request JSON</summary>
-                <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-border bg-surface p-3 text-xs">{JSON.stringify(toNewJob(draft, poolId), null, 2)}</pre>
+                <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-border bg-surface p-3 text-xs">{JSON.stringify(toNewJob(draft), null, 2)}</pre>
               </details>
               {firstBad && showErrors && <Alert tone="danger" title={`Fix the ${firstBad} step first.`} />}
               {submitError && <Alert tone="danger" title="Could not finish">{submitError}</Alert>}

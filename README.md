@@ -113,7 +113,7 @@ Terms = { uint128 periodAmount, uint64 periodDuration, uint64 startDate (0 = now
 - **One line = one run or one email.** Ids may repeat in a batch, so `maxPerCharge` is the per-run cap and `periodAmount` the per-day cap.
 - **Replay:** `settlementId` must strictly increase per role. A new spender continues the old one's sequence.
 - **A refused line is skipped, not reverted** (`ChargeSkipped(id, role, settlementId, amount, reason)`), so one pool pausing cannot block the others' settlement. Simulate with `eth_call` first and read the events after.
-- **Ids are first-come.** Pick a random `uptimeId` off-chain. The backend must check `getPool(id).owner == uptime owner` before it schedules anything.
+- **Ids are first-come.** The backend assigns each Bradbury job its `uptimeId` (the job UUID, left-padded to 32 bytes; returned as `job.poolId` by `POST /api/jobs`), and the UI deposits under exactly that id. Before scheduling anything the backend checks `getPool(id).owner == job owner`, so someone squatting an id can block a job but never move its owner's funds.
 - Kept from `NativeGenStaking` (validator-staking-program-tge): OpenZeppelin `ReentrancyGuard`, checks-effects-interactions, revert on a rejected transfer, permanent history plus events, no receive/fallback.
 
 ```bash
