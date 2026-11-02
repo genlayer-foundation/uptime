@@ -1,0 +1,164 @@
+// UptimePool access for the jobs UI. Reads go through a public Bradbury RPC;
+// writes are sent by the USER's wallet (deposit, topUp, withdraw, setPaused),
+// never by this app. Under NEXT_PUBLIC_JOBS_MOCK=1 everything is simulated by
+// lib/jobs/mock.ts and no wallet transaction is requested.
+//
+// Pool address: NEXT_PUBLIC_UPTIME_POOL_BRADBURY (lib/chains.ts poolAddress),
+// or what /api/presets reports. Unset = the pool is not deployed, and the UI
+// says so instead of guessing an address.
+
+import { keccak256, parseEther, toHex, type Address, type Hex } from "viem";
+import { JOBS_MOCK } from "@/lib/jobs/client";
+import { poolAddress } from "@/lib/chains";
+import { ROLE_SCHEDULER, UPTIME_POOL_ABI } from "./poolAbi";
+import { ensureBradbury, publicClient, requestAccount, walletClient } from "./wallet";
+
+export type PoolInfo = {
+  owner: Address;
+  paused: boolean;
+  balanceWei: bigint;
+  /** What the scheduler could draw right now, after every allowance rule. */
+  availableToSchedulerWei: bigint;
+  perRunWei?: bigint;
+  perDayWei?: bigint;
+};
+
+export type PoolTerms = { perRunWei: bigint; perDayWei: bigint };
+
+let reported: Address | null = null;
+/** Address /api/presets reported, preferred over the build-time env. */
+export function setReportedPoolAddress(a: string | null | undefined) {
+  reported = a && /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as Address) : null;
+}
+
+export function poolContract(): Address | null {
+  if (JOBS_MOCK) return "0x000000000000000000000000000000000000600d";
+  return reported ?? poolAddress("bradbury") ?? null;
+}
+
+/** A random, unguessable pool id. Ids are first-come on-chain, so never derive it. */
+export function newPoolId(): Hex {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return keccak256(toHex(bytes));
+}
+
+export function parseGen(s: string): bigint {
+  const v = s.trim();
+  if (!/^\d+(\.\d{1,18})?$/.test(v)) throw new Error(`"${s}" is not a GEN amount`);
+  return parseEther(v);
+}
+
+async function mock() {
+  return (await import("@/lib/jobs/mock")).mockPool;
+}
+
+export async function readPool(poolId: string): Promise<PoolInfo | null> {
+  if (JOBS_MOCK) {
+    const p = (await mock()).get(poolId);
+    if (!p) return null;
+    return {
+      owner: p.owner as Address,
+      paused: p.paused,
+      balanceWei: BigInt(p.balanceWei),
+      availableToSchedulerWei: p.paused ? 0n : BigInt(p.balanceWei) < BigInt(p.perRunWei) ? BigInt(p.balanceWei) : BigInt(p.perRunWei),
+      perRunWei: BigInt(p.perRunWei),
+      perDayWei: BigInt(p.perDayWei),
+    };
+  }
+  const address = poolContract();
+  if (!address) return null;
+  const [owner, paused, balance] = (await publicClient.readContract({
+    address,
+    abi: UPTIME_POOL_ABI,
+    functionName: "getPool",
+    args: [poolId as Hex],
+  })) as readonly [Address, boolean, bigint];
+  if (/^0x0{40}$/i.test(owner)) return null;
+  const avail = (await publicClient.readContract({
+    address,
+    abi: UPTIME_POOL_ABI,
+    functionName: "available",
+    args: [poolId as Hex, ROLE_SCHEDULER],
+  })) as bigint;
+  let perRunWei: bigint | undefined;
+  let perDayWei: bigint | undefined;
+  try {
+    const [terms] = (await publicClient.readContract({
+      address,
+      abi: UPTIME_POOL_ABI,
+      functionName: "getAllowance",
+      args: [poolId as Hex, ROLE_SCHEDULER],
+    })) as readonly [{ periodAmount: bigint; maxPerCharge: bigint }, ...unknown[]];
+    perDayWei = terms.periodAmount;
+    perRunWei = terms.maxPerCharge;
+  } catch {
+    /* allowance view is optional for the panel */
+  }
+  return { owner, paused, balanceWei: balance, availableToSchedulerWei: avail, perRunWei, perDayWei };
+}
+
+type Write = { hash: Hex | "mock" };
+
+async function send(functionName: "deposit" | "topUp" | "withdraw" | "setPaused", args: readonly unknown[], value?: bigint): Promise<Write> {
+  const address = poolContract();
+  if (!address) throw new Error("The UptimePool is not deployed yet (NEXT_PUBLIC_UPTIME_POOL_BRADBURY is unset).");
+  const account = await requestAccount();
+  await ensureBradbury();
+  const wc = walletClient();
+  // Simulate first: a revert surfaces as a readable error before the wallet prompt.
+  const { request } = await publicClient.simulateContract({
+    address,
+    abi: UPTIME_POOL_ABI,
+    functionName,
+    args: args as never,
+    value,
+    account,
+  } as never);
+  const hash = await wc.writeContract(request as never);
+  await publicClient.waitForTransactionReceipt({ hash });
+  return { hash };
+}
+
+/** Create the pool: lock `valueWei` and grant the scheduler a per-day / per-run allowance. */
+export async function depositPool(poolId: string, valueWei: bigint, terms: PoolTerms, owner?: string): Promise<Write> {
+  if (JOBS_MOCK) {
+    (await mock()).deposit(poolId, owner ?? "0x0", valueWei, terms.perRunWei, terms.perDayWei);
+    return { hash: "mock" };
+  }
+  return send(
+    "deposit",
+    [
+      poolId as Hex,
+      [ROLE_SCHEDULER],
+      [{ periodAmount: terms.perDayWei, periodDuration: 86_400n, startDate: 0n, expiry: 0n, maxPerCharge: terms.perRunWei }],
+    ],
+    valueWei
+  );
+}
+
+export async function topUpPool(poolId: string, valueWei: bigint): Promise<Write> {
+  if (JOBS_MOCK) {
+    (await mock()).topUp(poolId, valueWei);
+    return { hash: "mock" };
+  }
+  return send("topUp", [poolId as Hex], valueWei);
+}
+
+/** Withdraw to the owner. `"all"` passes the contract's ALL sentinel (type(uint256).max). */
+export async function withdrawPool(poolId: string, amount: bigint | "all"): Promise<Write> {
+  if (JOBS_MOCK) {
+    (await mock()).withdraw(poolId, amount);
+    return { hash: "mock" };
+  }
+  const ALL = 2n ** 256n - 1n;
+  return send("withdraw", [poolId as Hex, amount === "all" ? ALL : amount]);
+}
+
+export async function setPoolPaused(poolId: string, paused: boolean): Promise<Write> {
+  if (JOBS_MOCK) {
+    (await mock()).setPaused(poolId, paused);
+    return { hash: "mock" };
+  }
+  return send("setPaused", [poolId as Hex, paused]);
+}
