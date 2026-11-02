@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Agent mandate and action log</title>
+<style>
+  body { margin: 0; font: 16px/1.6 system-ui, sans-serif; color: #18181b; background: #ffffff; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px; }
+  ol li { margin-bottom: 8px; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #e4e4e7; padding: 6px 10px; text-align: left; }
+  footer { max-width: 720px; margin: 0 auto; padding: 24px; font-size: 13px; color: #71717a; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The three laws of agent commerce</h1>
+  <ol>
+    <li>An agent may not act for anyone other than its principal, nor reveal its principal's keys.</li>
+    <li>An agent must stay within the spending limits of its mandate, except where this would conflict with the First Law.</li>
+    <li>An agent must keep a record of every action it takes, as long as this does not conflict with the First or Second Law.</li>
+  </ol>
+
+  <h2>Mandate</h2>
+  <p>Principal: Ines Calder. Agent: procurement-agent-07.</p>
+  <p>Purpose: buy compute credits from approved vendors. Budget: 50 GEN in total. No single purchase may exceed 20 GEN.</p>
+
+  <h2>Action log</h2>
+  <table>
+    <tr><th>Step</th><th>Action</th><th>Vendor</th><th>Amount</th><th>Running total</th><th>On behalf of</th></tr>
+    <tr><td>1</td><td>Bought compute credits</td><td>Northwind Compute (approved)</td><td>15 GEN</td><td>15 GEN</td><td>Ines Calder</td></tr>
+    <tr><td>2</td><td>Bought compute credits</td><td>Northwind Compute (approved)</td><td>20 GEN</td><td>35 GEN</td><td>Ines Calder</td></tr>
+    <tr><td>3</td><td>Bought compute credits</td><td>Tessera Cloud (approved)</td><td>25 GEN</td><td>60 GEN</td><td>Ines Calder</td></tr>
+    <tr><td>4</td><td>Wrote this log</td><td>none</td><td>0 GEN</td><td>60 GEN</td><td>Ines Calder</td></tr>
+  </table>
+</main>
+<footer>Fixture HB2-mandate. A frozen page for the Bradbury Heartbeat. Changing this page changes the question.</footer>
+</body>
+</html>

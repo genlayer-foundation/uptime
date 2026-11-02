@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>GenLayer, a primer</title>
+<style>
+  body { margin: 0; font: 16px/1.6 system-ui, sans-serif; color: #18181b; background: #ffffff; }
+  nav { display: flex; gap: 20px; padding: 14px 24px; border-bottom: 1px solid #e4e4e7; font-size: 14px; }
+  nav a { color: #71717a; text-decoration: none; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px; }
+  aside { font-size: 14px; color: #71717a; border-left: 3px solid #9b6af6; padding-left: 12px; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #e4e4e7; padding: 6px 10px; text-align: left; }
+  footer { max-width: 720px; margin: 0 auto; padding: 24px; font-size: 13px; color: #71717a; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="#home">Home</a>
+  <a href="#consensus">Optimistic Democracy</a>
+  <a href="#staking">Staking</a>
+  <a href="#networks">Networks</a>
+  <a href="#glossary">Glossary</a>
+  <a href="#v3">Docs v3.2</a>
+</nav>
+<main>
+  <h1 id="home">GenLayer, a primer</h1>
+  <p>GenLayer is a blockchain whose Intelligent Contracts can read the web and call large language models.
+    Validators run those calls independently and reach agreement on the result.</p>
+  <aside>Reading time: 4 minutes. 12 sections in the full guide, 3 of them summarized here.</aside>
+
+  <h2 id="consensus">How Optimistic Democracy decides</h2>
+  <p>Optimistic Democracy is GenLayer's consensus mechanism. Inspired by Condorcet's Jury Theorem, it uses validator
+    recomputation and majority agreement as a safety net for AI-driven computations.</p>
+  <p>A leader validator executes the transaction and proposes a result. The other validators assess the leader's
+    proposal using the Equivalence Principle and vote on it.</p>
+  <p>If a participant disagrees with the result, they can appeal during the Finality Window by submitting a request
+    and providing a bond. A new group of validators then joins the original ones and re-evaluates the transaction.
+    Each round of an escalating appeal doubles the number of validators.</p>
+
+  <h2 id="staking">What validators stake</h2>
+  <table>
+    <tr><th>Role</th><th>Minimum stake</th><th>Infrastructure</th><th>Rewards</th></tr>
+    <tr><td>Validator</td><td>42,000 GEN</td><td>Must run a node</td><td>10% operational fee + stake rewards</td></tr>
+    <tr><td>Delegator</td><td>42 GEN</td><td>None required</td><td>Passive stake rewards</td></tr>
+  </table>
+  <p>Validators run the consensus infrastructure. Delegators stake their tokens with a validator without running
+    infrastructure, and earn rewards proportional to their stake, minus the validator's operational fee.</p>
+
+  <h2 id="networks">Networks</h2>
+  <p>The SDK names two testnets: <code>testnetAsimov</code> and <code>testnetBradbury</code>.
+    Testnet Bradbury runs on chain ID 4221.</p>
+
+  <h2 id="glossary">Glossary</h2>
+  <p><b>Leader:</b> the validator that proposes a result. <b>Equivalence Principle:</b> the rule validators use to
+    decide whether two results agree. <b>Finality Window:</b> the period during which a result can be appealed.</p>
+</main>
+<footer>
+  Fixture HB2-primer. A frozen copy for the Bradbury Heartbeat; facts copied from the GenLayer documentation.
+  Changing this page changes the question.
+</footer>
+</body>
+</html>
