@@ -73,3 +73,60 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 ## Cost
 
 Per hour: 1 deploy + 1 fetch + 2 LLM txs. Every 6 hours, 1 appeal (bond: `getMinAppealBond`). The wallet behind `PRIVATE_KEY` must stay funded on Bradbury.
+
+## Uptime contracts (in progress, not deployed)
+
+The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. Nothing below is deployed yet.
+
+| Contract | Network | What it is |
+|---|---|---|
+| `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time |
+| `contracts/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api` |
+| `contracts/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer |
+| `contracts/heartbeat.py`, `contracts/canary.py` | Bradbury | Preset 1 (unchanged) |
+
+### UptimePool
+
+```
+deposit(bytes32 uptimeId, uint8[] roles, Terms[] terms) payable   create the pool, become its owner, grant allowances
+topUp(bytes32 uptimeId) payable                                   owner only
+withdraw(bytes32 uptimeId, uint256 amount) → uint256              owner only, immediate, works while paused; amount = ALL takes everything
+withdrawTo(bytes32 uptimeId, uint256 amount, address to) → uint256
+setPaused(bytes32 uptimeId, bool)                                 kill switch: every charge on the pool is refused
+setAllowance(bytes32 uptimeId, uint8 role, Terms)                 grant or replace (resets the period count)
+setAllowancePaused(bytes32 uptimeId, uint8 role, bool)
+revokeAllowance(bytes32 uptimeId, uint8 role)
+charge(bytes32[] ids, uint256[] amounts, uint256 settlementId) → uint256   spender only
+proposeSpender(uint8 role, address) / executeSpender(uint8) / cancelSpender(uint8)   admin only, behind rotationDelay
+getPool · getAllowance · available · getHistory · spenderOf · roleOf · lastSettlement · pendingSpender
+Terms = { uint128 periodAmount, uint64 periodDuration, uint64 startDate (0 = now), uint64 expiry (0 = never), uint128 maxPerCharge (0 = no cap) }
+```
+
+- **Spenders are roles.** 1 = scheduler (pays run gas), 2 = mailer (pays email fees, charged before each send). The owner grants an allowance to a role, and the admin decides which address holds that role. The admin cannot touch balances or raise an allowance.
+- **Allowance = MetaMask `NativeTokenPeriodTransferEnforcer` semantics.** `periodAmount` per fixed window of `periodDuration` from `startDate`, no carry-over, plus `expiry`, `maxPerCharge` and a pause. The scheduler and mailer speak "charge spender X within its period allowance". A later move to ERC-7710 delegations then swaps only the payer.
+- **One line = one run or one email.** Ids may repeat in a batch, so `maxPerCharge` is the per-run cap and `periodAmount` the per-day cap.
+- **Replay:** `settlementId` must strictly increase per role. A new spender continues the old one's sequence.
+- **A refused line is skipped, not reverted** (`ChargeSkipped(id, role, settlementId, amount, reason)`), so one pool pausing cannot block the others' settlement. Simulate with `eth_call` first and read the events after.
+- **Ids are first-come.** Pick a random `uptimeId` off-chain. The backend must check `getPool(id).owner == uptime owner` before it schedules anything.
+- Kept from `NativeGenStaking` (validator-staking-program-tge): OpenZeppelin `ReentrancyGuard`, checks-effects-interactions, revert on a rejected transfer, permanent history plus events, no receive/fallback.
+
+```bash
+cd contracts/evm && forge test                    # dependencies vendored in lib/, hashes in dependencies.lock.json
+# deploy: prepared, NOT run. Simulates unless --broadcast is added
+ADMIN=0x… SCHEDULER=0x… MAILER=0x… forge script script/DeployUptimePool.s.sol --rpc-url bradbury --force
+```
+
+### Presets that need no contract
+
+The scheduler signs every run with the relayer key (`RELAYER_KEY_*`), so the user's contract sees **the relayer address as `msg.sender`**. If an owner-gated contract should accept these runs, its owner has to authorize that address.
+
+| Preset | Tx the scheduler sends (genlayer-js) |
+|---|---|
+| 5 Call your contract | `writeContract({ address: <user contract>, functionName, args, value: 0n })`, then optionally `readContract({ address, functionName: <view>, args })` to record a value |
+| 6 Read a view | `readContract(...)` only, no tx |
+| 7 Deploy your contract | `deployContract({ code: <user source, pinned by hash when the uptime is created>, args })` |
+| 8 Deploy every X, call every Y | schedule A = preset 7. Schedule B = preset 5 against the address that A's latest ACCEPTED deploy returned |
+
+### Bradbury Phase 2 chain config
+
+`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. Use `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain`) instead. It holds the Phase 2 addresses, verified against the live AddressManager. The app is not wired to it yet. Its import point is `frontend/src/lib/genlayer/client.ts`.

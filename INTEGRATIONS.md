@@ -26,3 +26,8 @@ Outward-facing surface of the Heartbeat. Env vars by NAME only.
 |---|---|---|
 | `contracts/heartbeat.py` | Bradbury | `HEARTBEAT_CONTRACT` (not yet deployed) |
 | `contracts/canary.py` | Bradbury | a new one each tick, address not tracked |
+| `contracts/evm/src/UptimePool.sol` (EVM) | Bradbury Phase 2 chain RPC `https://rpc.testnet-chain.genlayer.com` (chain 4221) | `UPTIME_POOL_BRADBURY` (not yet deployed). Users: `deposit`/`topUp`/`withdraw`/`setPaused`/allowances from their own wallets. Scheduler (`RELAYER_KEY_BRADBURY`, role 1) and mailer (`MAILER_KEY`, role 2): `charge`. Admin multisig: spender rotation only. Read: `getPool`, `available`, events. Deploy script `contracts/evm/script/DeployUptimePool.s.sol` (CREATE2 factory `0x4e59…956C`). Not wired into the app yet |
+| `contracts/web_probe.py` | Studio + Bradbury | not yet deployed. `check_url`, `check_api`. Results are filed under the caller, so read them under the relayer's address |
+| `contracts/ask.py` | Studio + Bradbury | not yet deployed. `ask`. Results are filed under the caller |
+
+Chain config: `frontend/src/lib/chains.ts` pins the Bradbury Phase 2 addresses (from `genlayerlabs/genlayer-consensus@4e5bacaa` `deployments/bradbury-phase-2.json`, checked against the live AddressManager `0x3F71…38E0`) over the stale `genlayer-js` `testnetBradbury` defaults. Nothing imports it yet. The client to switch is `frontend/src/lib/genlayer/client.ts:2-9`.
