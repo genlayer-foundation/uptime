@@ -123,7 +123,7 @@ export function JobsList() {
       <PageHeader
         title="Your jobs."
         muted="Every schedule you pay for."
-        lede="Scheduled calls, deploys and reads on GenLayer contracts, with every run recorded."
+        lede="Scheduled calls, deploys and reads on Intelligent Contracts on GenLayer, with every run recorded."
         actions={
           <>
             <MockBadge />
@@ -159,7 +159,7 @@ export function JobsList() {
             </ButtonLink>
           }
         >
-          A job runs a call, a deploy or a read on a GenLayer contract on the schedule you set.
+          A job calls, deploys or reads an Intelligent Contract on GenLayer, on the schedule you set.
         </EmptyState>
       ) : (
         <div className="grid gap-8">

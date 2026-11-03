@@ -17,7 +17,7 @@ const dmMono = DM_Mono({
 });
 
 const description =
-  "The uptime monitor that can't lie. Monitor websites, APIs and smart contracts, with every check verified by independent GenLayer validators and recorded on-chain.";
+  "The uptime monitor that can't lie. Monitor websites, APIs and Intelligent Contracts, with every check verified by independent GenLayer validators and recorded on-chain.";
 
 export const metadata: Metadata = {
   title: {

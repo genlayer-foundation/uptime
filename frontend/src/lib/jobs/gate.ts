@@ -30,7 +30,7 @@ export type GateResult =
 export function studioGate(wallet: string, allowlist: ReadonlySet<string>): GateResult {
   return isStudioAllowed(wallet, allowlist)
     ? { ok: true }
-    : { ok: false, fatal: true, reason: "This wallet is not on the Studio allowlist", state: "errored" };
+    : { ok: false, fatal: true, reason: "This wallet is not on the GenLayer Studio allowlist", state: "errored" };
 }
 
 export async function runGate(j: JobRow, deps: GateDeps): Promise<GateResult> {

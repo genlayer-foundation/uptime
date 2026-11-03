@@ -62,15 +62,15 @@ export function PoolPanel({ poolId, isOwner, wallet }: { poolId: string; isOwner
         title="Pool"
         subtitle={
           <span className="break-all font-mono">
-            {address ? `UptimePool ${shortHex(address, 4)}` : "UptimePool"} · id {shortHex(poolId, 6)}
+            GEN pool on GenLayer Testnet Bradbury{address ? ` ${shortHex(address, 4)}` : ""} · id {shortHex(poolId, 6)}
           </span>
         }
         actions={<MoneyNotice />}
       />
       <CardBody className="grid gap-5">
         {!address ? (
-          <Alert tone="warn" title="The UptimePool contract is not deployed yet">
-            This job is unfunded and does not run on Bradbury until a pool exists. <code>NEXT_PUBLIC_UPTIME_POOL_BRADBURY</code> is unset.
+          <Alert tone="warn" title="Funding is not available yet">
+            GEN pools on GenLayer Testnet Bradbury are not switched on yet, so this job is unfunded and does not run until funding is available.
           </Alert>
         ) : pool === undefined ? (
           <p className="text-sm text-muted">Reading the pool…</p>

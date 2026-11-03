@@ -25,9 +25,18 @@ def fixture(name: str) -> bytes:
         return f.read()
 
 
-def deploy(direct_vm, direct_deploy, owner):
+# A fixed operator address that no test signs as; tests that need the
+# operator to sign deploy with their own via `operator=`.
+NOBODY = "0x" + "11" * 20
+
+
+def _hex(addr) -> str:
+    return addr if isinstance(addr, str) else "0x" + bytes(addr).hex()
+
+
+def deploy(direct_vm, direct_deploy, owner, operator=None):
     direct_vm.sender = owner
-    return direct_deploy(CONTRACT, BASE + "/")
+    return direct_deploy(CONTRACT, BASE + "/", _hex(operator) if operator is not None else NOBODY)
 
 
 def mock_page(direct_vm, name: str, body=None):
@@ -422,15 +431,47 @@ def test_unknown_probe_reverts(direct_vm, direct_deploy, direct_alice):
         c.probe(1, "fact-gold")
 
 
-def test_writes_are_owner_only(direct_vm, direct_deploy, direct_alice, direct_bob):
-    c = deploy(direct_vm, direct_deploy, direct_alice)
+def test_stranger_cannot_write(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    c = deploy(direct_vm, direct_deploy, direct_alice, operator=direct_bob)
+    direct_vm.sender = direct_charlie
+    with direct_vm.expect_revert("only operator or owner"):
+        c.bump(1)
+    with direct_vm.expect_revert("only operator or owner"):
+        c.probe_status(1)
+    with direct_vm.expect_revert("only operator or owner"):
+        c.probe(1, "r2-answer42")
+
+
+def test_operator_and_owner_can_write(direct_vm, direct_deploy, direct_alice, direct_bob):
+    c = deploy(direct_vm, direct_deploy, direct_alice, operator=direct_bob)
+    assert c.get_owner().lower() == _hex(direct_alice).lower()
+    assert c.get_operator().lower() == _hex(direct_bob).lower()
+    direct_vm.sender = direct_bob
+    c.bump(1)
+    mock_page(direct_vm, "status.json", fixture("status.json").decode())
+    c.probe_status(1)
+    assert c.get_probe("1:f0-status")["grade"] == "correct"
+    direct_vm.sender = direct_alice
+    c.bump(2)
+    assert c.get_bump_count() == 2
+
+
+def test_set_operator_is_owner_only(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    c = deploy(direct_vm, direct_deploy, direct_alice, operator=direct_bob)
     direct_vm.sender = direct_bob
     with direct_vm.expect_revert("only owner"):
-        c.bump(1)
+        c.set_operator(_hex(direct_bob))
+    direct_vm.sender = direct_charlie
     with direct_vm.expect_revert("only owner"):
-        c.probe_status(1)
-    with direct_vm.expect_revert("only owner"):
-        c.probe(1, "r2-answer42")
+        c.set_operator(_hex(direct_charlie))
+    direct_vm.sender = direct_alice
+    c.set_operator(_hex(direct_charlie))
+    assert c.get_operator().lower() == _hex(direct_charlie).lower()
+    direct_vm.sender = direct_charlie
+    c.bump(1)
+    direct_vm.sender = direct_bob
+    with direct_vm.expect_revert("only operator or owner"):
+        c.bump(2)
 
 
 def test_rerun_same_key_overwrites_without_duplicating(direct_vm, direct_deploy, direct_alice):
@@ -450,3 +491,13 @@ def test_inlined_canary_matches_contract():
         inlined = f.read().split("CANARY_SOURCE = `", 1)[1].rsplit("`;", 1)[0]
     with open("contracts/canary.py") as f:
         assert inlined == f.read()
+
+
+def test_operator_accepts_address_typed_calldata(direct_vm, direct_deploy, direct_alice, direct_bob):
+    # `genlayer deploy --args 0x…` encodes a 40-hex arg as an address, not a str.
+    direct_vm.sender = direct_alice
+    c = direct_deploy(CONTRACT, BASE + "/", direct_bob)
+    assert c.get_operator().lower() == _hex(direct_bob).lower()
+    direct_vm.sender = direct_bob
+    c.bump(1)
+    assert c.get_bump_count() == 1

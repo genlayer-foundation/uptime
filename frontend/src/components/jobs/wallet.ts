@@ -14,7 +14,7 @@ type Eip1193 = {
 
 export const bradburyEvm = defineChain({
   id: BRADBURY_PHASE2.chainId,
-  name: "GenLayer Bradbury",
+  name: "GenLayer Testnet Bradbury",
   nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
   rpcUrls: { default: { http: [BRADBURY_PHASE2.chainRpc] } },
   blockExplorers: { default: { name: "GenLayer Chain Explorer", url: BRADBURY_PHASE2.chainExplorer } },

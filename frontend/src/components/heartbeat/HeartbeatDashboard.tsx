@@ -82,9 +82,9 @@ export function HeartbeatDashboard() {
         muted="A job we run ourselves."
         lede={
           <>
-            Every hour this job runs five kinds of test on Testnet {network}, each one way real contracts depend on
+            Every hour this job runs five kinds of test on GenLayer Testnet {network}, each one way real Intelligent Contracts depend on
             the network: a canary deploy, a plain state write, a web fetch, and two rotating probes that ask an LLM,
-            read a page or read an image. The contract grades every answer itself against an on-chain key, and every
+            read a page or read an image. The Intelligent Contract grades every answer itself against an on-chain key, and every
             fifth hour one probe is appealed.
           </>
         }
@@ -97,7 +97,7 @@ export function HeartbeatDashboard() {
           </span>
           <span>every hour</span>
           {shown?.source === "demo" ? (
-            <span>Synthetic demo contract, not on any network</span>
+            <span>Synthetic demo Intelligent Contract, not on any network</span>
           ) : shown?.contract ? (
             <a
               className="inline-flex items-center gap-1 break-all font-mono text-xs transition-colors hover:text-foreground"
@@ -109,7 +109,7 @@ export function HeartbeatDashboard() {
               <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
             </a>
           ) : shown ? (
-            <span>Contract not deployed yet</span>
+            <span>Intelligent Contract not deployed yet</span>
           ) : null}
           {shown ? <span>{shown.pending} probes awaiting a decision</span> : null}
         </div>
@@ -134,7 +134,7 @@ export function HeartbeatDashboard() {
         <Alert tone="info" className="mb-6" title="No probes recorded in this window">
           {shown?.contract
             ? "Results appear here after the next hourly tick is reconciled."
-            : "The Bradbury Heartbeat contract is not deployed yet. Results appear here once the hourly cron starts probing it."}
+            : "The Bradbury Heartbeat Intelligent Contract is not deployed yet. Results appear here once the hourly cron starts probing it."}
         </Alert>
       ) : null}
 

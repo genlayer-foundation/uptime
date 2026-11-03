@@ -208,7 +208,7 @@ export function JobDetail({ id }: { id: string }) {
         </div>
 
         {job.network === "bradbury" && (
-          <Section title="Funding" subtitle="This job's GEN pool on Bradbury. Only the owner's wallet can move it.">
+          <Section title="Funding" subtitle="This job's GEN pool on GenLayer Testnet Bradbury. Only the owner's wallet can move it.">
             {job.poolId ? (
               <PoolPanel poolId={job.poolId} isOwner={isOwner} wallet={me?.wallet ?? null} />
             ) : (

@@ -105,7 +105,7 @@ describe("env wallet lists (STUDIO_ALLOWLIST, UPTIME_ADMIN_WALLETS)", () => {
 describe("API gate", () => {
   it("refuses a Studio create from a non-allowlisted wallet (403) and stores nothing", async () => {
     const { repo, deps } = setup();
-    expect(await createJob(deps, MALLORY, job("studio"))).toEqual({ ok: false, status: 403, error: "This wallet is not on the Studio allowlist" });
+    expect(await createJob(deps, MALLORY, job("studio"))).toEqual({ ok: false, status: 403, error: "This wallet is not on the GenLayer Studio allowlist" });
     expect(repo.jobs.size).toBe(0);
   });
   it("refuses Studio for everyone when STUDIO_ALLOWLIST is unset", async () => {
@@ -169,8 +169,8 @@ describe("executor gate: every run", () => {
     const rep = await dispatchDue(delisted);
     expect(rep.skipped).toBe(1);
     expect(calls).toEqual([]);
-    expect(repo.runs[0]).toMatchObject({ state: "SKIPPED", error: "This wallet is not on the Studio allowlist" });
-    expect(toPublicRun(repo.runs[0]).steps[0]).toMatchObject({ status: "ERROR", error: "skipped: This wallet is not on the Studio allowlist" });
+    expect(repo.runs[0]).toMatchObject({ state: "SKIPPED", error: "This wallet is not on the GenLayer Studio allowlist" });
+    expect(toPublicRun(repo.runs[0]).steps[0]).toMatchObject({ status: "ERROR", error: "skipped: This wallet is not on the GenLayer Studio allowlist" });
     expect((await repo.getJob(made.value.id))!.state).toBe("errored");
     expect((await dispatchDue(delisted)).due).toBe(0);
   });

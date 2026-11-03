@@ -8,9 +8,9 @@ import { DEPLOY_PRESETS, blankStep, stepErrors, type DraftStep } from "./draft";
 import { ScheduleInput } from "./ScheduleInput";
 
 const KINDS: { value: Step["kind"]; label: string; help: string }[] = [
-  { value: "write", label: "Write", help: "A transaction: the relayer calls a write method and validators reach consensus on it." },
-  { value: "deploy", label: "Deploy", help: "Deploy a contract. Later steps can call it as $<id>.address." },
-  { value: "read", label: "Read", help: "Call a view. No transaction, no fee." },
+  { value: "write", label: "Write", help: "Call an Intelligent Contract method. A transaction: the Uptime relayer sends it and GenLayer validators reach consensus on it." },
+  { value: "deploy", label: "Deploy", help: "Deploy an Intelligent Contract. Later steps can call it as $<id>.address." },
+  { value: "read", label: "Read", help: "Read an Intelligent Contract view. No transaction, no fee." },
 ];
 
 function StepCard({
@@ -60,7 +60,7 @@ function StepCard({
         </Field>
         {d.kind !== "deploy" ? (
           <>
-            <Field label="Contract" htmlFor={f("contract")} error={errs.contract} help={deploys.length ? `0x… or $${deploys[deploys.length - 1].id}.address` : "0x… address"}>
+            <Field label="Intelligent Contract" htmlFor={f("contract")} error={errs.contract} help={deploys.length ? `0x… or $${deploys[deploys.length - 1].id}.address` : "0x… address"}>
               <Input
                 id={f("contract")}
                 aria-invalid={!!errs.contract}
@@ -84,12 +84,12 @@ function StepCard({
           <>
             <Field label="Source" htmlFor={f("src")}>
               <Select id={f("src")} value={d.deploySource} onChange={(e) => set("deploySource", e.target.value as DraftStep["deploySource"])}>
-                <option value="preset">A contract we host</option>
+                <option value="preset">An Intelligent Contract we host</option>
                 <option value="code">Paste source</option>
               </Select>
             </Field>
             {d.deploySource === "preset" && (
-              <Field label="Contract" htmlFor={f("preset")}>
+              <Field label="Intelligent Contract" htmlFor={f("preset")}>
                 <Select id={f("preset")} value={d.preset} onChange={(e) => set("preset", e.target.value)}>
                   {DEPLOY_PRESETS.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -104,7 +104,7 @@ function StepCard({
       </div>
 
       {d.kind === "deploy" && d.deploySource === "code" && (
-        <Field label="Contract source (Python)" htmlFor={f("code")} error={errs.code} help="Pinned by hash when the job is created.">
+        <Field label="Intelligent Contract source (Python)" htmlFor={f("code")} error={errs.code} help="Pinned by hash when the job is created.">
           <Textarea id={f("code")} aria-invalid={!!errs.code} rows={8} value={d.code} onChange={(e) => set("code", e.target.value)} />
         </Field>
       )}
@@ -146,7 +146,7 @@ export function StepsEditor({ steps, onChange, showErrors }: { steps: DraftStep[
     <div className="grid gap-4">
       <p className="text-sm text-muted">
         Steps run in order each slot; a failed step stops the run. Chain a deploy into later steps with <code className="text-foreground">$&lt;stepId&gt;.address</code>:
-        the contract that deploy created in the same run, else in its latest accepted run.
+        the Intelligent Contract that deploy created in the same run, else in its latest accepted run.
       </p>
       {steps.map((d, i) => (
         <StepCard

@@ -19,8 +19,13 @@ export function MoneyNotice() {
   );
 }
 
+/** The user-facing name of a GenLayer network. */
+export function networkName(network: Network): string {
+  return network === "bradbury" ? "GenLayer Testnet Bradbury" : "GenLayer Studio";
+}
+
 export function NetworkBadge({ network }: { network: Network }) {
-  return <Badge tone={network === "bradbury" ? "purple" : "neutral"}>{network === "bradbury" ? "Bradbury" : "Studio"}</Badge>;
+  return <Badge tone={network === "bradbury" ? "purple" : "neutral"}>{networkName(network)}</Badge>;
 }
 
 export function MockBadge() {

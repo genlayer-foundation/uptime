@@ -60,7 +60,7 @@ export function failureReason(run: AlertRun): string {
   return "an assertion failed";
 }
 
-const NETWORK_TEXT: Record<Network, string> = { studio: "Studio", bradbury: "Bradbury testnet" };
+const NETWORK_TEXT: Record<Network, string> = { studio: "GenLayer Studio", bradbury: "GenLayer Testnet Bradbury" };
 
 function footer(unsub: string): { text: string; html: string } {
   const line =

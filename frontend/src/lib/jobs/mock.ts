@@ -308,7 +308,7 @@ const PRESETS: Preset[] = [
     systemOnly: true,
     description: "Canary deploy, a state write, a web fetch and two probes graded on-chain every hour. Run by the Foundation.",
     networks: ["bradbury"],
-    availability: { bradbury: { ok: false, reason: "Run by the Foundation" }, studio: { ok: false, reason: "Bradbury only" } },
+    availability: { bradbury: { ok: false, reason: "Run by the Foundation" }, studio: { ok: false, reason: "GenLayer Testnet Bradbury only" } },
   },
   {
     id: "check-url",

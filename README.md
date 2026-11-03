@@ -67,10 +67,13 @@ genvm-lint check contracts/heartbeat.py
 python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest pillow   # pillow: the screenshot probe's direct test
 .venv/bin/pytest test/direct -q
 
-# deploy once to Bradbury, with the site's fixture base URL as the argument,
-# FROM THE SAME KEY as PRIVATE_KEY below (probes are owner-only)
+# deploy once to Bradbury: args are the site's fixture base URL and the
+# OPERATOR, the address of the PRIVATE_KEY wallet below that signs the cron's
+# probes and bumps. The deployer becomes owner (may also probe, and is the only
+# one who can set_operator), so you can deploy from your own wallet.
 genlayer network set testnet-bradbury
-genlayer deploy --contract contracts/heartbeat.py --args "https://uptime.genlayer.foundation/heartbeat"
+genlayer deploy --contract contracts/heartbeat.py --wallet browser \
+  --args "https://uptime.genlayer.foundation/heartbeat" <SCHEDULER_ADDRESS>
 
 # frontend
 cd frontend && cp .env.example .env.local && npm install && npm run dev

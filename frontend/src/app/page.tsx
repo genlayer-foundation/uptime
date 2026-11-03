@@ -31,7 +31,7 @@ const BUILD_YOUR_OWN = [
   },
   {
     title: "Boilerplate",
-    description: "Start from the GenLayer project boilerplate: contract, tests and a frontend.",
+    description: "Start from the GenLayer project boilerplate: an Intelligent Contract, tests and a frontend.",
     links: [{ label: "Boilerplate", href: "https://github.com/genlayerlabs/genlayer-project-boilerplate" }],
   },
   {
@@ -50,7 +50,7 @@ function Hero() {
           <span className="text-muted">that can&apos;t lie.</span>
         </h1>
         <p className="mt-4 text-base leading-relaxed text-muted">
-          Monitor websites, APIs and smart contracts. Every check is verified independently by many validators, not by
+          Monitor websites, APIs and Intelligent Contracts. Every check is verified independently by many validators, not by
           one server you have to trust.
         </p>
 
@@ -81,7 +81,7 @@ function Hero() {
       <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border pt-6">
         <span className="flex items-center gap-2 text-sm text-muted">
           <StatusDot tone="purple" />
-          Testnet Bradbury and Studio
+          GenLayer Testnet Bradbury and GenLayer Studio
         </span>
         <span className="text-sm text-muted">{PRESETS.length} check types</span>
         <span className="text-sm text-muted">verified by validator consensus</span>
@@ -97,7 +97,7 @@ export default function Home() {
       <Hero />
 
       <div className="space-y-12">
-        <Section title="What you can monitor" subtitle="Websites, APIs, smart contracts and AI answers, on the schedule you choose.">
+        <Section title="What you can monitor" subtitle="Websites, APIs, Intelligent Contracts and AI answers, on the schedule you choose.">
           <CardGrid className="sm:grid-cols-2 lg:grid-cols-3">
             {PRESETS.map((p) => (
               <CardGridCell key={p.title}>
@@ -110,7 +110,7 @@ export default function Home() {
               <div>
                 <h3 className="text-sm font-medium text-foreground">Schedule anything</h3>
                 <p className="mt-2 text-xs leading-relaxed text-muted">
-                  For power users: schedule any contract call or deploy on GenLayer, and track what it returns.
+                  For power users: schedule any Intelligent Contract call or deploy on GenLayer, and track what it returns.
                 </p>
               </div>
               <Link
@@ -143,10 +143,10 @@ export default function Home() {
 
           <Card className="mt-6 p-4">
             <p className="text-sm text-muted">
-              <strong className="text-purple">You fund it, you control it.</strong> On Testnet Bradbury, checks are
-              paid in GEN from a pool only you control. Top it up, pause it or withdraw it at any time, even while it is
+              <strong className="text-purple">You fund it, you control it.</strong> On GenLayer Testnet Bradbury, checks are
+              paid from your GEN pool, which only you control. Top it up, pause it or withdraw it at any time, even while it is
               paused. The scheduler can spend only within the per-run cap and daily allowance you set, and is never an
-              owner. Runs are signed by the Uptime relayer, so an owner-gated contract has to allow the relayer address.
+              owner. Runs are signed by the Uptime relayer, so an owner-gated Intelligent Contract has to allow the relayer address.
             </p>
           </Card>
         </Section>
@@ -160,8 +160,8 @@ export default function Home() {
                   <div>
                     <h3 className="text-sm font-medium text-foreground">Bradbury Heartbeat</h3>
                     <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted">
-                      Every hour on Testnet Bradbury: deploy a canary, write state, fetch a page, and run two probes
-                      (LLM, web or image) that the contract grades itself. Plus an appeal every fifth hour.
+                      Every hour on GenLayer Testnet Bradbury: deploy a canary, write state, fetch a page, and run two probes
+                      (LLM, web or image) that the Intelligent Contract grades itself. Plus an appeal every fifth hour.
                     </p>
                   </div>
                 </div>

@@ -51,7 +51,7 @@ export function Breakdown({ data }: { data: HeartbeatData | null }) {
       <Card>
         <CardHeader
           title="By test type"
-          subtitle="Each type is one way real contracts depend on the network. Errored = an agreed contract error, such as fixture drift"
+          subtitle="Each type is one way real Intelligent Contracts depend on GenLayer. Errored = an agreed contract error, such as fixture drift"
         />
         <Table>
           <Head first="Type" />
@@ -72,7 +72,7 @@ export function Breakdown({ data }: { data: HeartbeatData | null }) {
       <Card>
         <CardHeader
           title="By probe"
-          subtitle="The status fetch runs every tick; the other nine rotate, two per tick. Prompts and answer key live in the contract, which grades each answer. Appeals: upheld / overturned / withdrawn"
+          subtitle="The status fetch runs every tick; the other nine rotate, two per tick. Prompts and answer key live in the Intelligent Contract, which grades each answer. Appeals: upheld / overturned / withdrawn"
         />
         <Table minWidth={760}>
           <THead>

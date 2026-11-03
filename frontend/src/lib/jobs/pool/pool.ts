@@ -62,14 +62,14 @@ export function fundingDecision(j: JobRow, pool: PoolView | "unconfigured", allo
     // wallets may run on Bradbury, and the relayer pays.
     return isStudioAllowed(j.owner, allowlist)
       ? { ok: true }
-      : { ok: false, reason: "The Bradbury pool contract is not deployed yet" };
+      : { ok: false, reason: "Funding on GenLayer Testnet Bradbury is not available yet" };
   }
   if (pool.owner === ZERO) return { ok: false, reason: "Pool not funded: deposit GEN to start this job" };
   if (pool.owner.toLowerCase() !== j.owner) {
     return { ok: false, foreign: true, reason: "This job's pool id is owned by a different wallet" };
   }
   if (pool.paused) return { ok: false, paused: true, reason: "Pool is paused on-chain" };
-  if (!pool.allowanceActive) return { ok: false, reason: "Grant the scheduler (role 1) an allowance on the pool" };
+  if (!pool.allowanceActive) return { ok: false, reason: "Grant the scheduler an allowance on your GEN pool" };
   if (pool.allowancePaused) return { ok: false, paused: true, reason: "The scheduler's allowance is paused on-chain" };
   const perLine = j.perRunCapWei ? BigInt(j.perRunCapWei) : costWei;
   if (pool.available < perLine || pool.balance < perLine * BigInt(Math.max(1, txSteps(j)))) {

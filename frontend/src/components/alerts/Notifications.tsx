@@ -266,10 +266,10 @@ function Pricing() {
       <CardHeader title="Prices" subtitle="Set by the operator. Shown before anything is charged." actions={<MoneyNotice />} />
       <CardBody className="grid gap-2 text-sm">
         <p>
-          <span className="font-mono">{formatGen(p.emailWei)}</span> per alert or digest email on Bradbury, charged to that job&apos;s pool before the email goes out.
+          <span className="font-mono">{formatGen(p.emailWei)}</span> per alert or digest email on GenLayer Testnet Bradbury, charged to that job&apos;s GEN pool before the email goes out.
           At the default of {LIMITS.perJobPerDay.default} alerts a day, one job&apos;s alerts cost at most <span className="font-mono">{formatGen(perJobMax)}</span> a day.
         </p>
-        <p className="text-muted">Studio emails are free, under a daily quota, for allowlisted wallets. Confirmation emails are always free.</p>
+        <p className="text-muted">GenLayer Studio emails are free, under a daily quota, for allowlisted wallets. Confirmation emails are always free.</p>
         <p className="text-muted">
           Set per-job alert limits and the matching on-chain email allowance from each job&apos;s Alerts section.{" "}
           <Link href="/jobs" className="underline underline-offset-2 hover:text-foreground">

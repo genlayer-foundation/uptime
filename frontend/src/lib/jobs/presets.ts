@@ -49,7 +49,7 @@ export function templates(network: Network, c: PresetContracts = presetContracts
     {
       preset: "heartbeat",
       title: "Example: Bradbury Heartbeat",
-      description: "Our own public example job: every hour a canary deploy, a state write, a web fetch and two probes graded on-chain (LLM, web, image) on Testnet Bradbury, plus an appeal every 5th hour.",
+      description: "Our own public example job: every hour a canary deploy, a state write, a web fetch and two probes graded on-chain (LLM, web, image) on GenLayer Testnet Bradbury, plus an appeal every 5th hour.",
       name: "Bradbury Heartbeat",
       network: "bradbury",
       schedule: { everyMinutes: 60 },
@@ -77,7 +77,7 @@ export function templates(network: Network, c: PresetContracts = presetContracts
         { id: "result", kind: "read", contract: c.webprobe ?? ZERO, method: "get_run", args: getRun },
       ],
       assertions: [{ step: "result", path: "result.ok", op: "eq", expected: true }],
-      ...need(c.webprobe, "The WebProbe contract"),
+      ...need(c.webprobe, "The WebProbe Intelligent Contract"),
     },
     {
       preset: "check-api",
@@ -94,7 +94,7 @@ export function templates(network: Network, c: PresetContracts = presetContracts
         { id: "result", kind: "read", contract: c.webprobe ?? ZERO, method: "get_run", args: getRun },
       ],
       assertions: [{ step: "result", path: "result.ok", op: "eq", expected: true }],
-      ...need(c.webprobe, "The WebProbe contract"),
+      ...need(c.webprobe, "The WebProbe Intelligent Contract"),
     },
     {
       preset: "ask",
@@ -108,12 +108,12 @@ export function templates(network: Network, c: PresetContracts = presetContracts
         { id: "result", kind: "read", contract: c.ask ?? ZERO, method: "get_run", args: getRun },
       ],
       assertions: [{ step: "result", path: "answer", op: "eq", expected: "yes" }],
-      ...need(c.ask, "The Ask contract"),
+      ...need(c.ask, "The Ask Intelligent Contract"),
     },
     {
       preset: "call-contract",
-      title: "Call a contract method",
-      description: "Send a write tx to any contract, yours included, with any args; then read a view and assert on it.",
+      title: "Call an Intelligent Contract method",
+      description: "Call a write method on any Intelligent Contract, yours included, with any args; then read a view and assert on it.",
       name: "Call my contract",
       network,
       schedule: { everyMinutes: 60 },
@@ -126,8 +126,8 @@ export function templates(network: Network, c: PresetContracts = presetContracts
     },
     {
       preset: "deploy-contract",
-      title: "Deploy a contract",
-      description: "Deploy contract code on a schedule and record time to ACCEPTED. Starts from our canary; paste your own code instead.",
+      title: "Deploy an Intelligent Contract",
+      description: "Deploy an Intelligent Contract on a schedule and record time to ACCEPTED. Starts from our canary; paste your own code instead.",
       name: "Deploy a canary",
       network,
       schedule: { everyMinutes: 60 },
@@ -138,7 +138,7 @@ export function templates(network: Network, c: PresetContracts = presetContracts
     {
       preset: "deploy-then-call",
       title: "Deploy every hour, call every 5 minutes",
-      description: "Chained steps: one deploys a fresh instance, the other calls a method on the latest accepted deploy.",
+      description: "Chained steps: one deploys a fresh Intelligent Contract, the other calls it on the latest accepted deploy.",
       name: "Deploy, then call",
       network,
       schedule: { everyMinutes: 60 },

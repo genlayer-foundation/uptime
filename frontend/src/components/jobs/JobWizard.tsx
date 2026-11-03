@@ -11,7 +11,7 @@ import { useSession } from "./session";
 import { AssertionsEditor } from "./AssertionsEditor";
 import { ScheduleInput } from "./ScheduleInput";
 import { StepsEditor } from "./StepsEditor";
-import { MockBadge, MoneyNotice, NetworkBadge } from "./ui";
+import { MockBadge, MoneyNotice, NetworkBadge, networkName } from "./ui";
 import { assertionErrors, blankStep, draftFromTemplate, stepErrors, toAssertion, toNewJob, type Draft } from "./draft";
 import { describeSchedule, runsPerDay, scheduleError } from "./schedule";
 import { depositPool, parseGen, poolContract, setReportedPoolAddress } from "./pool";
@@ -25,17 +25,17 @@ type Page = (typeof PAGES)[number];
 
 const SUBTITLE: Record<Page, string> = {
   Start: "A preset fills in steps, schedule and assertions you can then edit.",
-  Network: "Where the job runs.",
+  Network: "Which GenLayer network the job runs on.",
   Steps: "What runs each slot, in order.",
   Schedule: "How often the job runs.",
   Assertions: "What counts as a passing run.",
-  Funding: "The GEN pool that pays for runs on Bradbury.",
+  Funding: "Your GEN pool on GenLayer Testnet Bradbury, which pays for runs.",
   Review: "Check everything, then create.",
 };
 
 function presetOk(p: Preset, n: Network) {
   if (p.systemOnly) return { ok: false, reason: "Run by the Foundation" };
-  if (p.networks && !p.networks.includes(n)) return { ok: false, reason: `${n === "studio" ? "Studio" : "Bradbury"} not supported` };
+  if (p.networks && !p.networks.includes(n)) return { ok: false, reason: `${networkName(n)} not supported` };
   return p.availability?.[n] ?? { ok: true };
 }
 
@@ -129,7 +129,7 @@ export function JobWizard() {
     if (!draft) return p === "Start" ? [] : ["Pick a preset or start blank."];
     switch (p) {
       case "Network":
-        return draft.network === "studio" && !studioAllowed ? ["Studio is limited to Foundation and Labs wallets."] : [];
+        return draft.network === "studio" && !studioAllowed ? ["GenLayer Studio is limited to Foundation and Labs wallets."] : [];
       case "Steps":
         if (!draft.steps.length) return ["Add at least one step."];
         return draft.steps.flatMap((s) => Object.values(stepErrors(s, draft.steps)).map((m) => `${s.id || "step"}: ${m}`));
@@ -268,12 +268,12 @@ export function JobWizard() {
                     <FileCode2 className="h-4 w-4 text-purple" aria-hidden />
                     <span className="text-sm font-medium text-foreground">Blank job</span>
                   </span>
-                  <span className="text-xs text-muted">Any write, deploy or read on any contract. You write the steps.</span>
+                  <span className="text-xs text-muted">Call, deploy or read any Intelligent Contract on GenLayer. You write the steps.</span>
                 </Choice>
                 {(presets ?? []).map((p) => {
                   const nets = (["bradbury", "studio"] as Network[]).filter((n) => presetOk(p, n).ok && (n !== "studio" || studioAllowed));
                   const disabled = nets.length === 0;
-                  const reason = presetOk(p, "bradbury").reason ?? presetOk(p, "studio").reason ?? (studioAllowed ? undefined : "Studio only (allowlisted wallets)");
+                  const reason = presetOk(p, "bradbury").reason ?? presetOk(p, "studio").reason ?? (studioAllowed ? undefined : "GenLayer Studio only (allowlisted wallets)");
                   return (
                     <Choice key={p.id} disabled={disabled} onClick={() => pick(p)} title={disabled ? reason : undefined}>
                       <span className="text-sm font-medium text-foreground">{p.name}</span>
@@ -299,13 +299,13 @@ export function JobWizard() {
                       <NetworkBadge network={n} />
                       {n === "bradbury" && <Badge tone="warn">testnet</Badge>}
                     </span>
-                    <span className="text-sm font-medium text-foreground">{n === "bradbury" ? "Testnet Bradbury" : "GenLayer Studio"}</span>
+                    <span className="text-sm font-medium text-foreground">{networkName(n)}</span>
                     <span className="text-xs text-muted">
                       {n === "bradbury"
-                        ? "Real validators. You fund a GEN pool from your wallet; the scheduler draws run costs within caps you set. Pause or withdraw any time."
-                        : "Studionet. GEN is free here, so there is no pool. Limited to Foundation and Labs wallets."}
+                        ? "Real GenLayer validators. You fund your GEN pool from your wallet; the scheduler draws run costs within caps you set. Pause or withdraw any time."
+                        : "GenLayer's hosted Studio network. GEN is free here, so there is no pool. Limited to Foundation and Labs wallets."}
                     </span>
-                    {locked && <span className="text-xs text-danger-fg">{me?.wallet ? "Your wallet is not on the Studio allowlist." : "Sign in to check Studio access."}</span>}
+                    {locked && <span className="text-xs text-danger-fg">{me?.wallet ? "Your wallet is not on the GenLayer Studio allowlist." : "Sign in to check GenLayer Studio access."}</span>}
                   </Choice>
                 );
               })}
@@ -391,7 +391,7 @@ export function JobWizard() {
                           )}
                         </>
                       ) : (
-                        <span className="text-warn-fg">The pool contract is not deployed: the job is created unfunded.</span>
+                        <span className="text-warn-fg">Funding on GenLayer Testnet Bradbury is not available yet: the job is created unfunded.</span>
                       )}
                     </dd>
                   </>
@@ -467,12 +467,12 @@ function FundingForm({
   return (
     <div className="grid gap-5">
       <p className="text-sm text-muted">
-        Your wallet locks GEN in this job&apos;s own pool on the UptimePool contract. The scheduler pays run fees up front and draws them back from the pool, never more than
+        Your wallet locks GEN in this job&apos;s own GEN pool on GenLayer Testnet Bradbury. The scheduler pays run fees up front and draws them back from the pool, never more than
         the caps below. From the job page you can top up, pause charges, or withdraw everything at any time, even while paused.
       </p>
       {!poolAddr && (
-        <Alert tone="warn" title="The UptimePool contract is not deployed yet">
-          <code>NEXT_PUBLIC_UPTIME_POOL_BRADBURY</code> is unset. You can still create the job; it stays unfunded and does not run until a pool exists.
+        <Alert tone="warn" title="Funding is not available yet">
+          GEN pools on GenLayer Testnet Bradbury are not switched on yet. You can still create the job; it stays unfunded and does not run until funding is available.
         </Alert>
       )}
 
@@ -490,7 +490,7 @@ function FundingForm({
         </p>
         <p className="text-xs text-muted">
           Each run is charged a flat <span className="font-mono">{formatGen(prices.runFeeWei)}</span> plus the gas it actually used. The gas part of the estimate assumes{" "}
-          <span className="font-mono">{formatGen(prices.gasPerTxEstimateWei)}</span> per transaction × {txSteps} transaction{txSteps === 1 ? "" : "s"} per run; Bradbury fees are not
+          <span className="font-mono">{formatGen(prices.gasPerTxEstimateWei)}</span> per transaction × {txSteps} transaction{txSteps === 1 ? "" : "s"} per run; GenLayer Testnet Bradbury fees are not
           measured yet, so the real figure may differ.
         </p>
         <p>
@@ -504,10 +504,10 @@ function FundingForm({
         <Field label="Deposit (GEN)" htmlFor={`${id}-dep`} error={e.deposit} help={lasts}>
           <Input id={`${id}-dep`} aria-invalid={!!e.deposit} className="font-mono" value={f.depositGen} onChange={(x) => setF({ depositGen: x.target.value })} />
         </Field>
-        <Field label="Cap per run (GEN)" htmlFor={`${id}-run`} error={e.perRun} help="maxPerCharge: one run can never cost more">
+        <Field label="Cap per run (GEN)" htmlFor={`${id}-run`} error={e.perRun} help="One run can never cost more">
           <Input id={`${id}-run`} aria-invalid={!!e.perRun} className="font-mono" value={f.perRunGen} onChange={(x) => setF({ perRunGen: x.target.value })} />
         </Field>
-        <Field label="Cap per day (GEN)" htmlFor={`${id}-day`} error={e.perDay} help="periodAmount per 24 h, no carry-over">
+        <Field label="Cap per day (GEN)" htmlFor={`${id}-day`} error={e.perDay} help="Per 24 h, no carry-over">
           <Input id={`${id}-day`} aria-invalid={!!e.perDay} className="font-mono" value={f.perDayGen} onChange={(x) => setF({ perDayGen: x.target.value })} />
         </Field>
       </div>
@@ -522,8 +522,8 @@ function FundingForm({
         </Alert>
       )}
       <p className="text-xs text-muted">
-        Your wallet signs <code className="text-foreground">deposit(uptimeId, [scheduler], [terms])</code> with the deposit as value when you create the job. Later, from the
-        job page: <code className="text-foreground">topUp</code>, <code className="text-foreground">withdraw</code>, <code className="text-foreground">setPaused</code>.
+        Your wallet signs one deposit transaction on GenLayer Testnet Bradbury when you create the job. Later, from the job page, you can top up, withdraw or pause the
+        pool.
       </p>
     </div>
   );

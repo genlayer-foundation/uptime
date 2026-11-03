@@ -265,7 +265,10 @@ INT_REPLY = '{"answer": <an integer>}'
 
 
 class Heartbeat(gl.Contract):
+    # owner deploys and administers; operator is the scheduler key that signs
+    # probes and bumps (the owner may too). Only the owner can swap operator.
     owner: Address
+    operator: Address
     fixture_base: str
     # "<tick>:<pid>" -> Probe; the runner reads back by the key it submitted
     probes: TreeMap[str, Probe]
@@ -275,13 +278,19 @@ class Heartbeat(gl.Contract):
     bump_count: u256
     bumps: TreeMap[str, u256]  # str(tick) -> bump_count after that bump
 
-    def __init__(self, fixture_base: str):
+    def __init__(self, fixture_base: str, operator: str):
         self.owner = gl.message.sender_address
+        self.operator = Address(operator)
         self.fixture_base = fixture_base.rstrip("/")
 
     def _only_owner(self) -> None:
         if gl.message.sender_address != self.owner:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} only owner")
+
+    def _only_runner(self) -> None:
+        sender = gl.message.sender_address
+        if sender != self.operator and sender != self.owner:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} only operator or owner")
 
     def _url(self, fixture: str) -> str:
         return self.fixture_base + "/" + fixture
@@ -304,11 +313,18 @@ class Heartbeat(gl.Contract):
             return
         self._store(tick, pid, str(answer), "")
 
+    # ---- admin ---------------------------------------------------------------
+
+    @gl.public.write
+    def set_operator(self, operator: str) -> None:
+        self._only_owner()
+        self.operator = Address(operator)
+
     # ---- WRITE ---------------------------------------------------------------
 
     @gl.public.write
     def bump(self, tick: u256) -> None:
-        self._only_owner()
+        self._only_runner()
         self.last_tick = tick
         self.bump_count = u256(int(self.bump_count) + 1)
         self.bumps[str(int(tick))] = self.bump_count
@@ -317,7 +333,7 @@ class Heartbeat(gl.Contract):
 
     @gl.public.write
     def probe_status(self, tick: u256) -> None:
-        self._only_owner()
+        self._only_runner()
         url = self._url(F0_FIXTURE)
 
         def fetch() -> str:
@@ -334,7 +350,7 @@ class Heartbeat(gl.Contract):
 
     @gl.public.write
     def probe(self, tick: u256, pid: str) -> None:
-        self._only_owner()
+        self._only_runner()
         entry = _probe(pid)
         if entry is None:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} unknown probe {pid}")
@@ -441,6 +457,14 @@ class Heartbeat(gl.Contract):
             self._record(tick, pid, lambda: gl.eq_principle.prompt_comparative(r9, R9_PRINCIPLE))
 
     # ---- views ---------------------------------------------------------------
+
+    @gl.public.view
+    def get_owner(self) -> str:
+        return self.owner.as_hex
+
+    @gl.public.view
+    def get_operator(self) -> str:
+        return self.operator.as_hex
 
     @gl.public.view
     def get_version(self) -> str:

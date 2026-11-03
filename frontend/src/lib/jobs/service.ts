@@ -33,7 +33,7 @@ export async function createJob(deps: ServiceDeps, wallet: string, body: Record<
     const g = studioGate(owner, deps.gate.allowlist);
     if (!g.ok) return fail(403, g.reason);
     if ((await deps.repo.countLiveJobs(owner, "studio")) >= studioMaxJobs()) {
-      return fail(429, `Studio quota reached: at most ${studioMaxJobs()} jobs per wallet`);
+      return fail(429, `GenLayer Studio quota reached: at most ${studioMaxJobs()} jobs per wallet`);
     }
   }
   if (body.preset === "heartbeat") return fail(403, "The Bradbury Heartbeat is run by the Foundation and cannot be created");

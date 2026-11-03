@@ -260,7 +260,7 @@ export function JobAlerts({ job, wallet }: { job: Job; wallet: string | null }) 
                 Confirmation emails are free.
               </p>
               {!job.poolId || !poolContract() ? (
-                <p className="text-xs text-warn-fg">This job has no pool yet, so Bradbury alerts are refused until it is funded.</p>
+                <p className="text-xs text-warn-fg">This job has no GEN pool yet, so GenLayer Testnet Bradbury alerts are refused until it is funded.</p>
               ) : allowance === undefined ? (
                 <p className="text-xs text-muted">Reading the email allowance…</p>
               ) : allowance === null ? (
@@ -294,7 +294,7 @@ export function JobAlerts({ job, wallet }: { job: Job; wallet: string | null }) 
             </>
           ) : (
             <p>
-              Studio emails are free, under a daily quota per wallet, for allowlisted wallets only. Nothing is charged.
+              GenLayer Studio emails are free, under a daily quota per wallet, for allowlisted wallets only. Nothing is charged.
             </p>
           )}
         </div>
