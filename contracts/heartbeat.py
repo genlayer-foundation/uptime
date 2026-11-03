@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
+# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -26,7 +26,8 @@
 # card.png with another sha256) is an agreed "[EXTERNAL] fixture drift" error,
 # stored with the probe, so a moved page never reads as a wrong answer.
 
-from genlayer import *
+import genlayer as gl
+from genlayer.storage import allow as allow_storage  # = gl.storage.allow, under the name genvm-lint checks
 from dataclasses import dataclass
 import hashlib
 import json
@@ -112,7 +113,7 @@ WORD_NUMBERS = [
 @allow_storage
 @dataclass
 class Probe:
-    tick: u256
+    tick: gl.u256
     pid: str
     answer: str
     grade: str  # correct | wrong | injected, "" when the probe errored
@@ -205,13 +206,22 @@ def _grade(pid: str, answer: str) -> str:
     return "wrong"
 
 
+def _err_text(e) -> str:
+    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
+    data = e.data if hasattr(e, "data") else ""
+    return data if isinstance(data, str) else str(data)
+
+
 def _handle_leader_error(leaders_res, leader_fn) -> bool:
-    leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
+    if isinstance(leaders_res, gl.vm.UserError):
+        leader_msg = _err_text(leaders_res)
+    else:
+        leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
     try:
         leader_fn()
         return False
     except gl.vm.UserError as e:
-        validator_msg = e.message if hasattr(e, "message") else str(e)
+        validator_msg = _err_text(e)
         if validator_msg.startswith(ERROR_EXPECTED) or validator_msg.startswith(ERROR_EXTERNAL):
             return validator_msg == leader_msg
         if validator_msg.startswith(ERROR_TRANSIENT) and leader_msg.startswith(ERROR_TRANSIENT):
@@ -264,23 +274,25 @@ def _ask(question: str, reply: str, context: str = "", images=None) -> dict:
 INT_REPLY = '{"answer": <an integer>}'
 
 
-class Heartbeat(gl.Contract):
+class Heartbeat(gl.contract.Contract):
     # owner deploys and administers; operator is the scheduler key that signs
     # probes and bumps (the owner may too). Only the owner can swap operator.
-    owner: Address
-    operator: Address
+    owner: gl.Address
+    operator: gl.Address
     fixture_base: str
     # "<tick>:<pid>" -> Probe; the runner reads back by the key it submitted
-    probes: TreeMap[str, Probe]
-    keys: DynArray[str]
+    probes: gl.storage.TreeMap[str, Probe]
+    keys: gl.storage.DynArray[str]
     # the WRITE probe
-    last_tick: u256
-    bump_count: u256
-    bumps: TreeMap[str, u256]  # str(tick) -> bump_count after that bump
+    last_tick: gl.u256
+    bump_count: gl.u256
+    bumps: gl.storage.TreeMap[str, gl.u256]  # str(tick) -> bump_count after that bump
 
-    def __init__(self, fixture_base: str, operator: str):
+    # `operator` is address-typed, so `genlayer deploy --args <url> 0x…` passes
+    # it as is; gl.Address() also accepts a 0x-hex or base64 string.
+    def __init__(self, fixture_base: str, operator: gl.Address):
         self.owner = gl.message.sender_address
-        self.operator = Address(operator)
+        self.operator = gl.Address(operator)
         self.fixture_base = fixture_base.rstrip("/")
 
     def _only_owner(self) -> None:
@@ -295,44 +307,44 @@ class Heartbeat(gl.Contract):
     def _url(self, fixture: str) -> str:
         return self.fixture_base + "/" + fixture
 
-    def _store(self, tick: u256, pid: str, answer: str, error: str) -> None:
+    def _store(self, tick: gl.u256, pid: str, answer: str, error: str) -> None:
         key = str(int(tick)) + ":" + pid
         if key not in self.probes:
             self.keys.append(key)
         grade = "" if error else _grade(pid, answer)
         self.probes[key] = Probe(tick=tick, pid=pid, answer=answer[:ANSWER_CHARS], grade=grade, error=error[:300])
 
-    def _record(self, tick: u256, pid: str, run) -> None:
+    def _record(self, tick: gl.u256, pid: str, run) -> None:
         # Consensus first; an AGREED error (fixture drift, a 404, a transient
         # outage both sides saw) is stored with the probe instead of reverting,
         # so the runner can tell plumbing from wrong answers.
         try:
             answer = run()
         except gl.vm.UserError as e:
-            self._store(tick, pid, "", e.message if hasattr(e, "message") else str(e))
+            self._store(tick, pid, "", _err_text(e))
             return
         self._store(tick, pid, str(answer), "")
 
     # ---- admin ---------------------------------------------------------------
 
     @gl.public.write
-    def set_operator(self, operator: str) -> None:
+    def set_operator(self, operator: gl.Address) -> None:
         self._only_owner()
-        self.operator = Address(operator)
+        self.operator = gl.Address(operator)
 
     # ---- WRITE ---------------------------------------------------------------
 
     @gl.public.write
-    def bump(self, tick: u256) -> None:
+    def bump(self, tick: gl.u256) -> None:
         self._only_runner()
         self.last_tick = tick
-        self.bump_count = u256(int(self.bump_count) + 1)
+        self.bump_count = gl.u256(int(self.bump_count) + 1)
         self.bumps[str(int(tick))] = self.bump_count
 
     # ---- WEB control (F0) ----------------------------------------------------
 
     @gl.public.write
-    def probe_status(self, tick: u256) -> None:
+    def probe_status(self, tick: gl.u256) -> None:
         self._only_runner()
         url = self._url(F0_FIXTURE)
 
@@ -349,7 +361,7 @@ class Heartbeat(gl.Contract):
     # ---- the rotating pool ---------------------------------------------------
 
     @gl.public.write
-    def probe(self, tick: u256, pid: str) -> None:
+    def probe(self, tick: gl.u256, pid: str) -> None:
         self._only_runner()
         entry = _probe(pid)
         if entry is None:
@@ -412,7 +424,7 @@ class Heartbeat(gl.Contract):
                     return _handle_leader_error(leaders_res, r6)
                 return leaders_res.calldata == r6()
 
-            self._record(tick, pid, lambda: gl.vm.run_nondet_unsafe(r6, r6_validator))
+            self._record(tick, pid, lambda: gl.vm.run_nondet(r6, r6_validator))
 
         elif pid == "r7-card":
             def r7() -> str:
@@ -445,7 +457,7 @@ class Heartbeat(gl.Contract):
                     return _handle_leader_error(leaders_res, r8)
                 return leaders_res.calldata == r8()
 
-            self._record(tick, pid, lambda: gl.vm.run_nondet_unsafe(r8, r8_validator))
+            self._record(tick, pid, lambda: gl.vm.run_nondet(r8, r8_validator))
 
         elif pid == "r9-namesake":
             def r9() -> str:
@@ -471,18 +483,18 @@ class Heartbeat(gl.Contract):
         return VERSION
 
     @gl.public.view
-    def get_last_tick(self) -> u256:
+    def get_last_tick(self) -> gl.u256:
         return self.last_tick
 
     @gl.public.view
-    def get_bump_count(self) -> u256:
+    def get_bump_count(self) -> gl.u256:
         return self.bump_count
 
     @gl.public.view
-    def get_bump(self, tick: u256) -> u256:
+    def get_bump(self, tick: gl.u256) -> gl.u256:
         # bump_count right after bump(tick), 0 if that tick was never bumped
         key = str(int(tick))
-        return self.bumps[key] if key in self.bumps else u256(0)
+        return self.bumps[key] if key in self.bumps else gl.u256(0)
 
     @gl.public.view
     def get_probe(self, key: str) -> dict:
@@ -492,11 +504,11 @@ class Heartbeat(gl.Contract):
         return {"tick": int(p.tick), "pid": p.pid, "answer": p.answer, "grade": p.grade, "error": p.error}
 
     @gl.public.view
-    def get_count(self) -> u256:
-        return u256(len(self.keys))
+    def get_count(self) -> gl.u256:
+        return gl.u256(len(self.keys))
 
     @gl.public.view
-    def get_probes(self, offset: u256, limit: u256) -> list:
+    def get_probes(self, offset: gl.u256, limit: gl.u256) -> list:
         end = min(int(offset) + int(limit), len(self.keys))
         out = []
         for i in range(int(offset), end):

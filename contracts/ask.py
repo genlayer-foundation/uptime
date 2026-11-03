@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
+# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -15,7 +15,8 @@
 #
 # Anyone may call it; results are filed under the CALLER's address (see contracts/web_probe.py).
 
-from genlayer import *
+import genlayer as gl
+from genlayer.storage import allow as allow_storage  # = gl.storage.allow, under the name genvm-lint checks
 from dataclasses import dataclass
 import json
 import re
@@ -53,13 +54,22 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _err_text(e) -> str:
+    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
+    data = e.data if hasattr(e, "data") else ""
+    return data if isinstance(data, str) else str(data)
+
+
 def _handle_leader_error(leaders_res, leader_fn) -> bool:
-    leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
+    if isinstance(leaders_res, gl.vm.UserError):
+        leader_msg = _err_text(leaders_res)
+    else:
+        leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
     try:
         leader_fn()
         return False
     except gl.vm.UserError as e:
-        validator_msg = e.message if hasattr(e, "message") else str(e)
+        validator_msg = _err_text(e)
         if validator_msg.startswith(ERROR_EXPECTED) or validator_msg.startswith(ERROR_EXTERNAL):
             return validator_msg == leader_msg
         if validator_msg.startswith(ERROR_TRANSIENT) and leader_msg.startswith(ERROR_TRANSIENT):
@@ -86,9 +96,9 @@ def _read_page(url: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:PAGE_CHARS]
 
 
-class Ask(gl.Contract):
-    slots: TreeMap[str, Record]
-    counts: TreeMap[str, u256]
+class Ask(gl.contract.Contract):
+    slots: gl.storage.TreeMap[str, Record]
+    counts: gl.storage.TreeMap[str, gl.u256]
 
     def __init__(self):
         pass
@@ -98,18 +108,18 @@ class Ask(gl.Contract):
 
     def _store(self, uptime_id: str, rec: Record) -> None:
         base = self._base(gl.message.sender_address.as_hex, uptime_id)
-        n = int(self.counts.get(base, u256(0)))
+        n = int(self.counts.get(base, gl.u256(0)))
         for i in range(max(0, n - KEEP), n):
             key = base + "|" + str(i % KEEP)
             if self.slots[key].run_id == rec.run_id:
                 self.slots[key] = rec
                 return
         self.slots[base + "|" + str(n % KEEP)] = rec
-        self.counts[base] = u256(n + 1)
+        self.counts[base] = gl.u256(n + 1)
 
     def _rows(self, caller: str, uptime_id: str) -> list:
-        base = self._base(Address(caller).as_hex, uptime_id)
-        n = int(self.counts.get(base, u256(0)))
+        base = self._base(gl.Address(caller).as_hex, uptime_id)
+        n = int(self.counts.get(base, gl.u256(0)))
         out = []
         for i in range(n - 1, max(0, n - KEEP) - 1, -1):
             r = self.slots[base + "|" + str(i % KEEP)]
@@ -157,12 +167,12 @@ class Ask(gl.Contract):
                 return _handle_leader_error(leaders_res, leader_fn)
             return leaders_res.calldata == leader_fn()
 
-        answer = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+        answer = gl.vm.run_nondet(leader_fn, validator_fn)
         self._store(uptime_id, Record(run_id=run_id, question=question, source_url=source_url, answer=answer))
         return answer
 
     @gl.public.view
-    def get_latest(self, caller: str, uptime_id: str, limit: u256) -> list:
+    def get_latest(self, caller: str, uptime_id: str, limit: gl.u256) -> list:
         return self._rows(caller, uptime_id)[: int(limit)]
 
     @gl.public.view
@@ -173,5 +183,5 @@ class Ask(gl.Contract):
         return {}
 
     @gl.public.view
-    def get_count(self, caller: str, uptime_id: str) -> u256:
-        return self.counts.get(self._base(Address(caller).as_hex, uptime_id), u256(0))
+    def get_count(self, caller: str, uptime_id: str) -> gl.u256:
+        return self.counts.get(self._base(gl.Address(caller).as_hex, uptime_id), gl.u256(0))

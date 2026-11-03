@@ -29,6 +29,11 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
   measure in `reconcile`, using chain timestamps.
 - Cron routes fail closed without `CRON_SECRET`.
 - Pushing `main` deploys to Vercel production.
+- **Contracts pin Bradbury's runner** (`py-genlayer:babwp9t…`, GenVM v0.6.0-rc10,
+  `import genlayer as gl`). An older hash fails every deploy with
+  `invalid_contract runner malformed`. Studio (GenVM v0.2.16) cannot load it.
+  `gen_call` with `type: "deploy"` on `https://rpc-bradbury.genlayer.com` runs a
+  constructor on the real GenVM without sending a transaction: use it before any deploy.
 
 ### Jobs backend
 
@@ -54,9 +59,9 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 ## Verify
 
 ```bash
-genvm-lint check contracts/heartbeat.py
-genvm-lint check contracts/mail_escrow.py
-.venv/bin/pytest test/direct -q          # needs genlayer-test, pytest, pillow
+GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/heartbeat.py      # genvm-linter >= 0.11.1rc2
+GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/mail_escrow.py
+.venv/bin/pytest test/direct -q          # needs genlayer-test >= 0.30.0rc2 (--pre), pytest, pillow
 (cd frontend && node scripts/heartbeat-fixtures.mjs --check)
 (cd contracts/evm && forge test)
 cd frontend && npx tsc --noEmit && npx eslint src && npx vitest run && npx next build

@@ -29,9 +29,11 @@ trusting the mailer.
 
 ### What GenVM can actually do (checked, not assumed)
 
-- **SHA-256:** the Python runner `py-genlayer:1jb45aa8…` uses CPython `1bk9g3zg…`. That build ships
-  `hashlib.py`, and the `_sha2` C module is compiled into `cpython.det.wasm` (`strings` finds
-  `_sha2`, `sha256`, `Hacl_Hash_SHA2`). So `hashlib.sha256` is native, not pure Python. The GenLayer
+- **SHA-256:** the Python runner `py-genlayer:babwp9t…` (Bradbury, GenVM v0.6.0-rc10) uses CPython
+  `3t4hs1ey…`. That build ships `hashlib.py`, and the SHA-2 C code is compiled into
+  `cpython.det.wasm` (`strings` finds `Hacl_Hash_SHA2`). So `hashlib.sha256` is native, not pure
+  Python; the Heartbeat's `card.png` sha256 check ran on Bradbury's GenVM in a `gen_call` deploy
+  simulation (2026-11-03). The GenLayer
   docs' randomness example (`features/random`) also calls `hashlib.sha256`.
 - **RSA verify:** this is Python big integers plus `pow(s, e, n)`. With e = 65537 a 2048-bit check
   is 17 modular squarings, which is cheap. No library is needed. `rsa_sha256_verify` is about 10
@@ -264,7 +266,7 @@ through the direct VM's `gl_call` hook (`EthSend`).
 - **Admin:** rotation and new keys wait for `delay`, and retiring a key is immediate.
 
 ```bash
-genvm-lint check contracts/mail_escrow.py
+GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/mail_escrow.py   # genvm-linter >= 0.11.1rc2
 .venv/bin/pytest test/direct -q
 ```
 

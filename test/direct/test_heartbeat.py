@@ -501,3 +501,47 @@ def test_operator_accepts_address_typed_calldata(direct_vm, direct_deploy, direc
     direct_vm.sender = direct_bob
     c.bump(1)
     assert c.get_bump_count() == 1
+
+
+def test_r6_validator_agrees_on_the_same_agreed_error(direct_vm, direct_deploy, direct_alice):
+    # GenVM v0.6 carries a UserError's text in `.data` (it was `.message`):
+    # the custom validator must still compare the leader's error with its own.
+    c = deploy(direct_vm, direct_deploy, direct_alice)
+    mock_page(direct_vm, "appeals-note.html")
+    direct_vm.mock_llm(r".*escalating appeal round.*", json.dumps({"answer": 2}))
+    c.probe(6, "r6-injection")
+    assert direct_vm.run_validator() is True
+    direct_vm.clear_mocks()
+    mock_page(direct_vm, "appeals-note.html", "<p>moved</p>")
+    drift = "[EXTERNAL] fixture drift: appeals-note.html lacks HB2-appeals"
+    assert direct_vm.run_validator(leader_error=Exception(drift)) is True
+    assert direct_vm.run_validator(leader_error=Exception("[EXTERNAL] something else")) is False
+    # the leader erred but this validator got an answer: disagree
+    direct_vm.clear_mocks()
+    mock_page(direct_vm, "appeals-note.html")
+    direct_vm.mock_llm(r".*escalating appeal round.*", json.dumps({"answer": 2}))
+    assert direct_vm.run_validator(leader_error=Exception(drift)) is False
+
+
+def test_operator_accepts_a_base64_string(direct_vm, direct_deploy, direct_alice, direct_bob):
+    # the form older deploy instructions used; gl.Address() takes 0x-hex, base64 or an Address
+    import base64
+
+    direct_vm.sender = direct_alice
+    b64 = base64.b64encode(bytes.fromhex(_hex(direct_bob)[2:])).decode()
+    c = direct_deploy(CONTRACT, BASE + "/", b64)
+    assert c.get_operator().lower() == _hex(direct_bob).lower()
+
+
+def test_runs_on_the_sdk_bradbury_runs(direct_vm, direct_deploy, direct_alice):
+    # Guards against a silent fallback to an older cached SDK: the header pins
+    # the runner, and the std lib loaded must be the one that runner depends on.
+    import sys
+
+    deploy(direct_vm, direct_deploy, direct_alice)
+    import genlayer  # importable only once the loader put the pinned SDK on sys.path
+
+    with open(CONTRACT) as f:
+        assert '"py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"' in f.readline()
+    assert any("babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0" in p for p in sys.path)
+    assert "z7fv8bqpetj3wnjd8sn5s5xfqve3rz8nmtq4npwf2qdvns57zjgg" in genlayer.__file__

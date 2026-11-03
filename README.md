@@ -62,17 +62,22 @@ Time to decision comes from the chain's own `createdTimestamp` → `lastVoteTime
 ## Setup
 
 ```bash
-# contract
-genvm-lint check contracts/heartbeat.py
-python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest pillow   # pillow: the screenshot probe's direct test
-.venv/bin/pytest test/direct -q
+# contract. The contracts pin the runner Bradbury Phase 2 runs (py-genlayer:babwp9t…,
+# GenVM v0.6.0-rc10, `import genlayer as gl`). Tools must load that SDK, not an older one:
+python3 -m venv .venv && .venv/bin/pip install --pre "genlayer-test>=0.30.0rc2" pytest pillow   # pillow: the screenshot probe's direct test
+.venv/bin/pytest test/direct -q     # test/direct/conftest.py sets GENVM_VERSION=v0.6.0-rc10
+GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/heartbeat.py   # genvm-linter >= 0.11.1rc2
 
 # deploy once to Bradbury: args are the site's fixture base URL and the
 # OPERATOR, the Bradbury scheduler wallet (RELAYER_KEY_BRADBURY) that signs the
-# cron's probes and bumps. The deployer becomes owner (may also probe, and is the only
-# one who can set_operator), so you can deploy from your own wallet.
+# cron's probes and bumps, as a plain 0x address (the constructor takes an Address).
+# The deployer becomes owner (may also probe, and is the only one who can
+# set_operator), so you can deploy from your own wallet.
+# GENLAYER_E2E_NO_OPEN=1 stops the CLI opening a browser; `genlayer wallet status`
+# prints the signing URL to open yourself.
 genlayer network set testnet-bradbury
-genlayer deploy --contract contracts/heartbeat.py --wallet browser \
+GENLAYER_E2E_NO_OPEN=1 genlayer deploy --contract contracts/heartbeat.py --wallet browser \
+  --fees '{"distribution":{"leaderTimeunitsAllocation":"600","validatorTimeunitsAllocation":"600","appealRounds":"1","executionBudgetPerRound":"25000000000000000","rotations":["1","1"],"maxPriceGenPerTimeUnit":"2","storageFeeMaxGasPrice":"300000000","receiptFeeMaxGasPrice":"300000000"}}' \
   --args "https://uptime.genlayer.foundation/heartbeat" <SCHEDULER_ADDRESS>
 
 # frontend
@@ -102,6 +107,8 @@ Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM 
 ## Uptime contracts (in progress, not deployed)
 
 The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. Nothing below is deployed yet.
+
+All the Python contracts here target Bradbury's runner (`py-genlayer:babwp9t…`). GenLayer Studio still runs GenVM v0.2.16, which cannot load that runner, so they no longer deploy on Studio as they are.
 
 | Contract | Network | What it is |
 |---|---|---|

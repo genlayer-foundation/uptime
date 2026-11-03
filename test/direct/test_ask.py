@@ -84,3 +84,18 @@ def test_results_are_filed_under_the_caller(direct_vm, direct_deploy, direct_ali
     assert c.get_count(hexof(direct_alice), "u1") == 1
     assert c.get_count(hexof(direct_bob), "u1") == 1
     assert c.get_latest(hexof(direct_alice), "u2", 5) == []
+
+
+def test_validator_compares_agreed_errors(direct_vm, direct_deploy, direct_alice):
+    # GenVM v0.6 carries a UserError's text in `.data` (it was `.message`).
+    c = deploy(direct_vm, direct_deploy, direct_alice)
+    direct_vm.mock_llm(r".*capital of France.*", json.dumps({"answer": "Paris"}))
+    direct_vm.mock_web(r"https://src\.test/", {"status": 200, "body": "<p>France: Paris</p>"})
+    c.ask("u1", "r1", "What is the capital of France?", "https://src.test/")
+    direct_vm.clear_mocks()
+    direct_vm.mock_web(r"https://src\.test/", {"status": 404, "body": ""})
+    assert direct_vm.run_validator(leader_error=Exception("[EXTERNAL] source returned 404")) is True
+    assert direct_vm.run_validator(leader_error=Exception("[EXTERNAL] source returned 410")) is False
+    direct_vm.clear_mocks()
+    direct_vm.mock_web(r"https://src\.test/", {"status": 503, "body": ""})
+    assert direct_vm.run_validator(leader_error=Exception("[TRANSIENT] source unreachable")) is True

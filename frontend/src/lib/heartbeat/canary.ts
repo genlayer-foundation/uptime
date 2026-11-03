@@ -2,7 +2,7 @@
 // Vercel project root is frontend/ and cannot read ../contracts at runtime.
 // Keep byte-identical with contracts/canary.py.
 
-export const CANARY_SOURCE = `# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
+export const CANARY_SOURCE = `# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -11,16 +11,16 @@ export const CANARY_SOURCE = `# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a
 # Deployed fresh every heartbeat tick. No LLM, no web: it measures only that a
 # deploy is accepted and how long that takes.
 
-from genlayer import *
+import genlayer as gl
 
 
-class Canary(gl.Contract):
-    tick: u256
+class Canary(gl.contract.Contract):
+    tick: gl.u256
 
-    def __init__(self, tick: u256):
+    def __init__(self, tick: gl.u256):
         self.tick = tick
 
     @gl.public.view
-    def get_tick(self) -> u256:
+    def get_tick(self) -> gl.u256:
         return self.tick
 `;

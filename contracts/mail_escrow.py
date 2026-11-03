@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
+# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -19,7 +19,8 @@
 # What a passing claim proves: the holder of the pinned DKIM private key (the email provider)
 # signed a message with these headers and this body. It does NOT prove delivery or reading.
 
-from genlayer import *
+import genlayer as gl
+from genlayer.storage import allow as allow_storage  # = gl.storage.allow, under the name genvm-lint checks
 from dataclasses import dataclass
 import base64
 import datetime
@@ -57,22 +58,22 @@ _RSA_OID = bytes.fromhex("2a864886f70d010101")
 @allow_storage
 @dataclass
 class Job:
-    owner: Address
+    owner: gl.Address
     job_id: str
-    balance: u256
-    daily_cap: u32
-    created_at: u64
-    expires_at: u64
+    balance: gl.u256
+    daily_cap: gl.u32
+    created_at: gl.u64
+    expires_at: gl.u64
     recipients: str  # comma-joined recipient hashes (see recipient_hash)
-    claimed: u64
+    claimed: gl.u64
 
 
 @allow_storage
 @dataclass
 class Claim:
     job_key: str
-    amount: u256
-    signed_at: u64
+    amount: gl.u256
+    signed_at: gl.u64
     selector: str
 
 
@@ -80,7 +81,7 @@ class Claim:
 @dataclass
 class Pending:
     value: str
-    eta: u64
+    eta: gl.u64
 
 
 @gl.evm.contract_interface
@@ -102,18 +103,18 @@ def _now() -> int:
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
 
-def _addr(a: str) -> Address:
+def _addr(a: str) -> gl.Address:
     try:
-        return Address(a)
+        return gl.Address(a)
     except Exception:
         raise gl.vm.UserError(f"{ERROR_EXPECTED} bad address")
 
 
-def _hex(a: Address) -> str:
+def _hex(a: gl.Address) -> str:
     return a.as_hex.lower()
 
 
-def _job_key(owner: Address, job_id: str) -> str:
+def _job_key(owner: gl.Address, job_id: str) -> str:
     return _hex(owner) + "|" + job_id
 
 
@@ -437,13 +438,22 @@ def _fail_web(what: str, status: int) -> None:
     raise gl.vm.UserError(f"{ERROR_EXTERNAL} {what} returned {status}")
 
 
+def _err_text(e) -> str:
+    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
+    data = e.data if hasattr(e, "data") else ""
+    return data if isinstance(data, str) else str(data)
+
+
 def _handle_leader_error(leaders_res, leader_fn) -> bool:
-    leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
+    if isinstance(leaders_res, gl.vm.UserError):
+        leader_msg = _err_text(leaders_res)
+    else:
+        leader_msg = leaders_res.message if hasattr(leaders_res, "message") else ""
     try:
         leader_fn()
         return False
     except gl.vm.UserError as e:
-        validator_msg = e.message if hasattr(e, "message") else str(e)
+        validator_msg = _err_text(e)
         if validator_msg.startswith(ERROR_EXPECTED) or validator_msg.startswith(ERROR_EXTERNAL):
             return validator_msg == leader_msg
         if validator_msg.startswith(ERROR_TRANSIENT) and leader_msg.startswith(ERROR_TRANSIENT):
@@ -456,22 +466,22 @@ def _handle_leader_error(leaders_res, leader_fn) -> bool:
 # ---------------------------------------------------------------- contract
 
 
-class MailEscrow(gl.Contract):
-    admin: Address
-    mailer: Address  # the only account that may claim
-    payee: Address  # the project wallet that receives released fees (may equal mailer)
+class MailEscrow(gl.contract.Contract):
+    admin: gl.Address
+    mailer: gl.Address  # the only account that may claim
+    payee: gl.Address  # the project wallet that receives released fees (may equal mailer)
     domain: str  # DKIM d= the messages must be signed for
     doh_base: str  # DNS-over-HTTPS JSON endpoint, e.g. https://dns.google/resolve
-    price: u256  # wei per claimed email, fixed at deployment
-    delay: u64  # seconds before an admin change (mailer, payee, new key) takes effect
-    total_escrowed: u256
-    total_released: u256
-    jobs: TreeMap[str, Job]
-    claims: TreeMap[str, Claim]  # email_id -> claim (replay protection)
-    signatures: TreeMap[str, str]  # sha256(signature) -> email_id (one message, one claim)
-    day_counts: TreeMap[str, u32]  # "<job_key>|<day>" -> claims dated that UTC day
-    keys: TreeMap[str, Pending]  # selector -> (sha256 of DER key, active from)
-    pending: TreeMap[str, Pending]  # "mailer" | "payee" -> proposed value
+    price: gl.u256  # wei per claimed email, fixed at deployment
+    delay: gl.u64  # seconds before an admin change (mailer, payee, new key) takes effect
+    total_escrowed: gl.u256
+    total_released: gl.u256
+    jobs: gl.storage.TreeMap[str, Job]
+    claims: gl.storage.TreeMap[str, Claim]  # email_id -> claim (replay protection)
+    signatures: gl.storage.TreeMap[str, str]  # sha256(signature) -> email_id (one message, one claim)
+    day_counts: gl.storage.TreeMap[str, gl.u32]  # "<job_key>|<day>" -> claims dated that UTC day
+    keys: gl.storage.TreeMap[str, Pending]  # selector -> (sha256 of DER key, active from)
+    pending: gl.storage.TreeMap[str, Pending]  # "mailer" | "payee" -> proposed value
 
     def __init__(
         self,
@@ -480,8 +490,8 @@ class MailEscrow(gl.Contract):
         domain: str,
         selector: str,
         key_sha256: str,
-        price: u256,
-        delay: u64,
+        price: gl.u256,
+        delay: gl.u64,
         doh_base: str,
     ):
         self.admin = gl.message.sender_address
@@ -496,12 +506,12 @@ class MailEscrow(gl.Contract):
         _expect(doh_base.startswith("https://") and len(doh_base) <= 256, "doh_base must be https")
         self.doh_base = doh_base.rstrip("/")
         self._check_key(selector, key_sha256)
-        self.keys[selector] = Pending(value=key_sha256.lower(), eta=u64(0))
+        self.keys[selector] = Pending(value=key_sha256.lower(), eta=gl.u64(0))
 
     # ---------------------------------------------------------------- owner
 
     @gl.public.write.payable
-    def open_job(self, job_id: str, recipients: list[str], daily_cap: u32, ttl: u64) -> None:
+    def open_job(self, job_id: str, recipients: list[str], daily_cap: gl.u32, ttl: gl.u64) -> None:
         """Create the caller's escrow for `job_id` and deposit the attached GEN. `recipients` are
         recipient_hash() values (1-3). daily_cap 0 = default 10. ttl seconds, 0 = 90 days."""
         _expect(0 < len(job_id) <= MAX_ID and "|" not in job_id, "bad job_id")
@@ -516,14 +526,14 @@ class MailEscrow(gl.Contract):
         self.jobs[key] = Job(
             owner=owner,
             job_id=job_id,
-            balance=u256(v),
-            daily_cap=u32(self._cap(int(daily_cap))),
-            created_at=u64(now),
-            expires_at=u64(now + t),
+            balance=gl.u256(v),
+            daily_cap=gl.u32(self._cap(int(daily_cap))),
+            created_at=gl.u64(now),
+            expires_at=gl.u64(now + t),
             recipients=self._recipients(recipients),
-            claimed=u64(0),
+            claimed=gl.u64(0),
         )
-        self.total_escrowed = u256(int(self.total_escrowed) + v)
+        self.total_escrowed = gl.u256(int(self.total_escrowed) + v)
 
     @gl.public.write.payable
     def top_up(self, job_id: str) -> None:
@@ -531,21 +541,21 @@ class MailEscrow(gl.Contract):
         _expect(v > 0, "deposit some GEN")
         job = self._owned(job_id)
         _expect(_now() < int(job.expires_at), "job expired")
-        job.balance = u256(int(job.balance) + v)
-        self.total_escrowed = u256(int(self.total_escrowed) + v)
+        job.balance = gl.u256(int(job.balance) + v)
+        self.total_escrowed = gl.u256(int(self.total_escrowed) + v)
 
     @gl.public.write
-    def set_job(self, job_id: str, recipients: list[str], daily_cap: u32, expires_at: u64) -> None:
+    def set_job(self, job_id: str, recipients: list[str], daily_cap: gl.u32, expires_at: gl.u64) -> None:
         """Replace recipients and cap, and move the expiry (any time up to now + 365 days;
         a past or present value expires the job now)."""
         job = self._owned(job_id)
         job.recipients = self._recipients(recipients)
-        job.daily_cap = u32(self._cap(int(daily_cap)))
+        job.daily_cap = gl.u32(self._cap(int(daily_cap)))
         _expect(int(expires_at) <= _now() + MAX_TTL, "bad expires_at")
         job.expires_at = expires_at
 
     @gl.public.write
-    def withdraw(self, job_id: str, amount: u256) -> u256:
+    def withdraw(self, job_id: str, amount: gl.u256) -> gl.u256:
         """Withdraw unspent credit to the owner, immediately. amount 0 = everything."""
         job = self._owned(job_id)
         a = int(amount) if int(amount) else int(job.balance)
@@ -553,10 +563,10 @@ class MailEscrow(gl.Contract):
         _expect(a <= int(job.balance), "insufficient balance")
         self._debit(job, a)
         self._pay(job.owner, a)
-        return u256(a)
+        return gl.u256(a)
 
     @gl.public.write
-    def refund_expired(self, owner: str, job_id: str) -> u256:
+    def refund_expired(self, owner: str, job_id: str) -> gl.u256:
         """Anyone may push an expired job's remaining credit back to its owner."""
         key = _job_key(_addr(owner), job_id)
         _expect(key in self.jobs, "unknown job")
@@ -566,7 +576,7 @@ class MailEscrow(gl.Contract):
         _expect(a > 0, "nothing to refund")
         self._debit(job, a)
         self._pay(job.owner, a)
-        return u256(a)
+        return gl.u256(a)
 
     # ---------------------------------------------------------------- mailer
 
@@ -645,7 +655,7 @@ class MailEscrow(gl.Contract):
                 return _handle_leader_error(leaders_res, leader_fn)
             return _canon(leaders_res.calldata) == _canon(leader_fn())
 
-        verdict = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+        verdict = gl.vm.run_nondet(leader_fn, validator_fn)
         _expect(bool(verdict.get("ok")), "evidence rejected: " + str(verdict.get("reason", "")))
 
         t = int(verdict["t"])
@@ -654,15 +664,15 @@ class MailEscrow(gl.Contract):
         _expect(int(job.created_at) <= t < int(job.expires_at), "message outside the job's term")
         _expect(verdict["sig_hash"] not in self.signatures, "message already claimed")
         day_key = key + "|" + str(t // DAY)
-        used = int(self.day_counts.get(day_key, u32(0)))
+        used = int(self.day_counts.get(day_key, gl.u32(0)))
         _expect(used < int(job.daily_cap), "daily cap reached")
 
-        self.day_counts[day_key] = u32(used + 1)
+        self.day_counts[day_key] = gl.u32(used + 1)
         self.signatures[verdict["sig_hash"]] = email_id
-        self.claims[email_id] = Claim(job_key=key, amount=u256(price), signed_at=u64(t), selector=verdict["selector"])
-        job.claimed = u64(int(job.claimed) + 1)
+        self.claims[email_id] = Claim(job_key=key, amount=gl.u256(price), signed_at=gl.u64(t), selector=verdict["selector"])
+        job.claimed = gl.u64(int(job.claimed) + 1)
         self._debit(job, price)
-        self.total_released = u256(int(self.total_released) + price)
+        self.total_released = gl.u256(int(self.total_released) + price)
         self._pay(self.payee, price)
         return {"email_id": email_id, "amount": price, "signed_at": t, "day": t // DAY}
 
@@ -674,7 +684,7 @@ class MailEscrow(gl.Contract):
         self._only_admin()
         _expect(what in ("mailer", "payee"), "bad what")
         _addr(value)
-        self.pending[what] = Pending(value=value, eta=u64(_now() + int(self.delay)))
+        self.pending[what] = Pending(value=value, eta=gl.u64(_now() + int(self.delay)))
 
     @gl.public.write
     def execute(self, what: str) -> None:
@@ -694,7 +704,7 @@ class MailEscrow(gl.Contract):
         self._only_admin()
         self._check_key(selector, key_sha256)
         _expect(selector not in self.keys, "selector exists")
-        self.keys[selector] = Pending(value=key_sha256.lower(), eta=u64(_now() + int(self.delay)))
+        self.keys[selector] = Pending(value=key_sha256.lower(), eta=gl.u64(_now() + int(self.delay)))
 
     @gl.public.write
     def retire_key(self, selector: str) -> None:
@@ -723,15 +733,15 @@ class MailEscrow(gl.Contract):
         }
 
     @gl.public.view
-    def claimable_today(self, owner: str, job_id: str, at: u64) -> u256:
+    def claimable_today(self, owner: str, job_id: str, at: gl.u64) -> gl.u256:
         """Claims still allowed for the UTC day containing unix time `at`, after cap and credit."""
         key = _job_key(_addr(owner), job_id)
         if key not in self.jobs:
-            return u256(0)
+            return gl.u256(0)
         j = self.jobs[key]
-        used = int(self.day_counts.get(key + "|" + str(int(at) // DAY), u32(0)))
+        used = int(self.day_counts.get(key + "|" + str(int(at) // DAY), gl.u32(0)))
         left = max(0, int(j.daily_cap) - used)
-        return u256(min(left, int(j.balance) // int(self.price)))
+        return gl.u256(min(left, int(j.balance) // int(self.price)))
 
     @gl.public.view
     def get_claim(self, email_id: str) -> dict:
@@ -793,9 +803,9 @@ class MailEscrow(gl.Contract):
         _expect(_HEX64.match(key_sha256.strip().lower()) is not None, "bad key_sha256")
 
     def _debit(self, job: Job, amount: int) -> None:
-        job.balance = u256(int(job.balance) - amount)
-        self.total_escrowed = u256(int(self.total_escrowed) - amount)
+        job.balance = gl.u256(int(job.balance) - amount)
+        self.total_escrowed = gl.u256(int(self.total_escrowed) - amount)
 
-    def _pay(self, to: Address, amount: int) -> None:
+    def _pay(self, to: gl.Address, amount: int) -> None:
         # External message to an EOA on the chain layer; executes when this tx finalizes.
-        _Wallet(to).emit_transfer(value=u256(amount))
+        _Wallet(to).emit_transfer(value=gl.u256(amount))

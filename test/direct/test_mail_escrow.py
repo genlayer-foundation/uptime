@@ -141,8 +141,11 @@ def env(direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob, direct
     sends = []
 
     def hook(vm, request):
-        if "EthSend" in request:
-            sends.append((hexof(request["EthSend"]["address"]), int(request["EthSend"]["value"])))
+        # GenVM v0.6 names a value transfer to an EOA EmitExternalMessage (was EthSend).
+        if "EmitExternalMessage" in request:
+            msg = request["EmitExternalMessage"]
+            assert msg["calldata"] == b""
+            sends.append((hexof(msg["address"]), int(msg["value"])))
             return {"ok": None}
         return None
 

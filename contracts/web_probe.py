@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
+# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -15,7 +15,8 @@
 # again and must produce the same verdict. Bodies are never compared or stored, so a dynamic
 # page still reaches agreement as long as the verdict holds.
 
-from genlayer import *
+import genlayer as gl
+from genlayer.storage import allow as allow_storage  # = gl.storage.allow, under the name genvm-lint checks
 from dataclasses import dataclass
 import json
 import re
@@ -170,10 +171,10 @@ def url_verdict(status: int, body: str, expect_status: int, contains: str) -> di
 UNREACHABLE = {"ok": False, "reachable": False, "status_class": "", "status_ok": False, "match": None}
 
 
-class WebProbe(gl.Contract):
+class WebProbe(gl.contract.Contract):
     # "<caller>|<uptime_id>|<slot>" -> Record ; "<caller>|<uptime_id>" -> runs written
-    slots: TreeMap[str, Record]
-    counts: TreeMap[str, u256]
+    slots: gl.storage.TreeMap[str, Record]
+    counts: gl.storage.TreeMap[str, gl.u256]
 
     def __init__(self):
         pass
@@ -185,7 +186,7 @@ class WebProbe(gl.Contract):
 
     def _store(self, uptime_id: str, run_id: str, kind: str, result: dict) -> None:
         base = self._base(gl.message.sender_address.as_hex, uptime_id)
-        n = int(self.counts.get(base, u256(0)))
+        n = int(self.counts.get(base, gl.u256(0)))
         rec = Record(run_id=run_id, kind=kind, result=_canon(result))
         # A retried run (same run_id) overwrites its own slot instead of taking a new one.
         for i in range(max(0, n - KEEP), n):
@@ -194,11 +195,11 @@ class WebProbe(gl.Contract):
                 self.slots[key] = rec
                 return
         self.slots[base + "|" + str(n % KEEP)] = rec
-        self.counts[base] = u256(n + 1)
+        self.counts[base] = gl.u256(n + 1)
 
     def _rows(self, caller: str, uptime_id: str) -> list:
-        base = self._base(Address(caller).as_hex, uptime_id)
-        n = int(self.counts.get(base, u256(0)))
+        base = self._base(gl.Address(caller).as_hex, uptime_id)
+        n = int(self.counts.get(base, gl.u256(0)))
         out = []
         for i in range(n - 1, max(0, n - KEEP) - 1, -1):
             r = self.slots[base + "|" + str(i % KEEP)]
@@ -208,7 +209,7 @@ class WebProbe(gl.Contract):
     # ---------------------------------------------------------------- probes
 
     @gl.public.write
-    def check_url(self, uptime_id: str, run_id: str, url: str, expect_status: u256, contains: str) -> dict:
+    def check_url(self, uptime_id: str, run_id: str, url: str, expect_status: gl.u256, contains: str) -> dict:
         """GET `url`. ok = status matches (`expect_status`, or any 2xx when 0) and, if `contains`
         is non-empty, the body contains it (case-sensitive). Stores and returns the verdict."""
         _check_ids(uptime_id, run_id)
@@ -301,14 +302,14 @@ class WebProbe(gl.Contract):
                 # the leader's verdict must be what ITS value gives
                 return theirs["ok"] == compare(_loads(theirs["value"]), op, expected)
 
-            verdict = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+            verdict = gl.vm.run_nondet(leader_fn, validator_fn)
         self._store(uptime_id, run_id, "api", verdict)
         return verdict
 
     # ---------------------------------------------------------------- views
 
     @gl.public.view
-    def get_latest(self, caller: str, uptime_id: str, limit: u256) -> list:
+    def get_latest(self, caller: str, uptime_id: str, limit: gl.u256) -> list:
         """Newest first, at most `limit` (and at most KEEP) results filed by `caller`."""
         return self._rows(caller, uptime_id)[: int(limit)]
 
@@ -320,6 +321,6 @@ class WebProbe(gl.Contract):
         return {}
 
     @gl.public.view
-    def get_count(self, caller: str, uptime_id: str) -> u256:
+    def get_count(self, caller: str, uptime_id: str) -> gl.u256:
         """Distinct runs ever filed (only the last KEEP are readable)."""
-        return self.counts.get(self._base(Address(caller).as_hex, uptime_id), u256(0))
+        return self.counts.get(self._base(gl.Address(caller).as_hex, uptime_id), gl.u256(0))
