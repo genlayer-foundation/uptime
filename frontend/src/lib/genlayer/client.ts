@@ -1,5 +1,6 @@
 import { createClient, createAccount } from "genlayer-js";
 import { bradburyPhase2 } from "../chains";
+import { signingKey } from "../signer";
 
 // The Bradbury Heartbeat example job runs on Bradbury only, through the
 // explicit Phase 2 chain config (lib/chains.ts): genlayer-js's own
@@ -23,10 +24,10 @@ export function getReadClient() {
 }
 
 export function getWriteClient() {
-  const privateKey = process.env.PRIVATE_KEY?.trim() as
-    | `0x${string}`
-    | undefined;
-  if (!privateKey) throw new Error("PRIVATE_KEY not configured");
+  // Same signer as the Bradbury job executor: the scheduler wallet
+  // (RELAYER_KEY_BRADBURY), which must be the Heartbeat contract's operator.
+  const privateKey = signingKey("bradbury");
+  if (!privateKey) throw new Error("RELAYER_KEY_BRADBURY not configured");
   const account = createAccount(privateKey);
   return createClient({ chain: NETWORK.chain, account });
 }

@@ -18,7 +18,8 @@ function heartbeatOwner(): string | null {
 
 // Every 5 minutes: find due jobs and start their runs. Never waits on
 // consensus. The Bradbury Heartbeat example job is created here on first use
-// (owner = the PRIVATE_KEY wallet) and ticks hourly at :00.
+// (owner = the Bradbury scheduler wallet, RELAYER_KEY_BRADBURY via lib/signer.ts)
+// and ticks hourly at :00.
 export async function GET(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!hasDatabase()) return NextResponse.json({ error: "DATABASE_URL not configured" }, { status: 503 });

@@ -3,14 +3,16 @@
 // genlayer-js defaults).
 //
 //   genlayer  genlayer-js client: deploy / write / read, signed by that
-//             network's relayer key (RELAYER_KEY_STUDIO / RELAYER_KEY_BRADBURY,
-//             the latter falling back to PRIVATE_KEY, the Heartbeat signer)
+//             network's relayer key (lib/signer.ts: RELAYER_KEY_STUDIO /
+//             RELAYER_KEY_BRADBURY, the latter falling back to the deprecated
+//             PRIVATE_KEY); the Heartbeat signs with the same key
 //   evm       viem on the Bradbury chain RPC: the UptimePool contract
 
 import { createAccount, createClient } from "genlayer-js";
 import { createPublicClient, createWalletClient, defineChain, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { BRADBURY_PHASE2, CHAINS } from "@/lib/chains";
+import { signingKey } from "@/lib/signer";
 import type { Network } from "./types";
 
 // The slice of genlayer-js the executor uses (fakeable in tests).
@@ -36,9 +38,7 @@ export interface ChainTx {
 }
 
 export function relayerKey(n: Network): `0x${string}` | null {
-  const raw = n === "studio" ? process.env.RELAYER_KEY_STUDIO : process.env.RELAYER_KEY_BRADBURY || process.env.PRIVATE_KEY;
-  const k = raw?.trim();
-  return k ? (k as `0x${string}`) : null;
+  return signingKey(n);
 }
 
 export function relayerAddress(n: Network): string | null {

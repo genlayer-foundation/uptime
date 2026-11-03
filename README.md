@@ -68,8 +68,8 @@ python3 -m venv .venv && .venv/bin/pip install genlayer-test pytest pillow   # p
 .venv/bin/pytest test/direct -q
 
 # deploy once to Bradbury: args are the site's fixture base URL and the
-# OPERATOR, the address of the PRIVATE_KEY wallet below that signs the cron's
-# probes and bumps. The deployer becomes owner (may also probe, and is the only
+# OPERATOR, the Bradbury scheduler wallet (RELAYER_KEY_BRADBURY) that signs the
+# cron's probes and bumps. The deployer becomes owner (may also probe, and is the only
 # one who can set_operator), so you can deploy from your own wallet.
 genlayer network set testnet-bradbury
 genlayer deploy --contract contracts/heartbeat.py --wallet browser \
@@ -97,7 +97,7 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 
 ## Cost
 
-Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Fees in GEN: not yet measured. The wallet behind `PRIVATE_KEY` must stay funded on Bradbury.
+Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Fees in GEN: not yet measured. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
 
 ## Uptime contracts (in progress, not deployed)
 
@@ -145,7 +145,7 @@ SCHEDULER=0x… MAILER=0x… forge script script/DeployUptimePool.s.sol --rpc-ur
 
 ### Presets that need no contract
 
-The scheduler signs every run with the relayer key (`RELAYER_KEY_*`), so the user's contract sees **the relayer address as `msg.sender`**. If an owner-gated contract should accept these runs, its owner has to authorize that address.
+The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in `src/lib/signer.ts`; the Heartbeat uses the same Bradbury key; `PRIVATE_KEY` is a deprecated Bradbury fallback that logs a warning), so the user's contract sees **the relayer address as `msg.sender`**. If an owner-gated contract should accept these runs, its owner has to authorize that address.
 
 | Preset | Tx the scheduler sends (genlayer-js) |
 |---|---|
@@ -213,6 +213,6 @@ npm test                                                 # unit tests; the Postg
 createdb uptime_test && TEST_DATABASE_URL=postgres://localhost/uptime_test npm test   # DROPS that DB's schema
 ```
 
-Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the `PRIVATE_KEY` wallet, hourly at :00), dispatched through the same runner and the same Postgres store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
+Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the Bradbury scheduler wallet, hourly at :00), dispatched through the same runner and the same Postgres store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
 
 Production data is planned on Neon via the Vercel Marketplace. Nothing is provisioned yet: run `npm run db:migrate` against its `DATABASE_URL` once it exists. Neon's URL carries `sslmode=require`, which `pg` honours.
