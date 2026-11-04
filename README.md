@@ -113,8 +113,8 @@ All the Python contracts here target Bradbury's runner (`py-genlayer:babwp9t…`
 | Contract | Network | What it is |
 |---|---|---|
 | `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time |
-| `contracts/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api` |
-| `contracts/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer |
+| `contracts/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`) |
+| `contracts/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`) |
 | `contracts/heartbeat.py`, `contracts/canary.py` | Bradbury | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |
 
 ### UptimePool
