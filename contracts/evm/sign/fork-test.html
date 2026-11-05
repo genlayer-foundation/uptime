@@ -1,0 +1,29 @@
+<!doctype html><html><body>
+<script>
+// TEST ONLY: MetaMask stand-in that forwards to anvil's unlocked account 0.
+const A = "http://127.0.0.1:8545";
+const rpc = async (method, params=[]) => { const r = await (await fetch(A,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})})).json(); if (r.error) throw r.error; return r.result; };
+window.__sent = [];
+window.ethereum = { on(){}, async request({method, params}) {
+  if (method === "eth_requestAccounts") return rpc("eth_accounts");
+  if (method === "wallet_switchEthereumChain" || method === "wallet_addEthereumChain") return null;
+  if (method === "eth_sendTransaction") window.__sent.push(params[0]);
+  return rpc(method, params); } };
+</script>
+<div id="host"></div>
+<script type="module">
+const html = await (await fetch("index.html")).text();
+document.body.insertAdjacentHTML("beforeend", html.replace(/[\s\S]*<body>/, "").replace(/<script[\s\S]*$/, ""));
+history.replaceState(null, "", "?rpc=http://127.0.0.1:8545");
+await import("./app.js");
+const $ = (id) => document.getElementById(id);
+const until = async (f, ms=240000) => { const t=Date.now(); while(!f()) { if (Date.now()-t>ms) throw new Error("timeout"); await new Promise(r=>setTimeout(r,500)); } };
+$("connect").click();
+await until(() => !$("p-go").disabled);
+$("p-go").click();
+await until(() => /DEPLOYED/.test($("p-state").textContent));
+await until(() => !$("d-go").disabled);
+$("d-go").click();
+await until(() => /complete/.test($("d-progress").textContent));
+document.title = "RESULT " + JSON.stringify({ pool: $("p-addr").textContent, poolState: $("p-state").textContent, progress: $("d-progress").textContent, sent: window.__sent.length, gasSet: window.__sent.every(t=>t.gas) });
+</script></body></html>
