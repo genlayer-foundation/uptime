@@ -12,3 +12,5 @@ __pycache__/
 video/out/
 video/film/fonts/
 *.mp4
+video/explainer/fonts/
+*.wav
