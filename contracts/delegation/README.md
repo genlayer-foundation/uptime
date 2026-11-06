@@ -6,8 +6,8 @@ GEN (for example 1 GEN per day through `NativeTokenPeriodTransferEnforcer`) inst
 funds in the pool. Every contract lands at the **canonical address it has on the other ~50
 chains MetaMask supports**, so MetaMask tooling works without modification.
 
-**Status: not deployed. Only a local anvil fork has run it.** Nothing in this directory has
-been broadcast to the real chain.
+**Status: deployed on Bradbury (2026-11-06).** All 44 canonical addresses have code
+(`script/verify-onchain.sh` → 44 OK). Signed by Ivan in MetaMask through `contracts/evm/sign/`.
 
 ## Verdict
 
