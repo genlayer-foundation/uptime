@@ -1,0 +1,7 @@
+{
+  "name": "uptime-film",
+  "private": true,
+  "type": "module",
+  "scripts": { "render": "node render.mjs" },
+  "dependencies": { "opentype.js": "1.3.4", "@resvg/resvg-js": "2.6.2" }
+}

@@ -8,3 +8,7 @@ node_modules/
 __pycache__/
 .pytest_cache/
 .DS_Store
+# video/film: rendered output and licensed fonts never get committed
+video/out/
+video/film/fonts/
+*.mp4
