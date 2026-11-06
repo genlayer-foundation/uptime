@@ -1,0 +1,90 @@
+# Nightly encrypted Postgres backup of the Uptime production database (Neon).
+#
+# - pg_dump custom format (-Fc, same format as the team's gym dumps), client 17 = Neon's server major.
+# - Encrypted in the pipe with age: the plaintext dump never touches the runner's disk.
+# - Stored as a GitHub Actions artifact, kept 30 days. Restore: README "Backups".
+#
+# Inputs (names only; values are set by the owner, never committed):
+#   secrets.UPTIME_DATABASE_URL          Neon DIRECT connection string (not the -pooler host)
+#   vars.UPTIME_BACKUP_AGE_RECIPIENT     age public key (age1...). The private key lives in
+#                                        1Password vault "Uptime Production", never in GitHub.
+# Fails closed: either input missing = red run, no artifact.
+name: db-backup
+
+on:
+  schedule:
+    - cron: "30 3 * * *" # 03:30 UTC nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PG_MAJOR: "17"
+    steps:
+      - name: Check inputs (fail closed)
+        env:
+          UPTIME_DATABASE_URL: ${{ secrets.UPTIME_DATABASE_URL }}
+          AGE_RECIPIENT: ${{ vars.UPTIME_BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UPTIME_DATABASE_URL}" ]; then
+            echo "::error::secret UPTIME_DATABASE_URL is not set"; exit 1
+          fi
+          if [[ "${AGE_RECIPIENT}" != age1* ]]; then
+            echo "::error::variable UPTIME_BACKUP_AGE_RECIPIENT is not set to an age public key (age1...)"; exit 1
+          fi
+          # pg_dump needs Neon's direct endpoint; the pooler (PgBouncer) host breaks it.
+          if [[ "${UPTIME_DATABASE_URL}" == *-pooler.* ]]; then
+            echo "::error::UPTIME_DATABASE_URL points at the Neon pooler; use the DIRECT connection string"; exit 1
+          fi
+
+      - name: Install postgresql-client-17 and age
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}" age
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version
+          age --version
+
+      - name: Dump and encrypt
+        id: dump
+        env:
+          UPTIME_DATABASE_URL: ${{ secrets.UPTIME_DATABASE_URL }}
+          AGE_RECIPIENT: ${{ vars.UPTIME_BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          name="uptime-$(date -u +%Y-%m-%dT%H%MZ).dump.age"
+          mkdir -p out
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" \
+              --format=custom --compress=6 --no-owner --no-privileges \
+              --dbname="${UPTIME_DATABASE_URL}" \
+            | age --encrypt --recipient "${AGE_RECIPIENT}" --output "out/${name}"
+          size=$(stat -c %s "out/${name}")
+          if [ "${size}" -lt 1024 ]; then
+            echo "::error::encrypted dump is only ${size} bytes"; exit 1
+          fi
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "${name}: ${size} bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact (30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dump.outputs.name }}
+          path: out/${{ steps.dump.outputs.name }}
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0

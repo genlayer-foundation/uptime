@@ -223,3 +223,13 @@ createdb uptime_test && TEST_DATABASE_URL=postgres://localhost/uptime_test npm t
 Without `DATABASE_URL` the jobs API answers 503, the dispatcher is idle, and `/api/cron/heartbeat` keeps ticking the Heartbeat exactly as before. With it, the Heartbeat becomes the public system job "Bradbury Heartbeat" (created on the first dispatch, owner = the Bradbury scheduler wallet, hourly at :00), dispatched through the same runner and the same Postgres store, so `/api/heartbeat` and its dashboard are unchanged, and the legacy route stands down.
 
 Production data is planned on Neon via the Vercel Marketplace. Nothing is provisioned yet: run `npm run db:migrate` against its `DATABASE_URL` once it exists. Neon's URL carries `sslmode=require`, which `pg` honours.
+
+### Backups
+
+`.github/workflows/db-backup.yml` runs nightly at 03:30 UTC (and on demand): `pg_dump -Fc` (client 17, Neon's major) piped through `age` to the public key in repo variable `UPTIME_BACKUP_AGE_RECIPIENT`, uploaded as an Actions artifact kept 30 days. It reads only the secret `UPTIME_DATABASE_URL` (Neon DIRECT string) and fails closed without it. Restore:
+
+1. `gh run list --repo genlayer-foundation/uptime --workflow db-backup.yml` and pick a green run id.
+2. `gh run download <run-id> --repo genlayer-foundation/uptime --dir restore/` (one `uptime-<ts>.dump.age`).
+3. `op read "op://Uptime Production/uptime-backup-age/private key" > /tmp/k && age -d -i /tmp/k -o restore/uptime.dump restore/*/*.dump.age && rm /tmp/k`
+4. `pg_restore --list restore/uptime.dump | head` to check it, then restore into a NEW Neon branch/database, never over prod: `pg_restore --no-owner --no-privileges --dbname="$TARGET_URL" restore/uptime.dump`.
+5. Point `DATABASE_URL` at it only after checking row counts; delete `restore/` when done.
