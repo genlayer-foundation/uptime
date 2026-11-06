@@ -112,12 +112,12 @@ export function HeartbeatDashboard() {
             <span>Synthetic demo contract, not on any network</span>
           ) : shown?.contract ? (
             <a
-              className="inline-flex items-center gap-1 break-all transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
               href={`${shown.explorerUrl}/address/${shown.contract}`}
               target="_blank"
               rel="noreferrer"
             >
-              Heartbeat contract <span className="font-mono text-xs">{shown.contract}</span>
+              Heartbeat contract <span className="font-mono text-xs">{`${shown.contract.slice(0, 6)}…${shown.contract.slice(-4)}`}</span>
               <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
             </a>
           ) : shown ? (

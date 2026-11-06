@@ -17,12 +17,12 @@ export interface Task {
 }
 
 export const TASKS: Task[] = [
-  { id: "website", preset: "check-url", title: "Check a website", line: "Is a page up, and does it say what it should?" },
-  { id: "api", preset: "check-api", title: "Check an API", line: "Read a JSON value and fail when it is not what you expect." },
-  { id: "ai", preset: "ask", title: "Ask an AI", line: "Ask a question on a schedule; validators agree on the answer." },
-  { id: "call", preset: "call-contract", title: "Call a contract", line: "Send a transaction to your Intelligent Contract on a schedule." },
-  { id: "deploy", preset: "deploy-contract", title: "Deploy a contract", line: "Deploy an Intelligent Contract on a schedule and time how long it takes." },
-  { id: "deploy-call", preset: "deploy-then-call", title: "Deploy, then call", line: "Deploy a fresh copy, then call the newest one on its own schedule." },
+  { id: "website", preset: "check-url", title: "Check a website", line: "Up, and showing the right text." },
+  { id: "api", preset: "check-api", title: "Check an API", line: "A status code or JSON field." },
+  { id: "ai", preset: "ask", title: "Ask an AI", line: "One question, on a schedule." },
+  { id: "call", preset: "call-contract", title: "Call a contract", line: "Call your contract on a schedule." },
+  { id: "deploy", preset: "deploy-contract", title: "Deploy a contract", line: "Deploy on a schedule." },
+  { id: "deploy-call", preset: "deploy-then-call", title: "Deploy, then call", line: "Deploy, then call the new copy." },
 ];
 
 export function taskById(id: string | null | undefined): Task | undefined {
