@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Activity } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { HeartbeatExampleCard } from "@/components/marketing/HeartbeatExampleCard";
 import { ButtonLink, Card, CardGrid, CardGridCell, PageContainer, Section, StatusDot } from "@/components/ui";
 import { PRESETS } from "@/components/marketing/presets";
 
@@ -152,26 +153,7 @@ export default function Home() {
         </Section>
 
         <Section title="Live example" subtitle="A monitor we run ourselves, with every result in public.">
-          <Link href="/examples/bradbury-heartbeat" className="block">
-            <Card interactive className="p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <Activity className="mt-0.5 h-4 w-4 text-purple" aria-hidden />
-                  <div>
-                    <h3 className="text-sm font-medium text-foreground">Bradbury Heartbeat</h3>
-                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted">
-                      Every hour on GenLayer Testnet Bradbury: deploy a canary, write state, fetch a page, and run two probes
-                      (LLM, web or image) that the Intelligent Contract grades itself. Plus an appeal every fifth hour.
-                    </p>
-                  </div>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted">
-                  View results
-                  <ArrowRight className="h-3 w-3" aria-hidden />
-                </span>
-              </div>
-            </Card>
-          </Link>
+          <HeartbeatExampleCard />
         </Section>
 
         <Section title="Build Your Own" subtitle="Write an Intelligent Contract, then monitor it here.">

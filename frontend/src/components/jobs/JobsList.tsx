@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { ButtonLink, CardGrid, EmptyRow, EmptyState, PageContainer, PageHeader, Section, Stat, StatusDot, TBody, THead, Table, Td, Th, Tr, type Tone } from "@/components/ui";
+import { HeartbeatExampleCard } from "@/components/marketing/HeartbeatExampleCard";
 import { jobsApi } from "@/lib/jobs/client";
 import type { Job, Run } from "@/lib/jobs/types";
 import { useSession } from "./session";
@@ -151,16 +152,22 @@ export function JobsList() {
       ) : !mine.rows ? (
         <Loading />
       ) : mine.rows.length === 0 ? (
-        <EmptyState
-          title="No jobs yet"
-          action={
-            <ButtonLink href="/jobs/new" variant="secondary">
-              Create your first job →
-            </ButtonLink>
-          }
-        >
-          A job calls, deploys or reads an Intelligent Contract on GenLayer, on the schedule you set.
-        </EmptyState>
+        <div className="grid gap-10">
+          <EmptyState
+            title="No jobs yet"
+            action={
+              <ButtonLink href="/jobs/new" variant="secondary">
+                Create your first job →
+              </ButtonLink>
+            }
+          >
+            This wallet has no jobs yet. A job calls, deploys or reads an Intelligent Contract on GenLayer on the schedule
+            you set, and records every run here.
+          </EmptyState>
+          <Section title="Example job" subtitle="Run by Uptime itself, with every result in public.">
+            <HeartbeatExampleCard />
+          </Section>
+        </div>
       ) : (
         <div className="grid gap-8">
           <CardGrid className="grid-cols-1 sm:grid-cols-3">
