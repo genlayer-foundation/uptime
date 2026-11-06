@@ -50,7 +50,7 @@ Vercel cron  */10 * * * *  /api/cron/reconcile   read decided txs, copy on-chain
                              │
                            Postgres  heartbeat_probes, heartbeat_state  (migrations/011_heartbeat.sql + 013_heartbeat_write.sql)
                              │
-public                     /api/heartbeat                    summary + hourly series
+public                     /api/heartbeat                    summary + hourly series + runs (passed / failed / missed on our side) + latest run
                            /api/heartbeat?format=rows        flat rows for Grafana (Infinity)
                            /examples/bradbury-heartbeat      dashboard
 ```

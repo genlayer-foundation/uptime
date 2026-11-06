@@ -10,7 +10,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/jobs", label: "Jobs", match: ["/jobs"] },
   { href: "/notifications", label: "Notifications", match: ["/notifications"] },
   { href: "/examples/bradbury-heartbeat", label: "Example", match: ["/examples"] },
-  { href: "/#how-it-works", label: "How It Works" },
+  { href: "/#how-it-works", label: "How it works" },
 ];
 
 export function isActive(item: NavItem, pathname: string): boolean {

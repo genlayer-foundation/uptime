@@ -17,17 +17,17 @@ const dmMono = DM_Mono({
 });
 
 const description =
-  "The uptime monitor that can't lie. Monitor websites, APIs and Intelligent Contracts, with every check verified by independent GenLayer validators and recorded on-chain.";
+  "Uptime you can prove. Independent validators check your website, API or AI answer, agree on the result, and record it where anyone can verify it. Testnet beta, built on GenLayer.";
 
 export const metadata: Metadata = {
   title: {
-    default: "Uptime by GenLayer | Uptime monitoring you can trust",
+    default: "Uptime by GenLayer | Uptime you can prove",
     template: "%s | Uptime by GenLayer",
   },
   description,
   metadataBase: new URL("https://uptime.genlayer.foundation"),
   openGraph: {
-    title: "Uptime by GenLayer",
+    title: "Uptime by GenLayer | Uptime you can prove",
     description,
     url: "https://uptime.genlayer.foundation",
     siteName: "Uptime by GenLayer",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Uptime by GenLayer",
+    title: "Uptime by GenLayer | Uptime you can prove",
     description,
   },
 };

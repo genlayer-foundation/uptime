@@ -13,8 +13,8 @@ export function HeartbeatExampleCard() {
             <div>
               <h3 className="text-sm font-medium text-foreground">Bradbury Heartbeat</h3>
               <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted">
-                Every hour on GenLayer Testnet Bradbury: deploy a canary, write state, fetch a page, and run two probes
-                (LLM, web or image) that the Intelligent Contract grades itself. Plus an appeal every fifth hour.
+                Our own check, in public. Every hour it asks GenLayer Testnet Bradbury to deploy a contract, save data, read a
+                web page and answer two test questions we already know the answers to.
               </p>
             </div>
           </div>

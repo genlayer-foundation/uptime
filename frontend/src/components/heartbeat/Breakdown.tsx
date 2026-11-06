@@ -71,13 +71,13 @@ export function Breakdown({ data }: { data: HeartbeatData | null }) {
 
       <Card>
         <CardHeader
-          title="By probe"
-          subtitle="The status fetch runs every tick; the other nine rotate, two per tick. Prompts and answer key live in the Intelligent Contract, which grades each answer. Appeals: upheld / overturned / withdrawn"
+          title="By test question"
+          subtitle="The status fetch runs every run; the other nine rotate, two per run. Questions and answer key live in the Heartbeat contract, which grades each answer. Appeals: upheld / overturned / withdrawn"
         />
         <Table minWidth={760}>
           <THead>
             <tr>
-              <Th>Probe</Th>
+              <Th>Question</Th>
               <Th>Consensus</Th>
               <Th num>Correct</Th>
               <Th num>Agreement</Th>

@@ -29,15 +29,15 @@ function kpis(d: HeartbeatData | null): Kpi[] {
       value: pct(deploy ? ratio(deploy.correct, deploy.total) : undefined, 0),
       sub: deploy?.total
         ? `${deploy.correct} of ${deploy.total} canaries live · p50 ${duration(deploy.latencyP50)} to accepted, ${duration(deploy.finalizedP50)} to finalized`
-        : "One canary deploy per tick",
+        : "One Canary deploy per run",
     },
     {
       label: "Write",
       value: pct(write ? ratio(write.correct, write.total) : undefined, 0),
-      sub: write?.total ? `${write.correct} of ${write.total} bumps landed · p50 ${duration(write.latencyP50)}` : "bump(tick) every tick, no web, no LLM",
+      sub: write?.total ? `${write.correct} of ${write.total} writes landed · p50 ${duration(write.latencyP50)}` : "One plain write per run, no web, no AI",
     },
     {
-      label: "LLM",
+      label: "AI answers",
       value: pct(accuracy(llm), 1),
       sub: llm?.graded ? `${graded(llm, "", "graded correct")} · agreement ${pct(llm.agreement, 0)}` : "No graded answers yet",
     },
@@ -58,7 +58,7 @@ function kpis(d: HeartbeatData | null): Kpi[] {
       value: pct(appeals ? ratio(appeals.upheld, decidedAppeals) : undefined, 0),
       sub: decidedAppeals
         ? `${appeals!.upheld} upheld, ${appeals!.overturned} overturned, ${appeals!.withdrawn} withdrawn`
-        : "One appeal every 5th tick, cycling all 9 probes",
+        : "One appeal every 5th run, cycling all 9 questions",
     },
   ];
 }

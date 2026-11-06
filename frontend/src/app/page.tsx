@@ -1,184 +1,152 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { HeartbeatExampleCard } from "@/components/marketing/HeartbeatExampleCard";
-import { ButtonLink, Card, CardGrid, CardGridCell, PageContainer, Section, StatusDot } from "@/components/ui";
-import { PRESETS } from "@/components/marketing/presets";
+import { ArrowRight, CalendarClock, ShieldCheck, Users, type LucideIcon } from "lucide-react";
+import { ButtonLink, PageContainer, Section, StatusDot } from "@/components/ui";
+import { SHOWCASE } from "@/components/jobs/tasks";
+import { Ago } from "@/components/heartbeat/Ago";
+import { verdict } from "@/components/heartbeat/verdict";
+import { getPending, getResults, storeConfigured } from "@/lib/heartbeat/store";
+import { runsSummary, type RunsSummary } from "@/lib/heartbeat/summary";
+import { formatGen, readPrices } from "@/lib/pricing";
 
-const REPO = "https://github.com/genlayer-foundation/uptime";
+// Server-rendered, refreshed at most once a minute. The live strip reads the
+// Heartbeat's store directly (same data as GET /api/heartbeat); if that fails
+// it falls back to a plain link, never to made-up numbers.
+export const revalidate = 60;
 
-const STEPS = [
-  {
-    title: "Each check is an Intelligent Contract",
-    description:
-      "You choose what to check and how often. Website, API and AI checks run as Intelligent Contracts on GenLayer, not as a script on our server.",
-  },
-  {
-    title: "Many validators must agree",
-    description:
-      "A set of independent validators each run the check themselves and must reach consensus on the result before it counts.",
-  },
-  {
-    title: "Recorded on-chain",
-    description:
-      "The agreed result lands on-chain with its transaction, and Uptime tracks the status and value of every run, so you see when something changes.",
-  },
-];
+const HEARTBEAT = "/examples/bradbury-heartbeat";
 
-const BUILD_YOUR_OWN = [
-  {
-    title: "Developer Docs",
-    description: "Write your own Intelligent Contract, then monitor or schedule it here.",
-    links: [{ label: "Docs", href: "https://docs.genlayer.com/" }],
-  },
-  {
-    title: "Boilerplate",
-    description: "Start from the GenLayer project boilerplate: an Intelligent Contract, tests and a frontend.",
-    links: [{ label: "Boilerplate", href: "https://github.com/genlayerlabs/genlayer-project-boilerplate" }],
-  },
-  {
-    title: "This Repo",
-    description: "The scheduler, the pool contract and this site are open source.",
-    links: [{ label: "GitHub", href: REPO }],
-  },
-];
+async function loadRuns(): Promise<RunsSummary | null> {
+  if (!storeConfigured()) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const work = Promise.all([getResults(nowSec - 168 * 3600), getPending()]).then(([r, p]) => runsSummary(r, p, nowSec));
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+  try {
+    return await Promise.race([work, timeout]);
+  } catch {
+    return null;
+  }
+}
 
-function Hero() {
+function MoreLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <section className="py-12 sm:py-16">
-      <div className="max-w-2xl">
-        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">
-          The uptime monitor{" "}
-          <span className="text-muted">that can&apos;t lie.</span>
-        </h1>
-        <p className="mt-4 text-base leading-relaxed text-muted">
-          Monitor websites, APIs and Intelligent Contracts. Every check is verified independently by many validators, not by
-          one server you have to trust.
-        </p>
-
-        <div className="mt-8 flex flex-wrap items-center gap-6">
-          <ButtonLink href="/jobs/new">
-            Start monitoring
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </ButtonLink>
-          <Link
-            href="/examples/bradbury-heartbeat"
-            className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            See a live example
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </Link>
-          <a
-            href={REPO}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-foreground transition-colors hover:text-purple"
-          >
-            GitHub
-          </a>
-        </div>
-      </div>
-
-      {/* the old status strip */}
-      <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border pt-6">
-        <span className="flex items-center gap-2 text-sm text-muted">
-          <StatusDot tone="purple" />
-          GenLayer Testnet Bradbury and GenLayer Studio
-        </span>
-        <span className="text-sm text-muted">{PRESETS.length} check types</span>
-        <span className="text-sm text-muted">verified by validator consensus</span>
-        <span className="text-sm text-muted">results recorded on-chain</span>
-      </div>
-    </section>
+    <Link href={href} className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground">
+      {children}
+      <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+    </Link>
   );
 }
 
-export default function Home() {
+/** Live proof: our own hourly job. Misses on our side are always shown. */
+function ProofStrip({ runs }: { runs: RunsSummary | null }) {
+  const v = verdict(runs);
+  const done = runs ? runs.passed + runs.failed + runs.missed : 0;
+  return (
+    <Link
+      href={HEARTBEAT}
+      className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-border px-4 py-3 text-sm text-muted transition-colors hover:border-border-strong hover:bg-surface"
+    >
+      <span className="flex items-center gap-2 font-medium text-foreground">
+        <StatusDot tone={v?.tone ?? "purple"} />
+        Live example
+      </span>
+      {runs && done > 0 ? (
+        <>
+          <span>
+            <span className="font-mono text-foreground">
+              {runs.passed}/{done}
+            </span>{" "}
+            runs passed
+          </span>
+          <span>
+            <span className="font-mono text-foreground">{runs.missed}</span> missed by us
+          </span>
+          {runs.lastRunAt ? (
+            <span>
+              last run <Ago sec={runs.lastRunAt} />
+            </span>
+          ) : null}
+        </>
+      ) : (
+        <span>Our hourly check on GenLayer Testnet Bradbury</span>
+      )}
+    </Link>
+  );
+}
+
+const STEPS: { icon: LucideIcon; title: string; line: string }[] = [
+  { icon: CalendarClock, title: "Schedule a check", line: "A site, an API or a question." },
+  { icon: Users, title: "Validators decide", line: "GenLayer's independent validators agree." },
+  { icon: ShieldCheck, title: "You get proof", line: "Recorded on-chain for anyone to check." },
+];
+
+function faqs(runFee: string) {
+  return [
+    { q: "Does it replace my monitoring?", a: "No. It checks every 5 minutes at most. Use it for numbers others must trust." },
+    { q: "Can Uptime fake a result?", a: "No. Validators decide it. We can only fail to send a check, and that never counts as a pass." },
+    { q: "What does it cost?", a: `${runFee} per run plus network fees, within your limits. Charging is off during the beta.` },
+    { q: "Is my GEN safe?", a: "Testnet only, not audited. Only you can withdraw your budget." },
+  ];
+}
+
+export default async function Home() {
+  const runs = await loadRuns();
   return (
     <PageContainer>
-      <Hero />
+      <section className="py-12 sm:py-16">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">Built on GenLayer</p>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-4xl">Uptime you can prove.</h1>
+        <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted">
+          Independent validators check your site or API and record the result for anyone to verify.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+          <ButtonLink href="/jobs/new">
+            Start a check
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </ButtonLink>
+          <MoreLink href={HEARTBEAT}>See a live check</MoreLink>
+        </div>
+      </section>
 
-      <div className="space-y-12">
-        <Section title="What you can monitor" subtitle="Websites, APIs, Intelligent Contracts and AI answers, on the schedule you choose.">
-          <CardGrid className="sm:grid-cols-2 lg:grid-cols-3">
-            {PRESETS.map((p) => (
-              <CardGridCell key={p.title}>
-                <h3 className="text-sm font-medium text-foreground">{p.title}</h3>
-                <p className="mt-2 text-xs leading-relaxed text-muted">{p.description}</p>
-                <p className="mt-4 text-[10px] uppercase tracking-wider text-subtle">{p.networks}</p>
-              </CardGridCell>
-            ))}
-            <CardGridCell className="flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-foreground">Schedule anything</h3>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  For power users: schedule any Intelligent Contract call or deploy on GenLayer, and track what it returns.
-                </p>
-              </div>
-              <Link
-                href="/jobs/new"
-                className="mt-4 inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
-              >
-                Create a job
-                <ArrowRight className="h-3 w-3" aria-hidden />
-              </Link>
-            </CardGridCell>
-          </CardGrid>
-        </Section>
+      <ProofStrip runs={runs} />
 
-        <Section
-          id="how-it-works"
-          title="How It Works"
-          subtitle="Built on GenLayer. Think of it as cron, except no single server decides the result."
-        >
-          <CardGrid className="sm:grid-cols-3">
-            {STEPS.map((s, i) => (
-              <CardGridCell key={s.title}>
-                <span className="flex h-6 w-6 items-center justify-center rounded border border-border text-xs font-medium text-foreground">
-                  {i + 1}
-                </span>
+      <div className="mt-14 space-y-14">
+        <Section id="how-it-works" title="How it works">
+          <ol className="grid gap-8 sm:grid-cols-3">
+            {STEPS.map((s) => (
+              <li key={s.title}>
+                <s.icon className="h-8 w-8 text-purple" strokeWidth={1.5} aria-hidden />
                 <h3 className="mt-4 text-sm font-medium text-foreground">{s.title}</h3>
-                <p className="mt-2 text-xs leading-relaxed text-muted">{s.description}</p>
-              </CardGridCell>
+                <p className="mt-1 text-sm text-muted">{s.line}</p>
+              </li>
             ))}
-          </CardGrid>
-
-          <Card className="mt-6 p-4">
-            <p className="text-sm text-muted">
-              <strong className="text-purple">You fund it, you control it.</strong> On GenLayer Testnet Bradbury, checks are
-              paid from your GEN pool, which only you control. Top it up, pause it or withdraw it at any time, even while it is
-              paused. The scheduler can spend only within the per-run cap and daily allowance you set, and is never an
-              owner. Runs are signed by the Uptime relayer, so an owner-gated Intelligent Contract has to allow the relayer address.
-            </p>
-          </Card>
+          </ol>
         </Section>
 
-        <Section title="Live example" subtitle="A monitor we run ourselves, with every result in public.">
-          <HeartbeatExampleCard />
+        <Section title="What you can check">
+          <ul className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
+            {SHOWCASE.map((c) => (
+              <li key={c.title} className="bg-background">
+                <Link href={`/jobs/new?task=${c.task}`} className="block h-full p-4 transition-colors hover:bg-surface">
+                  <span className="text-sm font-medium text-foreground">{c.title}</span>
+                  <span className="mt-1 block text-sm text-muted">{c.line}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-sm text-muted">
+            <span className="font-medium text-foreground">Next:</span> SLIs and SLAs your customers can verify.
+          </p>
         </Section>
 
-        <Section title="Build Your Own" subtitle="Write an Intelligent Contract, then monitor it here.">
-          <CardGrid className="sm:grid-cols-3">
-            {BUILD_YOUR_OWN.map((card) => (
-              <CardGridCell key={card.title}>
-                <h3 className="text-sm font-medium text-foreground">{card.title}</h3>
-                <p className="mt-2 text-xs leading-relaxed text-muted">{card.description}</p>
-                <div className="mt-4 flex flex-wrap gap-4">
-                  {card.links.map((link) => (
-                    <a
-                      key={link.label}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                      <ArrowRight className="h-3 w-3" aria-hidden />
-                    </a>
-                  ))}
-                </div>
-              </CardGridCell>
+        <Section title="Questions">
+          <dl className="grid gap-6 sm:grid-cols-2">
+            {faqs(formatGen(readPrices().runFeeWei)).map((f) => (
+              <div key={f.q}>
+                <dt className="text-sm font-medium text-foreground">{f.q}</dt>
+                <dd className="mt-1 text-sm text-muted">{f.a}</dd>
+              </div>
             ))}
-          </CardGrid>
+          </dl>
         </Section>
       </div>
     </PageContainer>

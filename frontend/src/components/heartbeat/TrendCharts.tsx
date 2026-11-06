@@ -7,7 +7,7 @@ import { dayLabel, duration, hourLabel, pct } from "./format";
 
 // The three answer-bearing test types, charted against each other.
 const LINES: Array<{ type: TestType; label: string; color: string }> = [
-  { type: "llm", label: "LLM", color: "var(--series-1)" },
+  { type: "llm", label: "AI", color: "var(--series-1)" },
   { type: "web", label: "Web", color: "var(--series-2)" },
   { type: "image", label: "Image", color: "var(--series-3)" },
 ];
@@ -117,7 +117,7 @@ export function TrendCharts({ data }: { data: HeartbeatData | null }) {
   const tickFmt = (t: number) => (short && (data?.hours ?? 24) <= 24 ? hourLabel(t, false) : dayLabel(t));
   const dot = { r: 3, strokeWidth: 0 };
   const per = bucket === 3600 ? "per hour" : bucket === 6 * 3600 ? "per 6 hours" : "per day";
-  const emptyText = "No LLM, web or image probes resolved in this window yet. Points appear once the first hourly tick is reconciled.";
+  const emptyText = "No AI, web or image answers decided in this window yet. Points appear once the first hourly run is decided.";
   const legend = <Legend items={LINES.map((l) => ({ label: l.label, color: l.color }))} />;
 
   return (

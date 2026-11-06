@@ -7,6 +7,9 @@ import { KpiRow } from "./KpiRow";
 import { TrendCharts } from "./TrendCharts";
 import { Breakdown } from "./Breakdown";
 import { RecentProbes } from "./RecentProbes";
+import { RunSteps } from "./RunSteps";
+import { Ago } from "./Ago";
+import { verdict } from "./verdict";
 import { DataSourceSwitch, DEV_BUILD } from "./DataSourceSwitch";
 import { WINDOWS, type DataSource, type HeartbeatData } from "./types";
 
@@ -71,49 +74,61 @@ export function HeartbeatDashboard() {
   const loading = !shown && !error;
   const empty = !!shown && Object.values(shown.byKind).every((s) => s.total === 0);
   const network = data?.network ?? "Bradbury";
+  const v = verdict(shown?.runs);
 
   return (
     <PageContainer>
       <DataSourceSwitch shown={shownSource} onChange={setSource} />
 
       <PageHeader
-        eyebrow="Example job"
+        eyebrow="Live example"
         title="Bradbury Heartbeat."
-        muted="A job we run ourselves."
-        lede={
-          <>
-            Every hour this job runs five kinds of test on GenLayer Testnet {network}, each one way real Intelligent Contracts depend on
-            the network: a canary deploy, a plain state write, a web fetch, and two rotating probes that ask an LLM,
-            read a page or read an image. The Intelligent Contract grades every answer itself against an on-chain key, and every
-            fifth hour one probe is appealed.
-          </>
-        }
+        lede={`Our own job: five actions every hour on GenLayer Testnet ${network}, with answers we know in advance.`}
       >
-        {/* the old status strip */}
-        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border pt-6 text-sm text-muted">
-          <span className="flex items-center gap-2">
-            <StatusDot tone={error ? "danger" : shown ? "success" : "neutral"} pulse={loading} />
-            {loading ? "Loading..." : error ? "Data unavailable" : `Testnet ${network}`}
+        <p className="mt-8 flex items-center gap-3 text-lg font-medium text-foreground sm:text-xl" aria-live="polite">
+          <StatusDot size="md" tone={error ? "danger" : (v?.tone ?? "neutral")} pulse={loading} />
+          <span>
+            {loading
+              ? "Loading the latest run…"
+              : error
+                ? "Live data is unavailable right now"
+                : v
+                  ? (
+                      <>
+                        {v.text}
+                        {shown?.runs.lastRunAt ? (
+                          <span className="text-muted">
+                            {" "}
+                            — last run <Ago sec={shown.runs.lastRunAt} />
+                          </span>
+                        ) : null}
+                      </>
+                    )
+                  : "No runs in this window yet"}
           </span>
-          <span>every hour</span>
-          {shown?.source === "demo" ? (
-            <span>Synthetic demo Intelligent Contract, not on any network</span>
+        </p>
+        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-border pt-6 text-sm text-muted">
+                    {shown?.source === "demo" ? (
+            <span>Synthetic demo contract, not on any network</span>
           ) : shown?.contract ? (
             <a
-              className="inline-flex items-center gap-1 break-all font-mono text-xs transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1 break-all transition-colors hover:text-foreground"
               href={`${shown.explorerUrl}/address/${shown.contract}`}
               target="_blank"
               rel="noreferrer"
             >
-              {shown.contract}
+              Heartbeat contract <span className="font-mono text-xs">{shown.contract}</span>
               <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
             </a>
           ) : shown ? (
-            <span>Intelligent Contract not deployed yet</span>
+            <span>Heartbeat contract not deployed yet</span>
           ) : null}
-          {shown ? <span>{shown.pending} probes awaiting a decision</span> : null}
         </div>
       </PageHeader>
+
+      <section aria-label="One run, step by step" className="mb-10">
+        <RunSteps data={shown} />
+      </section>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <Segmented label="Time window" options={WINDOW_OPTIONS} value={hours} onChange={setHours} />
@@ -131,10 +146,10 @@ export function HeartbeatDashboard() {
           {error.message} The page will retry every minute.
         </Alert>
       ) : empty ? (
-        <Alert tone="info" className="mb-6" title="No probes recorded in this window">
+        <Alert tone="info" className="mb-6" title="No runs recorded in this window">
           {shown?.contract
-            ? "Results appear here after the next hourly tick is reconciled."
-            : "The Bradbury Heartbeat Intelligent Contract is not deployed yet. Results appear here once the hourly cron starts probing it."}
+            ? "Results appear here once the next hourly run is decided."
+            : "The Heartbeat contract is not deployed yet. Results appear here once the hourly runs start."}
         </Alert>
       ) : null}
 
@@ -147,13 +162,13 @@ export function HeartbeatDashboard() {
           <TrendCharts data={shown} />
         </section>
 
-        <section aria-label="Breakdown by test type and probe">
-          <Breakdown data={shown} />
-        </section>
-
-        <section aria-label="Recent probes">
-          <RecentProbes data={shown} />
-        </section>
+        <details className="rounded-lg border border-border">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-foreground hover:bg-surface">Details</summary>
+          <div className="space-y-10 border-t border-border p-4">
+            <Breakdown data={shown} />
+            <RecentProbes data={shown} />
+          </div>
+        </details>
 
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-6 text-xs text-muted">
           <a

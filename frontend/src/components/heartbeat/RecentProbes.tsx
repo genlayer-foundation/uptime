@@ -34,13 +34,13 @@ export function RecentProbes({ data }: { data: HeartbeatData | null }) {
   const explorer = data?.explorerUrl;
   return (
     <Card>
-      <CardHeader title="Recent probes" subtitle="The last 50 resolved probes in this window, newest first" />
+      <CardHeader title="Recent actions" subtitle="The last 50 decided actions in this window, newest first" />
       <Table minWidth={760}>
         <THead>
           <tr>
-            <Th num>Tick</Th>
+            <Th num>Run</Th>
             <Th>Type</Th>
-            <Th>Probe</Th>
+            <Th>Action</Th>
             <Th>Status</Th>
             <Th>Answer</Th>
             <Th>Grade</Th>
@@ -51,7 +51,7 @@ export function RecentProbes({ data }: { data: HeartbeatData | null }) {
         <TBody>
           {recent.length === 0 ? (
             <EmptyRow colSpan={8}>
-              No probes resolved yet. The first rows land after the next hourly tick is reconciled.
+              Nothing decided yet. The first rows land once the next hourly run is decided.
             </EmptyRow>
           ) : (
             recent.map((r) => (
