@@ -122,3 +122,117 @@ export function summarize(recs: ProbeRecord[], bucketSec = 3600) {
 
   return { byKind, byType, byProbe, appeals: byKind.appeal, appealsByProbe, series };
 }
+
+// ---------------------------------------------------------------- runs
+//
+// One RUN is one tick: five actions (deploy, write, fetch, two rotating
+// questions). Appeals are judged separately and never decide a run.
+//
+// A run's outcome keeps OUR failures apart from the NETWORK's:
+//   passed   every action was sent and graded correct
+//   failed   at least one sent action was not correct (wrong, injected,
+//            no agreement, timed out, or an agreed error): a network result
+//   missed   we failed to send at least one action (SUBMIT_FAILED), and none
+//            of the sent ones failed: our side, not the network's
+//   pending  some action is still waiting for validators
+// Hourly slots with no run at all (the scheduler never fired) are counted
+// as missed too, from the first run in the window up to the last due slot.
+
+export type RunOutcome = "passed" | "failed" | "missed" | "pending";
+
+export interface RunView {
+  tick: number;
+  submittedAt: number;
+  outcome: RunOutcome;
+  actions: number; // non-appeal records of this tick
+  notCorrect: number; // sent actions that were not graded correct
+  notSent: number; // SUBMIT_FAILED actions
+}
+
+export interface RunsSummary {
+  runs: number; // ticks recorded in the window (resolved or pending)
+  passed: number;
+  failed: number;
+  missed: number; // runs with an action we failed to send + slots that never ran
+  missedSlots: number; // of which: hourly slots with no run at all
+  pending: number;
+  actionsGraded: number; // sent, decided actions
+  actionsCorrect: number;
+  lastRunAt: number | null; // newest submission, pending included
+  lastCompleted: RunView | null; // newest run that is not pending
+}
+
+function actionOutcome(r: ProbeRecord): "correct" | "bad" | "notSent" | "pending" {
+  if (r.status === "SUBMIT_FAILED") return "notSent";
+  if (!r.status) return "pending";
+  if (r.grade === "correct" && OK.has(r.status)) return "correct";
+  return "bad";
+}
+
+export function runViews(results: ProbeRecord[], pending: ProbeRecord[] = []): RunView[] {
+  const byTick = new Map<number, ProbeRecord[]>();
+  for (const r of [...results, ...pending]) {
+    if (r.kind === "appeal") continue;
+    if (!byTick.has(r.tick)) byTick.set(r.tick, []);
+    byTick.get(r.tick)!.push(r);
+  }
+  return [...byTick.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([tick, rs]) => {
+      const o = rs.map(actionOutcome);
+      const notCorrect = o.filter((x) => x === "bad").length;
+      const notSent = o.filter((x) => x === "notSent").length;
+      const outcome: RunOutcome = o.includes("pending") ? "pending" : notCorrect > 0 ? "failed" : notSent > 0 ? "missed" : "passed";
+      return { tick, submittedAt: Math.min(...rs.map((r) => r.submittedAt)), outcome, actions: rs.length, notCorrect, notSent };
+    });
+}
+
+/** Hourly runs: how many due slots since the first run have no run at all. */
+export function missedSlots(runs: RunView[], nowSec: number, everySec = 3600, graceSec = 15 * 60): number {
+  if (runs.length === 0) return 0;
+  const slot = (t: number) => Math.floor(t / everySec);
+  const seen = new Set(runs.map((r) => slot(r.submittedAt)));
+  const first = Math.min(...seen);
+  const lastDue = slot(nowSec - graceSec);
+  let n = 0;
+  for (let s = first; s <= lastDue; s++) if (!seen.has(s)) n++;
+  return n;
+}
+
+export function runsSummary(results: ProbeRecord[], pending: ProbeRecord[], nowSec: number): RunsSummary {
+  const views = runViews(results, pending);
+  const count = (o: RunOutcome) => views.filter((v) => v.outcome === o).length;
+  const slots = missedSlots(views, nowSec);
+  const sent = results.filter((r) => r.kind !== "appeal").map(actionOutcome);
+  const all = [...results, ...pending];
+  const completed = views.filter((v) => v.outcome !== "pending");
+  return {
+    runs: views.length,
+    passed: count("passed"),
+    failed: count("failed"),
+    missed: count("missed") + slots,
+    missedSlots: slots,
+    pending: count("pending"),
+    actionsGraded: sent.filter((x) => x === "correct" || x === "bad").length,
+    actionsCorrect: sent.filter((x) => x === "correct").length,
+    lastRunAt: all.length ? Math.max(...all.map((r) => r.submittedAt)) : null,
+    lastCompleted: completed.at(-1) ?? null,
+  };
+}
+
+/** The newest run, every action as recorded (pending ones too), plus its appeal if any. */
+export function latestRun(results: ProbeRecord[], pending: ProbeRecord[]) {
+  const all = [...results, ...pending];
+  const ticks = all.filter((r) => r.kind !== "appeal").map((r) => r.tick);
+  if (ticks.length === 0) return null;
+  const tick = Math.max(...ticks);
+  const order = (r: ProbeRecord) => ["deploy", "write", "fetch", "llm"].indexOf(r.kind);
+  const actions = all.filter((r) => r.tick === tick && r.kind !== "appeal").sort((a, b) => order(a) - order(b));
+  const appeals = all.filter((r) => r.kind === "appeal").sort((a, b) => a.tick - b.tick);
+  return {
+    tick,
+    submittedAt: Math.min(...actions.map((r) => r.submittedAt)),
+    actions,
+    lastAppeal: appeals.at(-1) ?? null,
+  };
+}

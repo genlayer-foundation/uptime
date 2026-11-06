@@ -9,7 +9,7 @@ import {
   type DataSource,
 } from "@/lib/heartbeat/source";
 import { getPending, getResults, storeConfigured, type ProbeRecord } from "@/lib/heartbeat/store";
-import { summarize } from "@/lib/heartbeat/summary";
+import { latestRun, runsSummary, summarize } from "@/lib/heartbeat/summary";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ async function proxyProduction(url: URL): Promise<NextResponse> {
 }
 
 // Public, read-only. Two shapes:
-//   /api/heartbeat?hours=168              summary + hourly series + recent
+//   /api/heartbeat?hours=168              summary + hourly series + runs + latest run + recent
 //   /api/heartbeat?hours=168&format=rows  one flat row per probe (Grafana)
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -110,6 +110,9 @@ export async function GET(request: Request) {
       hours,
       ...summarize(results),
       pending: pending.length,
+      // Per run (one hourly tick = five actions): our misses kept apart from network results.
+      runs: runsSummary(results, pending, nowSec),
+      latestRun: latestRun(results, pending),
       recent: results.slice(-50).reverse(),
       ...(headers ? { source } : {}),
     },

@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { POOL, PROBE_SET, appealDue, rotation } from "@/lib/heartbeat/probes";
 import { runReconcile, runTick, tickPlan, type RunnerClient, type RunnerDeps, type RunnerTx } from "@/lib/heartbeat/runner";
-import { summarize } from "@/lib/heartbeat/summary";
+import { latestRun, runsSummary, summarize } from "@/lib/heartbeat/summary";
 import type { ProbeRecord } from "@/lib/heartbeat/types";
 
 const CONTRACT = "0x00000000000000000000000000000000000000c0" as const;
@@ -334,6 +334,46 @@ describe("summarize", () => {
     expect(s.series).toHaveLength(1);
     expect(s.series[0].appeal.total).toBe(2);
     expect(s.series[0].web.total).toBe(2);
+  });
+});
+
+describe("runsSummary", () => {
+  const H = 3600;
+  const run = (tick: number, over: Partial<ProbeRecord>[] = []): ProbeRecord[] =>
+    (["deploy", "write", "fetch", "llm", "llm"] as const).map((kind, i) => ({
+      id: `${tick}:${kind}:${i}`,
+      tick,
+      kind,
+      type: "web",
+      submittedAt: tick * H + 5,
+      status: "FINALIZED",
+      grade: "correct",
+      ...over[i],
+    }));
+
+  it("keeps our misses apart from network failures, and counts hours that never ran", () => {
+    const results = [
+      ...run(10, [{ status: "SUBMIT_FAILED", grade: undefined }, { status: "SUBMIT_FAILED", grade: undefined }, { status: "SUBMIT_FAILED", grade: undefined }, { status: "SUBMIT_FAILED", grade: undefined }, { status: "SUBMIT_FAILED", grade: undefined }]),
+      ...run(11),
+      ...run(12, [{}, {}, {}, { grade: "wrong" }]),
+      // tick 13 never ran
+      ...run(14, [{}, { status: "SUBMIT_FAILED", grade: undefined }]),
+    ];
+    const pending: ProbeRecord[] = run(15).map((r) => ({ ...r, status: undefined, grade: undefined }));
+    const s = runsSummary(results, pending, 15 * H + 1200);
+    expect(s).toMatchObject({ runs: 5, passed: 1, failed: 1, missed: 3, missedSlots: 1, pending: 1 });
+    expect(s.actionsCorrect).toBe(13);
+    expect(s.actionsGraded).toBe(14);
+    expect(s.lastRunAt).toBe(15 * H + 5);
+    expect(s.lastCompleted).toMatchObject({ tick: 14, outcome: "missed", notSent: 1 });
+    const l = latestRun(results, pending)!;
+    expect(l.tick).toBe(15);
+    expect(l.actions.map((a) => a.kind)).toEqual(["deploy", "write", "fetch", "llm", "llm"]);
+  });
+
+  it("is empty without runs", () => {
+    expect(runsSummary([], [], 100)).toMatchObject({ runs: 0, missed: 0, lastRunAt: null, lastCompleted: null });
+    expect(latestRun([], [])).toBeNull();
   });
 });
 

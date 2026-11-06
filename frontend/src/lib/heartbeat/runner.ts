@@ -224,6 +224,7 @@ async function gradeDeploy(deps: RunnerDeps, rec: ProbeRecord, tx: RunnerTx): Pr
     rec.error = "canary address not found in the deploy tx";
     return;
   }
+  rec.address = address;
   const t = Number(await deps.reader().readContract({ address, functionName: "get_tick", args: [] }));
   rec.answer = String(t);
   rec.grade = t === rec.tick ? "correct" : "wrong";

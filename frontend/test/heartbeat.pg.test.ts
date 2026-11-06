@@ -86,7 +86,7 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
   it("serves /api/heartbeat (summary and ?format=rows) from Postgres, same shapes as before", async () => {
     await getPoolTruncate();
     const { demoSnapshot } = await import("@/lib/heartbeat/demo");
-    const { summarize } = await import("@/lib/heartbeat/summary");
+    const { latestRun, runsSummary, summarize } = await import("@/lib/heartbeat/summary");
     const { NETWORK, getContractAddress } = await import("@/lib/genlayer/client");
     const store = await import("@/lib/heartbeat/store");
     const nowSec = Math.floor(Date.now() / 1000);
@@ -110,6 +110,8 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
       hours: 24,
       ...summarize(win),
       pending: pending.length,
+      runs: runsSummary(win, pending, body.generatedAt),
+      latestRun: latestRun(win, pending),
       recent: win.slice(-50).reverse(),
     }));
     expect(JSON.stringify(body)).toBe(JSON.stringify(expected));

@@ -48,6 +48,7 @@ export interface ProbeRecord {
   latencySec?: number; // time to decision: chain lastVoteTimestamp - createdTimestamp
   acceptedAt?: number; // deploy only: when reconcile first saw it decided (kept while it waits to finalize)
   finalizedSec?: number; // deploy only: createdTimestamp -> first seen FINALIZED (reconcile-cadence resolution)
+  address?: string; // deploy only: the canary this tick deployed
   rounds?: number;
   votes?: VoteCounts;
   answer?: string;
