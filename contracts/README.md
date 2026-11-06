@@ -50,11 +50,21 @@ UPTIME_TARGET=studio .venv-studio/bin/pytest test/direct -q    # UPTIME_TARGET p
 
 ## Deploy the Studio presets (owner signs in MetaMask)
 
+**Deploy Studio builds with genlayer CLI 0.39.2 (`npx genlayer@0.39.2`), Bradbury with
+0.40.0-rc.5.** 0.40.x bundles genlayer-js 2.x, which sends the fee-aware
+`addTransaction(params)` (`0x35a251fb`) that hosted Studio cannot decode: the tx finalizes
+`NO_MAJORITY` with no contract (2026-11-06). 0.39.2 (genlayer-js 1.1.8) sends the legacy
+`addTransaction` Studio expects; the app's Studio client uses the same 1.1.8
+(`frontend/src/lib/genlayer/studio.ts`).
+
 ```bash
-genlayer network set studionet
-GENLAYER_E2E_NO_OPEN=1 genlayer deploy --contract contracts/build/studio/web_probe.py --wallet browser
-GENLAYER_E2E_NO_OPEN=1 genlayer deploy --contract contracts/build/studio/ask.py --wallet browser
+npx genlayer@0.39.2 network set studionet
+GENLAYER_E2E_NO_OPEN=1 npx genlayer@0.39.2 deploy --contract contracts/build/studio/web_probe.py --wallet browser
+GENLAYER_E2E_NO_OPEN=1 npx genlayer@0.39.2 deploy --contract contracts/build/studio/ask.py --wallet browser
 genlayer network set bradbury-p2          # back to the default profile
 # signing URL: `genlayer wallet status`. Then on Vercel Production:
 # UPTIME_WEBPROBE_STUDIO=<web_probe address>  UPTIME_ASK_STUDIO=<ask address>
 ```
+
+Live on Studio (2026-11-06, CLI 0.39.2): `web_probe` `0x4574A36757da191D34CE3a38060b229928766024`,
+`ask` `0x3E6A11b37a94F7dA45E052aE6A2D289d3E8128e6`.

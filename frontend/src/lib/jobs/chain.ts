@@ -2,8 +2,9 @@
 // in lib/chains.ts (Bradbury = Phase 2 address overrides, never the stale
 // genlayer-js defaults).
 //
-//   genlayer  genlayer-js client: deploy / write / read (Bradbury txs carry
-//             the Phase 2 fee deposit, lib/genlayer/fees.ts), signed by that
+//   genlayer  genlayer-js client: deploy / write / read (Bradbury: 2.x, txs
+//             carry the Phase 2 fee deposit, lib/genlayer/fees.ts; Studio: 1.x,
+//             legacy addTransaction, lib/genlayer/studio.ts), signed by that
 //             network's relayer key (lib/signer.ts: RELAYER_KEY_STUDIO /
 //             RELAYER_KEY_BRADBURY); the Heartbeat signs with the same key
 //   evm       viem on the Bradbury chain RPC: the UptimePool contract
@@ -14,6 +15,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { BRADBURY_PHASE2, CHAINS } from "@/lib/chains";
 import { signingKey } from "@/lib/signer";
 import { withFees } from "@/lib/genlayer/fees";
+import { studioClient } from "@/lib/genlayer/studio";
 import type { Network } from "./types";
 
 // The slice of genlayer-js the executor uses (fakeable in tests).
@@ -54,6 +56,9 @@ export function relayerAddress(n: Network): string | null {
 export function genlayerClient(n: Network): ChainClient {
   const key = relayerKey(n);
   if (!key) throw new Error(`relayer key for ${n} not configured`);
+  // Studio: genlayer-js 1.x, the legacy addTransaction hosted Studio decodes,
+  // no fees (lib/genlayer/studio.ts).
+  if (n === "studio") return studioClient(key) as unknown as ChainClient;
   // Bradbury deploys/writes carry the Phase 2 fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: CHAINS[n].chain, account: createAccount(key) }), n) as unknown as ChainClient;
 }

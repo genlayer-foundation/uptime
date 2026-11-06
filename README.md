@@ -113,8 +113,8 @@ Every Python contract is built per network GenVM from one source: deploy `contra
 | Contract | Network | What it is |
 |---|---|---|
 | `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time Deployed at `0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A` (`UPTIME_POOL_BRADBURY`; admin `0x3B49…7Da97`, scheduler `0xDcA4…84dd`, mailer unset) |
-| `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`); Studio not deployed yet (`UPTIME_WEBPROBE_STUDIO`) |
-| `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`); Studio not deployed yet (`UPTIME_ASK_STUDIO`) |
+| `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`); Studio: `0x4574A36757da191D34CE3a38060b229928766024` (`UPTIME_WEBPROBE_STUDIO`) |
+| `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`); Studio: `0x3E6A11b37a94F7dA45E052aE6A2D289d3E8128e6` (`UPTIME_ASK_STUDIO`) |
 | `contracts/src/heartbeat.py`, `contracts/src/canary.py` | Bradbury (canary: any network, per-network build) | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |
 
 ### UptimePool
@@ -163,7 +163,7 @@ The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in
 
 ### Bradbury Phase 2 chain config
 
-`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. `genlayer-js` is pinned at `2.0.0-rc.2`, whose ABIs are Phase 2's (fee-aware `addTransaction`); every Bradbury deploy/write carries a fee deposit from `frontend/src/lib/genlayer/fees.ts`.
+`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. `genlayer-js` is pinned at `2.0.0-rc.2`, whose ABIs are Phase 2's (fee-aware `addTransaction`); every Bradbury deploy/write carries a fee deposit from `frontend/src/lib/genlayer/fees.ts`. Studio jobs use genlayer-js 1.1.8 (aliased `genlayer-js-v1`, `frontend/src/lib/genlayer/studio.ts`): hosted Studio only decodes the legacy `addTransaction` (`0x27241a99`), and 2.x txs finalize `NO_MAJORITY` there with no contract. Studio txs carry no fees.
 
 ## Jobs backend (a generic paid cron)
 
