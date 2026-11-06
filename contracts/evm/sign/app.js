@@ -79,7 +79,11 @@ const sendViaMetaMask = async (tx) => {
   await ensureChain();
   const [cur] = await eth.request({ method: "eth_accounts" });
   if (!cur || cur.toLowerCase() !== tx.from.toLowerCase()) throw new Error("MetaMask account changed; reconnect");
-  return eth.request({ method: "eth_sendTransaction", params: [tx] });
+  // MetaMask can keep a stale local nonce for chain 4221 (Phase 1 history under the same
+  // chain id -> "nonce too high"). Pin the chain's own pending nonce on every send.
+  const nonce = await reader.call("eth_getTransactionCount", [tx.from, "pending"]);
+  log(`nonce from chain: ${parseInt(nonce, 16)}`);
+  return eth.request({ method: "eth_sendTransaction", params: [{ ...tx, nonce }] });
 };
 
 // ---------------------------------------------------------------- 1. UptimePool
