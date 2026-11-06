@@ -15,8 +15,8 @@ export type JobTemplate = Omit<Job, "id" | "owner" | "createdAt" | "paused" | "p
   systemOnly?: boolean;
 };
 
-// Generic contracts we deploy once per network (contracts/web_probe.py,
-// contracts/ask.py, contracts/heartbeat.py).
+// Generic contracts we deploy once per network, each from the build for that
+// network's GenVM: contracts/build/<bradbury|studio>/{web_probe,ask,heartbeat}.py.
 export interface PresetContracts {
   webprobe: string | null;
   ask: string | null;

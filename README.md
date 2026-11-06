@@ -8,13 +8,13 @@ A paid cron for GenLayer: schedule any call, deploy or read, pay for it in GEN, 
 
 ## Example job: Bradbury Heartbeat
 
-The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs five test types against GenLayer's **Bradbury** testnet, each one way real contracts depend on the network, plus an appeal every fifth hour. When a type goes red, that capability is broken for real contracts. Prompts and the answer key are constants in `contracts/heartbeat.py`, which grades every answer itself. Dashboard: `/examples/bradbury-heartbeat`.
+The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs five test types against GenLayer's **Bradbury** testnet, each one way real contracts depend on the network, plus an appeal every fifth hour. When a type goes red, that capability is broken for real contracts. Prompts and the answer key are constants in `contracts/src/heartbeat.py`, which grades every answer itself. Dashboard: `/examples/bradbury-heartbeat`.
 
 ## What a tick does
 
 | Type | Probe | What it calls | Consensus | Graded |
 |---|---|---|---|---|
-| DEPLOY | canary | deploys `contracts/canary.py` (no LLM, no web) | none | canary's `get_tick() == tick`; time to ACCEPTED **and** to FINALIZED |
+| DEPLOY | canary | deploys `contracts/build/bradbury/canary.py` (no LLM, no web) | none | canary's `get_tick() == tick`; time to ACCEPTED **and** to FINALIZED |
 | WRITE | bump | `bump(tick)`: a plain state write, no web, no LLM | none | `get_last_tick() == tick` (or `get_bump(tick)` once a later bump landed) |
 | WEB | `f0-status` | `probe_status(tick)`: `web.get` of `status.json`, no LLM | `strict_eq` | exact canonical JSON |
 | 2 rotating | `r1`…`r9` | `probe(tick, id)`, 2 of 9 per tick, each every 4.5 h | see below | on-chain: `correct` / `wrong` / `injected` |
@@ -62,11 +62,11 @@ Time to decision comes from the chain's own `createdTimestamp` → `lastVoteTime
 ## Setup
 
 ```bash
-# contract. The contracts pin the runner Bradbury Phase 2 runs (py-genlayer:babwp9t…,
-# GenVM v0.6.0-rc10, `import genlayer as gl`). Tools must load that SDK, not an older one:
-python3 -m venv .venv && .venv/bin/pip install --pre "genlayer-test>=0.30.0rc2" pytest pillow   # pillow: the screenshot probe's direct test
-.venv/bin/pytest test/direct -q     # test/direct/conftest.py sets GENVM_VERSION=v0.6.0-rc10
-GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/heartbeat.py   # genvm-linter >= 0.11.1rc2
+# contracts. One source per contract (contracts/src/), one generated build per network
+# GenVM: contracts/build/bradbury/ (py-genlayer:babwp9t…, GenVM v0.6.0-rc10) and
+# contracts/build/studio/ (py-genlayer:1jb45aa8…, GenVM v0.2.16). See contracts/README.md.
+python3 contracts/build.py          # after editing contracts/src/ or contracts/targets.json
+contracts/verify.sh --network       # drift + direct tests + genvm-lint per target + read-only live load checks
 
 # deploy once to Bradbury: args are the site's fixture base URL and the
 # OPERATOR, the Bradbury scheduler wallet (RELAYER_KEY_BRADBURY) that signs the
@@ -76,7 +76,7 @@ GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/heartbeat.py   # genvm-lint
 # GENLAYER_E2E_NO_OPEN=1 stops the CLI opening a browser; `genlayer wallet status`
 # prints the signing URL to open yourself.
 genlayer network set testnet-bradbury
-GENLAYER_E2E_NO_OPEN=1 genlayer deploy --contract contracts/heartbeat.py --wallet browser \
+GENLAYER_E2E_NO_OPEN=1 genlayer deploy --contract contracts/build/bradbury/heartbeat.py --wallet browser \
   --fees '{"distribution":{"leaderTimeunitsAllocation":"600","validatorTimeunitsAllocation":"600","appealRounds":"1","executionBudgetPerRound":"25000000000000000","rotations":["1","1"],"maxPriceGenPerTimeUnit":"2","storageFeeMaxGasPrice":"300000000","receiptFeeMaxGasPrice":"300000000"}}' \
   --args "https://uptime.genlayer.foundation/heartbeat" <SCHEDULER_ADDRESS>
 
@@ -108,14 +108,14 @@ Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM 
 
 The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. Nothing below is deployed yet.
 
-All the Python contracts here target Bradbury's runner (`py-genlayer:babwp9t…`). GenLayer Studio still runs GenVM v0.2.16, which cannot load that runner, so they no longer deploy on Studio as they are.
+Every Python contract is built per network GenVM from one source: deploy `contracts/build/bradbury/<name>.py` on Bradbury and `contracts/build/studio/<name>.py` on Studio (GenVM v0.2.16). The app picks the build for the job's network (`contracts/README.md`).
 
 | Contract | Network | What it is |
 |---|---|---|
 | `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time Deployed at `0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A` (`UPTIME_POOL_BRADBURY`; admin `0x3B49…7Da97`, scheduler `0xDcA4…84dd`, mailer unset) |
-| `contracts/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`) |
-| `contracts/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`) |
-| `contracts/heartbeat.py`, `contracts/canary.py` | Bradbury | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |
+| `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`); Studio not deployed yet (`UPTIME_WEBPROBE_STUDIO`) |
+| `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`); Studio not deployed yet (`UPTIME_ASK_STUDIO`) |
+| `contracts/src/heartbeat.py`, `contracts/src/canary.py` | Bradbury (canary: any network, per-network build) | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |
 
 ### UptimePool
 

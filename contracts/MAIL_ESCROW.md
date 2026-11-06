@@ -1,6 +1,6 @@
 # MailEscrow: email fees released against proof of sending
 
-> **NOT AUDITED. TESTNET ONLY.** `contracts/mail_escrow.py` has had no external review and has
+> **NOT AUDITED. TESTNET ONLY.** `contracts/src/mail_escrow.py` has had no external review and has
 > never run on a live network. Do not deposit anything you can't lose.
 
 Owner model (Ivan, 2026-11-02): the mailer is a **project wallet**. It earns the email fees and sends
@@ -119,7 +119,7 @@ owner (wallet)                 mailer (project hot key)            MailEscrow (B
 
 ---
 
-## 4. Contract API (`contracts/mail_escrow.py`)
+## 4. Contract API (`contracts/src/mail_escrow.py`)
 
 Deploy: `MailEscrow(mailer, payee, domain, selector, key_sha256, price, delay, doh_base)`. The deployer
 becomes `admin`.
@@ -266,8 +266,7 @@ through the direct VM's `gl_call` hook (`EthSend`).
 - **Admin:** rotation and new keys wait for `delay`, and retiring a key is immediate.
 
 ```bash
-GENVM_VERSION=v0.6.0-rc10 genvm-lint check contracts/mail_escrow.py   # genvm-linter >= 0.11.1rc2
-.venv/bin/pytest test/direct -q
+contracts/verify.sh     # both builds (bradbury, studio): direct tests + genvm-lint; see contracts/README.md
 ```
 
 Not covered: real consensus (integration tests on Studio/Bradbury), real Postmark output, and the

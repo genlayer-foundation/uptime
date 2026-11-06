@@ -1,10 +1,9 @@
-"""Shared direct-mode setup for the GenVM v0.6 SDK (py-genlayer:babwp9t…).
+"""Shared direct-mode setup. Runs ONE target's builds (contracts/build/<target>/),
+picked by UPTIME_TARGET (see _target.py); gltest resolves the runner pinned in each
+build's header from the genvm-manager release that target names, so these tests
+import that network's real std lib, not a stand-in.
 
-The contracts pin the runner Bradbury runs; gltest resolves it from the
-genvm-manager release named by GENVM_VERSION (default below), so these tests
-import that release's real std lib, not a stand-in.
-
-One seam is fixed here: in GenVM v0.6 the host answers ExecPrompt with TEXT in
+One v0.6 seam is fixed here: in GenVM v0.6 the host answers ExecPrompt with TEXT in
 both response formats, and the SDK itself json.loads() it for
 response_format="json" (genlayer/nondet/__init__.py: _decode_nondet_json).
 gltest 0.30.0rc2's mock pre-parses JSON mocks into a dict, which the v0.6 SDK
@@ -17,8 +16,7 @@ import os
 
 import pytest
 
-# The GenVM release Bradbury runs (node v0.6.0-rc.3). Override with GENVM_VERSION.
-os.environ.setdefault("GENVM_VERSION", "v0.6.0-rc10")
+from _target import V06  # noqa: E402  (sets GENVM_VERSION before gltest loads)
 
 import gltest.direct.wasi_mock as wasi_mock  # noqa: E402
 
@@ -36,4 +34,6 @@ def _llm_as_text(vm, data):
 
 @pytest.fixture(autouse=True)
 def _v06_llm_text(monkeypatch):
+    if not V06:
+        return  # v0.2 (Studio) takes the parsed dict gltest hands it
     monkeypatch.setattr(wasi_mock, "_handle_llm_request", _llm_as_text)

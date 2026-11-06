@@ -11,7 +11,7 @@
 //   node scripts/heartbeat-fixtures.mjs           write both files
 //   node scripts/heartbeat-fixtures.mjs --check   fail if the committed files differ
 //
-// The fixtures are FROZEN: contracts/heartbeat.py pins card.png's sha256
+// The fixtures are FROZEN: contracts/src/heartbeat.py pins card.png's sha256
 // (CARD_SHA256). Re-running this script must reproduce the committed bytes;
 // if it does not, do NOT commit the new output — a changed card is a new
 // question and needs a new contract deployment.

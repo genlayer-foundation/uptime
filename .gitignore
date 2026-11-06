@@ -14,3 +14,4 @@ video/film/fonts/
 *.mp4
 video/explainer/fonts/
 *.wav
+.venv-studio/

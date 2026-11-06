@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
+# GENVM-RUNNER-HEADER: replaced per target by contracts/build.py (contracts/targets.json). Deploy contracts/build/<target>/, never this file.
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -55,8 +55,13 @@ def normalize(text: str) -> str:
 
 
 def _err_text(e) -> str:
-    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
-    data = e.data if hasattr(e, "data") else ""
+    # A UserError's payload: `.data` on GenVM v0.6 (Bradbury), `.message` on v0.2 (Studio).
+    if hasattr(e, "data"):
+        data = e.data
+    elif hasattr(e, "message"):
+        data = e.message
+    else:
+        return str(e)
     return data if isinstance(data, str) else str(data)
 
 

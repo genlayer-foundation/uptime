@@ -1,8 +1,10 @@
-"""Direct-mode tests for contracts/ask.py (preset 4)."""
+"""Direct-mode tests for contracts/src/ask.py (each target's build, see _target.py) (preset 4)."""
 
 import json
 
-CONTRACT = "contracts/ask.py"
+from _target import contract, source  # noqa: E402
+
+CONTRACT = contract("ask")
 
 
 def deploy(direct_vm, direct_deploy, who):

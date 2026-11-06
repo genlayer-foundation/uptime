@@ -1,6 +1,6 @@
 // The Bradbury Heartbeat probe catalogue: ids, test types and how consensus is
 // reached. NO answers here: prompts and the answer key live on-chain in
-// contracts/heartbeat.py, which grades every probe itself. This file must list
+// contracts/src/heartbeat.py, which grades every probe itself. This file must list
 // the same ids, types and equivalences in the same order as the contract's
 // get_probe_set() (test/direct/test_heartbeat.py fails on drift). The rotating
 // pool's ORDER is the rotation order.

@@ -1,10 +1,12 @@
-"""Direct-mode tests for contracts/web_probe.py (presets 2 and 3). The leader path runs in
+"""Direct-mode tests for contracts/src/web_probe.py (each target's build, see _target.py) (presets 2 and 3). The leader path runs in
 direct mode; validator functions are exercised with direct_vm.run_validator where the contract
 uses a custom one (check_api with a tolerance)."""
 
 import json
 
-CONTRACT = "contracts/web_probe.py"
+from _target import contract, source  # noqa: E402
+
+CONTRACT = contract("web_probe")
 SITE = "https://site.test/"
 API = "https://api.test/status"
 

@@ -199,7 +199,7 @@ describe.skipIf(!url)("API against Postgres", () => {
     };
     const deps = {
       repo, gate: { allowlist: new Set<string>(), funding: async () => ({ ok: true }) },
-      clientFor: () => client, relayerFor: () => C1, nowSec: () => now, deployPresets: { canary: "# canary" },
+      clientFor: () => client, relayerFor: () => C1, nowSec: () => now, deployPresets: { studio: { canary: "# canary" }, bradbury: { canary: "# canary" } },
       runCostWei: () => BigInt(7),
     };
     expect((await dispatchDue(deps)).started).toBe(1);

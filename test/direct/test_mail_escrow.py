@@ -1,4 +1,4 @@
-"""Direct-mode tests for contracts/mail_escrow.py.
+"""Direct-mode tests for contracts/src/mail_escrow.py (each target's build, see _target.py).
 
 Messages are DKIM-signed here with real RSA keys (pycryptodome) by a small test signer, and the
 contract's verifier is also checked against the published RFC 8463 rsa-sha256 test vector, so a
@@ -16,7 +16,9 @@ from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 
-CONTRACT = "contracts/mail_escrow.py"
+from _target import contract, source  # noqa: E402
+
+CONTRACT = contract("mail_escrow")
 DOMAIN = "uptime.example"
 SELECTOR = "pm1"
 DOH = "https://dns.test/resolve"
@@ -141,9 +143,10 @@ def env(direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob, direct
     sends = []
 
     def hook(vm, request):
-        # GenVM v0.6 names a value transfer to an EOA EmitExternalMessage (was EthSend).
-        if "EmitExternalMessage" in request:
-            msg = request["EmitExternalMessage"]
+        # A value transfer to an EOA: EmitExternalMessage on GenVM v0.6, EthSend on v0.2 (Studio).
+        kind = next((k for k in ("EmitExternalMessage", "EthSend") if k in request), None)
+        if kind:
+            msg = request[kind]
             assert msg["calldata"] == b""
             sends.append((hexof(msg["address"]), int(msg["value"])))
             return {"ok": None}

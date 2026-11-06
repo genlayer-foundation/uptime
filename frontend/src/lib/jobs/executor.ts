@@ -27,8 +27,9 @@ export interface ExecutorDeps {
   clientFor: (n: Network) => ChainClient;
   relayerFor: (n: Network) => string;
   nowSec: () => number;
-  // Deploy presets, by name (deploy steps with `preset` instead of `code`).
-  deployPresets: Record<string, string>;
+  // Deploy presets per network, by name (deploy steps with `preset` instead of
+  // `code`). Each network gets the build for its GenVM (contracts/build/<target>/).
+  deployPresets: Record<Network, Record<string, string>>;
   // Bradbury Heartbeat example job: submit one tick through the existing
   // runner, which grades it in its own store (heartbeat_probes) (public dashboard unchanged).
   heartbeatTick?: () => Promise<{ tick: number; probes: { kind: string; qid?: string; txHash?: string; status?: string; error?: string }[] }>;
@@ -204,7 +205,7 @@ export async function advance(deps: ExecutorDeps, job: JobRow, group: Group, run
 
     try {
       if (step.kind === "deploy") {
-        const code = step.code ?? deps.deployPresets[step.preset ?? ""];
+        const code = step.code ?? deps.deployPresets[job.network]?.[step.preset ?? ""];
         if (!code) throw new Error(`unknown deploy preset "${step.preset}"`);
         sr.txHash = await client.deployContract({ code, args: call.args });
       } else {

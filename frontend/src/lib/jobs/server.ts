@@ -3,7 +3,7 @@
 // tests build their own deps instead.
 
 import { NextResponse } from "next/server";
-import { CANARY_SOURCE } from "@/lib/heartbeat/canary";
+import { CANARY_SOURCES } from "@/lib/heartbeat/canary";
 import { runTick } from "@/lib/heartbeat/runner";
 import { studioAllowlist } from "./allowlist";
 import { getSession, requestHost, sessionSecret, type Session } from "./auth/session";
@@ -37,7 +37,7 @@ export async function executorDeps(): Promise<ExecutorDeps> {
       return clients.get(n)!;
     },
     relayerFor: (n) => relayerAddress(n) ?? "0x0000000000000000000000000000000000000000",
-    deployPresets: { canary: CANARY_SOURCE },
+    deployPresets: { studio: { canary: CANARY_SOURCES.studio }, bradbury: { canary: CANARY_SOURCES.bradbury } },
     heartbeatTick: async () => {
       const recs = await runTick();
       return {

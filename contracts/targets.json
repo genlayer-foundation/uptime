@@ -1,0 +1,81 @@
+{
+  "_doc": "One entry per network GenVM. contracts/build.py writes contracts/build/<target>/<name>.py from contracts/src/<name>.py: header pinned to `runner`, then `rewrites` (regex -> replacement, in order), then fails if a `forbid` string is left. A GenVM bump = change `runner`/`genvm`, rebuild, run contracts/verify.sh. See contracts/README.md.",
+  "targets": {
+    "bradbury": {
+      "networks": [
+        "testnetBradbury",
+        "studio-next"
+      ],
+      "runner": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0",
+      "genvm": "v0.6.0-rc10",
+      "genvm_repo": "genlayerlabs/genvm-manager",
+      "sdk": "v0.6: import genlayer as gl; gl.contract.Contract; gl.storage.*; gl.vm.run_nondet; UserError.data",
+      "rpc": "https://rpc-bradbury.genlayer.com",
+      "rewrites": [],
+      "forbid": [
+        "from genlayer import *",
+        "gl.Contract)",
+        "run_nondet_unsafe"
+      ],
+      "direct_tests": {
+        "python": ".venv/bin/python",
+        "genlayer_test": "0.30.0rc2 (--pre)"
+      },
+      "load_check": {
+        "method": "gen_call_deploy",
+        "note": "gen_call {type: deploy}: runs the constructor on the real GenVM, no transaction"
+      },
+      "deploy_env": {
+        "webprobe": "UPTIME_WEBPROBE_BRADBURY",
+        "ask": "UPTIME_ASK_BRADBURY",
+        "heartbeat": "HEARTBEAT_CONTRACT"
+      }
+    },
+    "studio": {
+      "networks": [
+        "studionet"
+      ],
+      "runner": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6",
+      "genvm": "v0.2.16",
+      "genvm_repo": "genlayerlabs/genvm",
+      "sdk": "v0.2: from genlayer import *; gl.Contract; gl.vm.run_nondet_unsafe; UserError.message",
+      "rpc": "https://studio.genlayer.com/api",
+      "rewrites": [
+        [
+          "^import genlayer as gl\\n",
+          "from genlayer import *\n"
+        ],
+        [
+          "^from genlayer\\.storage import allow as allow_storage.*\\n",
+          ""
+        ],
+        [
+          "\\bgl\\.contract\\.Contract\\b",
+          "gl.Contract"
+        ],
+        [
+          "\\bgl\\.vm\\.run_nondet\\(",
+          "gl.vm.run_nondet_unsafe("
+        ]
+      ],
+      "forbid": [
+        "import genlayer as gl",
+        "genlayer.storage",
+        "gl.contract.",
+        "gl.vm.run_nondet("
+      ],
+      "direct_tests": {
+        "python": ".venv-studio/bin/python",
+        "genlayer_test": "0.29.2 (last release with the v0.2 SDK layout)"
+      },
+      "load_check": {
+        "method": "gen_getContractSchemaForCode",
+        "note": "hex code -> schema; the network GenVM loads it, no transaction"
+      },
+      "deploy_env": {
+        "webprobe": "UPTIME_WEBPROBE_STUDIO",
+        "ask": "UPTIME_ASK_STUDIO"
+      }
+    }
+  }
+}

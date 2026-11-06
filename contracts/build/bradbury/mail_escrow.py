@@ -439,8 +439,13 @@ def _fail_web(what: str, status: int) -> None:
 
 
 def _err_text(e) -> str:
-    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
-    data = e.data if hasattr(e, "data") else ""
+    # A UserError's payload: `.data` on GenVM v0.6 (Bradbury), `.message` on v0.2 (Studio).
+    if hasattr(e, "data"):
+        data = e.data
+    elif hasattr(e, "message"):
+        data = e.message
+    else:
+        return str(e)
     return data if isinstance(data, str) else str(data)
 
 

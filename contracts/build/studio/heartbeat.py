@@ -1,4 +1,4 @@
-# { "Seq": [{"Depends": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0"}] }
+# { "Seq": [{"Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6"}] }
 
 # ==============================================================================
 # NOT AUDITED — TESTNET ONLY. Do not deposit anything you can't lose.
@@ -26,8 +26,7 @@
 # card.png with another sha256) is an agreed "[EXTERNAL] fixture drift" error,
 # stored with the probe, so a moved page never reads as a wrong answer.
 
-import genlayer as gl
-from genlayer.storage import allow as allow_storage  # = gl.storage.allow, under the name genvm-lint checks
+from genlayer import *
 from dataclasses import dataclass
 import hashlib
 import json
@@ -207,8 +206,13 @@ def _grade(pid: str, answer: str) -> str:
 
 
 def _err_text(e) -> str:
-    # GenVM v0.6: a UserError carries its payload in `.data` (it was `.message`).
-    data = e.data if hasattr(e, "data") else ""
+    # A UserError's payload: `.data` on GenVM v0.6 (Bradbury), `.message` on v0.2 (Studio).
+    if hasattr(e, "data"):
+        data = e.data
+    elif hasattr(e, "message"):
+        data = e.message
+    else:
+        return str(e)
     return data if isinstance(data, str) else str(data)
 
 
@@ -274,7 +278,7 @@ def _ask(question: str, reply: str, context: str = "", images=None) -> dict:
 INT_REPLY = '{"answer": <an integer>}'
 
 
-class Heartbeat(gl.contract.Contract):
+class Heartbeat(gl.Contract):
     # owner deploys and administers; operator is the scheduler key that signs
     # probes and bumps (the owner may too). Only the owner can swap operator.
     owner: gl.Address
@@ -424,7 +428,7 @@ class Heartbeat(gl.contract.Contract):
                     return _handle_leader_error(leaders_res, r6)
                 return leaders_res.calldata == r6()
 
-            self._record(tick, pid, lambda: gl.vm.run_nondet(r6, r6_validator))
+            self._record(tick, pid, lambda: gl.vm.run_nondet_unsafe(r6, r6_validator))
 
         elif pid == "r7-card":
             def r7() -> str:
@@ -457,7 +461,7 @@ class Heartbeat(gl.contract.Contract):
                     return _handle_leader_error(leaders_res, r8)
                 return leaders_res.calldata == r8()
 
-            self._record(tick, pid, lambda: gl.vm.run_nondet(r8, r8_validator))
+            self._record(tick, pid, lambda: gl.vm.run_nondet_unsafe(r8, r8_validator))
 
         elif pid == "r9-namesake":
             def r9() -> str:

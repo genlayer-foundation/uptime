@@ -62,7 +62,7 @@ function setup(allowed: string[] = [ALICE]) {
   const { client, calls } = fakeClient();
   const deps: ExecutorDeps = {
     repo, gate, clientFor: () => client, relayerFor: () => RELAYER, nowSec: () => now,
-    deployPresets: { canary: "# canary" },
+    deployPresets: { studio: { canary: "# canary" }, bradbury: { canary: "# canary" } },
   } satisfies ExecutorDeps;
   return { repo, gate, deps, client, calls, setNow: (t: number) => (now = t) };
 }

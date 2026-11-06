@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "db:migrate": "node scripts/migrate.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "contracts:build": "python3 ../contracts/build.py",
+    "contracts:check": "python3 ../contracts/build.py --check"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",
