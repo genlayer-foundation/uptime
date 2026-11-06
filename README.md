@@ -230,6 +230,6 @@ Production data is planned on Neon via the Vercel Marketplace. Nothing is provis
 
 1. `gh run list --repo genlayer-foundation/uptime --workflow db-backup.yml` and pick a green run id.
 2. `gh run download <run-id> --repo genlayer-foundation/uptime --dir restore/` (one `uptime-<ts>.dump.age`).
-3. `op read "op://Uptime Production/uptime-backup-age/private key" > /tmp/k && age -d -i /tmp/k -o restore/uptime.dump restore/*/*.dump.age && rm /tmp/k`
+3. `op document get uptime-backup-age --vault "Uptime Production" > /tmp/k && age -d -i /tmp/k -o restore/uptime.dump restore/*/*.dump.age && rm /tmp/k`
 4. `pg_restore --list restore/uptime.dump | head` to check it, then restore into a NEW Neon branch/database, never over prod: `pg_restore --no-owner --no-privileges --dbname="$TARGET_URL" restore/uptime.dump`.
 5. Point `DATABASE_URL` at it only after checking row counts; delete `restore/` when done.
