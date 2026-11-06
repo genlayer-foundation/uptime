@@ -30,11 +30,13 @@ export async function GET(request: Request) {
   }
   const auth = requireUser(request);
   if ("response" in auth) return auth.response;
-  const { repo } = await serviceDeps();
   if (new URL(request.url).searchParams.get("all") === "1") {
+    // Gate before touching the repo: a non-operator never reaches a query.
     if (!isAdmin(auth.session.wallet)) return jsonError(403, "operators only");
+    const { repo } = await serviceDeps();
     return NextResponse.json(await withMeta(repo, await repo.listAllJobs(500)));
   }
+  const { repo } = await serviceDeps();
   return NextResponse.json(await withMeta(repo, await repo.listJobs(auth.session.wallet)));
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdminJobs } from "@/components/jobs/AdminJobs";
 import { BackendGate } from "@/components/jobs/BackendGate";
 import { JobsList } from "@/components/jobs/JobsList";
 
@@ -8,6 +9,7 @@ export default function JobsPage() {
   return (
     <BackendGate>
       <JobsList />
+      <AdminJobs />
     </BackendGate>
   );
 }

@@ -14,7 +14,7 @@ import type { Assertion, Job, Network, Run, Schedule, Step } from "./types";
 
 export const JOBS_MOCK = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_JOBS_MOCK === "1";
 
-export type Me = { ready: boolean; wallet: string | null; studioAllowed: boolean };
+export type Me = { ready: boolean; wallet: string | null; studioAllowed: boolean; isAdmin?: boolean };
 
 export type PresetAvailability = { ok: boolean; reason?: string };
 
