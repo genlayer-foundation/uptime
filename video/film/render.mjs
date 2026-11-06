@@ -1,4 +1,4 @@
-// Uptime — launch film. Every frame is an SVG string built from glyph outlines
+// Uptime — launch film: Uptime you can prove. Every frame is an SVG string built from glyph outlines
 // (never <text>), rasterised by resvg and piped to ffmpeg.
 // Follows video_launch_motion.md: no fades, expo.out entrances over D, match cuts
 // (out up on expo.in ending on the cut, in from below), a linear push-in per shot.
@@ -6,6 +6,10 @@
 //   node render.mjs                     1920x1080 -> ../out/uptime-film-16x9.mp4
 //   node render.mjs --vertical          1080x1920 -> ../out/uptime-film-9x16.mp4
 //   node render.mjs --stills 1,5.5,20   PNG stills -> ../out/stills/
+//
+// Sound: an effects track built from draw cues (one beep per word, a sound per kind of
+// motion, a whoosh per cut), synthesised by ../explainer/sfx.mjs. No music: the design
+// repo's video/README.md says music comes from an AI model on fal.ai, never synthesised.
 //
 // Fonts are NOT in the repo (licensed). Put them in ./fonts first:
 //   fonts/Lineca-500.ttf  = F37Lineca-VF.ttf instanced at wght=500 slnt=0
@@ -21,6 +25,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import opentype from "opentype.js";
 import { Resvg } from "@resvg/resvg-js";
+import { synth } from "../explainer/sfx.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(HERE, "../out");
@@ -36,6 +41,15 @@ const C = {
   white: "#FFFFFF", ink: "#070707", card: "#F3F3F3", q1: "#E7E7E7", q2: "#CDCDCD",
   label: "#999999", blue: "#110FFF", red: "#FF3B30", night: "#0A0A0A", logo: "#F7F8F8",
 };
+
+// ---------- cues (sound events), registered as things are drawn ----------
+const CUES = [], seen = new Set();
+function cue(kind, at) {
+  if (!(at >= 0)) return;
+  const k = `${kind}@${at.toFixed(3)}`;
+  if (seen.has(k)) return;
+  seen.add(k); CUES.push({ kind, t: +at.toFixed(3) });
+}
 
 // ---------- easing + motion ----------
 const expoOut = (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p));
@@ -107,6 +121,10 @@ function text(t, o) {
     else if (o.unit === "letter") { unit.push(k); if (ch !== " ") k++; }
     else unit.push(0);
   });
+  if (o.tIn >= 0) {
+    if (fk === "m") cue("data", o.tIn);
+    else { const n = Math.max(...unit) + 1; for (let u = 0; u < n; u++) cue("word", o.tIn + u * (o.step || 0)); }
+  }
   let s = "";
   L.glyphs.forEach((gg, i) => {
     if (chars[i] === " ") return;
@@ -168,6 +186,30 @@ function wireCube(cx, cy, e, stroke, sw) {
     `<path d="M${p(0, -e)}L${p(a, -e / 2)}L${p(a, e / 2)}L${p(0, e)}L${p(-a, e / 2)}L${p(-a, -e / 2)}Z"/>` +
     `<path d="M${p(-a, -e / 2)}L${p(0, 0)}L${p(a, -e / 2)}M${p(0, 0)}L${p(0, e)}"/></g>`;
 }
+// GenLayer's jury — a new concept, so its own shape: a jury box, a row of abstract
+// heads behind one grey front panel. No labels, no per-seat results; it decides as one.
+const JURY = { w: 400, h: 190 };
+function juryBox(cx, cy, ink = C.ink) {
+  const { w, h } = JURY, top = cy - h / 2, pt = cy + 6, n = 6;
+  const step = (w - 96) / (n - 1), x0 = cx - (w - 96) / 2;
+  let o = "";
+  for (let i = 0; i < n; i++) {
+    const x = x0 + i * step;
+    o += `<path d="M${n3(x - 26)} ${n3(pt + 10)}v-12a26 26 0 0 1 52 0v12" fill="${C.white}" stroke="${ink}" stroke-width="3"/>`;
+    o += `<circle cx="${n3(x)}" cy="${n3(top + 36)}" r="18" fill="${C.white}" stroke="${ink}" stroke-width="3"/>`;
+  }
+  return o + `<rect x="${n3(cx - w / 2)}" y="${n3(pt)}" width="${w}" height="${n3(top + h - pt)}" rx="24" fill="${C.card}" stroke="${C.q1}" stroke-width="2"/>`;
+}
+// One blue outline round the group, drawn on over D (expo.out).
+function juryOutline(t, cx, cy, at) {
+  if (at < 0) return "";
+  cue("agree", at);
+  if (t < at) return "";
+  const pad = 24, x = cx - JURY.w / 2 - pad, y = cy - JURY.h / 2 - pad, w = JURY.w + 2 * pad, h = JURY.h + 2 * pad, per = 2 * (w + h);
+  const k = expoOut((t - at) / D);
+  return `<rect x="${n3(x)}" y="${n3(y)}" width="${n3(w)}" height="${n3(h)}" rx="38" fill="none" stroke="${C.blue}" stroke-width="3" stroke-dasharray="${n3(per * k)} ${n3(per)}"/>`;
+}
+
 // Lucide icons (24-unit box), flagged as Lucide in README.
 const ICON = {
   globe: `<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>`,
@@ -301,56 +343,47 @@ shot(10.6, 16.0, C.night, (t) => {
   return A + layer(t, 16.0 - 3 * F, B1) + layer(t, 16.0, objS + B2);
 });
 
-// 5 · Now there's Uptime — the ground cuts to white
-shot(16.0, 19.0, C.white, (t) => {
-  const e = 120, objW = 2 * e * Math.sin(Math.PI / 3);
-  const cube = gs(enter(t, 16.0, 1e9, 160, 0.88), CX, CY, solidCube(CX, CY, e, C.blue));
-  return layer(t, 19.0 - 3 * F, flank(t, { objW, objH: 2 * e, left: { str: "Now there’s", fill: C.ink, tIn: 16.35 } })) +
-    layer(t, 19.0, cube + flank(t, { objW, objH: 2 * e, right: { str: "Uptime", fill: C.blue, tIn: 16.95 } }));
+// 5 · The turn: Now GenLayer's [jury] jury decides — the ground cuts to white
+const JY = CY - 20;
+function juryScene(t, t0, o = {}) {
+  cue("pop", t0);
+  const box = gs(enter(t, t0, 1e9, 160, 0.92), CX, JY, juryBox(CX, JY));
+  const res = o.resAt === undefined ? "" : text(t, { str: "[DOWN]", font: "m", size: MONO, fill: C.ink, x: CX, y: JY + JURY.h / 2 + 96, align: "center", tIn: o.resAt });
+  return box + juryOutline(t, CX, JY, o.outAt ?? -1) + res;
+}
+const JH = JURY.h + 200;
+shot(16.0, 20.0, C.white, (t) => {
+  const obj = juryScene(t, 16.0, { outAt: 18.0, resAt: 18.35 });
+  return layer(t, 20.0 - 3 * F, flank(t, { objW: JURY.w + 48, objH: JH, left: { str: "Now GenLayer’s", fill: C.ink, tIn: 16.35 } })) +
+    layer(t, 20.0, obj + flank(t, { objW: JURY.w + 48, objH: JH, right: { spans: [["jury ", C.ink], ["decides", C.blue]], tIn: 16.95 } }));
 });
 
-// 6 · Validators check it / One lies, outvoted
-const V = { rowH: 74, cube: 22, lab: 30 };
-shot(19.0, 26.6, C.white, (t) => {
-  const labW = measure("[VALIDATOR 5]", V.lab, "m"), resW = measure("[DOWN]", V.lab, "m");
-  const objW = 44 + 20 + labW + 24 + 96 + 24 + resW, objH = 5 * V.rowH;
-  const x0 = CX - objW / 2, lie = t >= 22.8, agreed = t >= 24.2;
-  let stack = "";
-  for (let i = 0; i < 5; i++) {
-    const ry = CY + (i - 2) * V.rowH, liar = i === 4 && lie;
-    const col = liar ? C.red : C.ink;
-    const rowM = enter(t, 19.0 + i * 0.1, 1e9, 40, 0.92);
-    if (!rowM) continue;
-    const lx = x0 + 44 + 20, cx1 = lx + labW + 24, rx = cx1 + 96 + 24;
-    let row = wireCube(x0 + 22, ry, V.cube, col, 2);
-    row += text(t, { str: `[VALIDATOR ${i + 1}]`, font: "m", size: V.lab, fill: col, x: lx, y: ry + 11, tIn: -1 });
-    row += `<path d="M${n3(cx1)} ${ry}H${n3(cx1 + 96)}" stroke="${liar ? C.red : C.label}" stroke-width="2"/>`;
-    if (i < 4) row += text(t, { str: "[DOWN]", font: "m", size: V.lab, fill: agreed ? C.blue : C.ink, x: rx, y: ry + 11, tIn: 20.7 + i * 0.3 });
-    else row += text(t, { str: "[UP]", font: "m", size: V.lab, fill: C.red, x: rx, y: ry + 11, tIn: 22.8 });
-    stack += gs(rowM, CX, ry, row);
-  }
-  if (agreed) {
-    const rx = x0 + objW - resW, top = CY - 2 * V.rowH - 32, bot = CY + 1 * V.rowH + 32;
-    stack += `<rect x="${n3(rx - 22)}" y="${n3(top)}" width="${n3(resW + 44)}" height="${n3(bot - top)}" rx="26" fill="none" stroke="${C.blue}" stroke-width="3"/>`;
-  }
-  const A = flank(t, { objW, objH, left: { str: "Validators", fill: C.ink, tIn: 19.45, tOut: 22.6 }, right: { str: "check it", fill: C.ink, tIn: 20.0, tOut: 22.6 } });
-  const B1 = flank(t, { objW, objH, left: { str: "One lies", fill: C.ink, tIn: 22.8 } });
-  const B2 = flank(t, { objW, objH, right: { str: "outvoted", fill: C.ink, tIn: 24.4 } });
-  return A + layer(t, 26.6 - 3 * F, B1) + layer(t, 26.6, stack + B2);
+// 6 · A false report [one red mark, struck and thrown out] won't stand
+shot(20.0, 23.6, C.white, (t) => {
+  let obj = juryScene(t, 20.0, { outAt: 20.0, resAt: 20.0 });
+  const my = JY - JURY.h / 2 - 82, mw = measure("[UP]", MONO, "m");
+  let mark = text(t, { str: "[UP]", font: "m", size: MONO, fill: C.red, x: CX, y: my, align: "center", tIn: 20.55 });
+  cue("fail", 21.5);
+  if (t >= 21.5) { const k = expoOut((t - 21.5) / (12 * F)); mark += `<path d="M${n3(CX - mw / 2 - 10)} ${n3(my - 11)}h${n3((mw + 20) * k)}" stroke="${C.red}" stroke-width="3"/>`; }
+  obj += layer(t, 22.6, mark);
+  return layer(t, 23.6 - 3 * F, flank(t, { objW: JURY.w + 48, objH: JH, left: { str: "A false report", fill: C.ink, tIn: 20.35 } })) +
+    layer(t, 23.6, obj + flank(t, { objW: JURY.w + 48, objH: JH, right: { str: "won’t stand", fill: C.ink, tIn: 21.7 } }));
 });
 
-// 7 · The truth lands on-chain — sealed block
-shot(26.6, 30.4, C.white, (t) => {
+// 7 · The truth lands on-chain — sealed block (timed as written, played 3 s earlier)
+const at = (dt, draw) => (t) => draw(t + dt);
+shot(23.6, 27.4, C.white, at(3.0, (t) => {
   const e = 110, objW = 2 * e * Math.sin(Math.PI / 3);
   const cube = gs(enter(t, 26.6, 1e9, 160, 0.88), CX, CY, solidCube(CX, CY, e, C.ink));
   const tag = text(t, { str: "[DOWN · 03:04 AM]", font: "m", size: MONO, fill: C.ink, x: CX, y: CY + e + 70, align: "center", tIn: 27.95 });
   return layer(t, 30.4 - 6 * F, tag) +
     layer(t, 30.4 - 3 * F, flank(t, { objW, objH: 2 * e + 120, left: { str: "The truth", fill: C.ink, tIn: 26.95 } })) +
     layer(t, 30.4, cube + flank(t, { objW, objH: 2 * e + 120, right: { str: "lands on-chain", fill: C.ink, tIn: 27.5 } }));
-});
+}));
+cue("lock", 23.6);
 
 // 8 · You get the alert / Before your users do
-shot(30.4, 35.0, C.white, (t) => {
+shot(27.4, 32.0, C.white, at(3.0, (t) => {
   const label = "YOURSITE.COM IS DOWN", G = pillGeom(label);
   const p = gs(enter(t, 30.4, 1e9, 160, 0.92), CX, CY, pill(t, CX, CY, label, { icon: "bell", fill: C.white, stroke: C.red, color: C.red }));
   const lab = text(t, { str: "UPTIME ALERT", font: "m", size: 22, fill: C.label, x: CX, y: CY - 70, align: "center", tIn: 31.7 });
@@ -359,35 +392,29 @@ shot(30.4, 35.0, C.white, (t) => {
   const B1 = flank(t, { objW: G.w, objH, left: { str: "Before", fill: C.ink, tIn: 32.8 } });
   const B2 = flank(t, { objW: G.w, objH, right: { str: "your users do", fill: C.ink, tIn: 33.15 } });
   return layer(t, 35.0 - 6 * F, lab) + A + layer(t, 35.0 - 3 * F, B1) + layer(t, 35.0, p + B2);
-});
+}));
+cue("alert", 27.4);
 
-// 9 · Uptime — the uptime monitor that can't lie
-shot(35.0, 39.4, C.white, (t) => {
-  const big = VERT ? 200 : 180, sm = 80;
-  const lines = VERT
-    ? [[["The uptime monitor", C.ink]], [["that ", C.ink], ["can’t lie", C.blue]]]
-    : [[["The uptime monitor that ", C.ink], ["can’t lie", C.blue]]];
-  const gapB = VERT ? 130 : 120, lineH = 100;
-  const blockH = CAP.d * big + gapB + (lines.length - 1) * lineH;
-  const yTop = CY - blockH / 2 + CAP.d * big;
-  let s = text(t, { str: "Uptime", size: big, fill: C.ink, x: CX, y: yTop, align: "center", unit: "letter", step: 2 * F, tIn: 35.0, rise: 0.42 * big });
-  let tag = "";
-  lines.forEach((spans, i) => {
-    tag += text(t, { spans, size: sm, x: CX, y: yTop + gapB + i * lineH, align: "center", unit: "word", step: 0.1, tIn: 35.75 + i * 0.4, rise: 24 });
-  });
-  return layer(t, 39.4 - 3 * F, tag) + layer(t, 39.4, s);
+// 9 · Uptime / you can prove
+shot(32.0, 35.6, C.white, (t) => {
+  const big = VERT ? 200 : 180, sm = VERT ? 92 : 80, gapB = VERT ? 130 : 120;
+  const yTop = CY - (CAP.d * big + gapB) / 2 + CAP.d * big;
+  const s = text(t, { str: "Uptime", size: big, fill: C.ink, x: CX, y: yTop, align: "center", unit: "letter", step: 2 * F, tIn: 32.0, rise: 0.42 * big });
+  const tag = text(t, { spans: [["you can ", C.ink], ["prove", C.blue]], size: sm, x: CX, y: yTop + gapB, align: "center", unit: "word", step: 0.12, tIn: 32.75, rise: 24 });
+  return layer(t, 35.6 - 3 * F, tag) + layer(t, 35.6, s);
 });
 
 // 10 · End card — Built on GenLayer
-shot(39.4, 43.6, C.night, (t) => {
+shot(35.6, 39.8, C.night, (t) => {
   const lw = VERT ? 700 : 806, lh = (lw * LOGO.h) / LOGO.w, sc = lw / LOGO.w;
   const top = CY - 190;
-  const label = text(t, { str: "BUILT ON", font: "m", size: 32, track: 0.08, fill: C.logo, opacity: 0.5, x: CX, y: top, align: "center", tIn: 39.9 });
+  cue("logo", 35.6);
+  const label = text(t, { str: "BUILT ON", font: "m", size: 32, track: 0.08, fill: C.logo, opacity: 0.5, x: CX, y: top, align: "center", tIn: 36.1 });
   const ly = top + 40;
-  const logo = gs(enter(t, 39.4, 1e9, 24, 0.88), CX, ly + lh / 2,
+  const logo = gs(enter(t, 35.6, 1e9, 24, 0.88), CX, ly + lh / 2,
     `<g transform="translate(${n3(CX - lw / 2)} ${n3(ly)}) scale(${n3(sc)})">${LOGO.ds.map((d) => `<path d="${d}" fill="${C.logo}"/>`).join("")}</g>`);
-  const url = text(t, { str: "uptime.genlayer.foundation", font: "m", size: VERT ? 40 : 40, fill: C.logo, x: CX, y: ly + lh + 110, align: "center", tIn: 40.5 });
-  const note = text(t, { str: "NOT AUDITED · TESTNET ONLY", font: "m", size: 22, track: 0.08, fill: C.logo, opacity: 0.5, x: CX, y: ly + lh + 170, align: "center", tIn: 41.1 });
+  const url = text(t, { str: "uptime.genlayer.foundation", font: "m", size: VERT ? 40 : 40, fill: C.logo, x: CX, y: ly + lh + 110, align: "center", tIn: 36.7 });
+  const note = text(t, { str: "NOT AUDITED · TESTNET ONLY", font: "m", size: 22, track: 0.08, fill: C.logo, opacity: 0.5, x: CX, y: ly + lh + 170, align: "center", tIn: 37.3 });
   return label + logo + url + note;
 });
 
@@ -415,9 +442,16 @@ if (stillsArg) {
     console.log(f);
   }
 } else {
+  // collect cues by drawing every shot at a fine step, then a whoosh on each cut
+  for (const sc of S) for (let t = sc.t0; t < sc.t1; t += 0.02) sc.draw(t);
+  S.slice(1).forEach((sc) => cue("whoosh", sc.t0));
+  const kept = CUES.filter((c) => c.t < DUR).sort((a, b) => a.t - b.t);
+  const wav = path.join(OUT, `film-sfx-${tag}.wav`);
+  fs.writeFileSync(path.join(OUT, `film-cues-${tag}.json`), JSON.stringify(kept, null, 1));
+  synth(kept, DUR, wav);
   const file = path.join(OUT, `uptime-film-${tag}.mp4`);
-  const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${W}x${H}`, "-r", `${FPS}`, "-i", "-",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-r", `${FPS}`, "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
+  const ff = spawn("ffmpeg", ["-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${W}x${H}`, "-r", `${FPS}`, "-i", "-", "-i", wav,
+    "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-r", `${FPS}`, "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
   const N = Math.round(DUR * FPS);
   for (let i = 0; i < N; i++) {
     const img = raster(frameSVG(i / FPS));

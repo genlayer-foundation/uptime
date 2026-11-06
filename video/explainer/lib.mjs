@@ -162,7 +162,7 @@ export function text(str, o) {
     const on = t < o.type.at + n / (o.type.cps || 32) + 0.1 || Math.floor(t * 2) % 2 === 0;
     if (t >= o.type.at - 0.4 && on && (o.caretUntil === undefined || t < o.caretUntil)) {
       const cx = visibleTyped >= n ? L.width + fs * 0.12 : (L.glyphs[Math.max(0, visibleTyped)] || { x: L.width }).x;
-      out += `<rect x="${r2(x0 + Math.max(0, cx))}" y="${r2(yb - L.cap - fs * 0.06)}" width="${r2(fs * 0.55)}" height="${r2(L.cap + fs * 0.12)}" fill="${o.caretFill || fill}"/>`;
+      out += `<rect x="${r2(x0 + Math.max(0, cx))}" y="${r2(yb - L.cap - fs * 0.06)}" width="${r2(fs * (o.caretW ?? 0.55))}" height="${r2(L.cap + fs * 0.12)}" fill="${o.caretFill || fill}"/>`;
     }
   }
   return out;
@@ -248,6 +248,7 @@ const ICONS = {
   clock: `<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>`,
   code: `<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>`,
   rocket: `<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>`,
+  check: `<path d="M20 6 9 17l-5-5"/>`,
   unlock: `<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>`,
 };
 export function icon(name, x, y, size = 28, stroke = C.ink, sw = 2) {
@@ -289,4 +290,27 @@ export function bez3(p0, p1, p2, p3, u) {
     v * v * v * p0[0] + 3 * v * v * u * p1[0] + 3 * v * u * u * p2[0] + u * u * u * p3[0],
     v * v * v * p0[1] + 3 * v * v * u * p1[1] + 3 * v * u * u * p2[1] + u * u * u * p3[1],
   ];
+}
+
+// GenLayer's jury: a new concept, so its own shape (video_illustration.md, "A new concept").
+// A jury box: a row of abstract heads behind one grey front panel. No labels, no per-seat
+// results: the jury decides as one. Width w, centred on (cx, cy).
+export const JURY = { w: 380, h: 180 };
+export function juryBox(cx, cy, { w = JURY.w, h = JURY.h, seats = 6, stroke = C.ink, bg = "#FFFFFF", panel = C.card } = {}) {
+  const top = cy - h / 2, panelTop = cy + 6;
+  const step = (w - 90) / (seats - 1), x0 = cx - (w - 90) / 2;
+  let o = "";
+  for (let i = 0; i < seats; i++) {
+    const x = x0 + i * step;
+    o += `<path d="M${r2(x - 25)},${r2(panelTop + 10)} v-12 a25,25 0 0 1 50,0 v12" fill="${bg}" stroke="${stroke}" stroke-width="2.5"/>`;
+    o += `<circle cx="${r2(x)}" cy="${r2(top + 34)}" r="17" fill="${bg}" stroke="${stroke}" stroke-width="2.5"/>`;
+  }
+  o += rect(cx - w / 2, panelTop, w, top + h - panelTop, { r: 24, fill: panel, stroke: C.quiet1, sw: 2 });
+  return o;
+}
+// The one blue outline round the group, drawn on. k in 0..1.
+export function outline(cx, cy, w, h, k, col = C.blue, pad = 22, r = 36) {
+  const x = cx - w / 2 - pad, y = cy - h / 2 - pad, ww = w + 2 * pad, hh = h + 2 * pad;
+  const per = 2 * (ww + hh);
+  return `<rect x="${r2(x)}" y="${r2(y)}" width="${r2(ww)}" height="${r2(hh)}" rx="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-dasharray="${(per * k).toFixed(1)} ${per}"/>`;
 }
