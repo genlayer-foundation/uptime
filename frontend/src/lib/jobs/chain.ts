@@ -5,8 +5,7 @@
 //   genlayer  genlayer-js client: deploy / write / read (Bradbury txs carry
 //             the Phase 2 fee deposit, lib/genlayer/fees.ts), signed by that
 //             network's relayer key (lib/signer.ts: RELAYER_KEY_STUDIO /
-//             RELAYER_KEY_BRADBURY, the latter falling back to the deprecated
-//             PRIVATE_KEY); the Heartbeat signs with the same key
+//             RELAYER_KEY_BRADBURY); the Heartbeat signs with the same key
 //   evm       viem on the Bradbury chain RPC: the UptimePool contract
 
 import { createAccount, createClient } from "genlayer-js";

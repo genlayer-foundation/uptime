@@ -152,7 +152,7 @@ SCHEDULER=0x… MAILER=0x… forge script script/DeployUptimePool.s.sol --rpc-ur
 
 ### Presets that need no contract
 
-The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in `src/lib/signer.ts`; the Heartbeat uses the same Bradbury key; `PRIVATE_KEY` is a deprecated Bradbury fallback that logs a warning), so the user's contract sees **the relayer address as `msg.sender`**. If an owner-gated contract should accept these runs, its owner has to authorize that address.
+The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in `src/lib/signer.ts`; the Heartbeat uses the same Bradbury key), so the user's contract sees **the relayer address as `msg.sender`**. If an owner-gated contract should accept these runs, its owner has to authorize that address.
 
 | Preset | Tx the scheduler sends (genlayer-js) |
 |---|---|
