@@ -53,6 +53,8 @@ export interface ChargeLine {
   amountWei: string;
   // The run's first transaction step: it also carries the run's flat fee.
   runFee?: boolean;
+  // The job's off-chain per-run cap (jobs.per_run_cap_wei), if any.
+  capWei?: string | null;
 }
 
 export interface LineOutcome {
@@ -95,7 +97,9 @@ export interface Repo {
 
   // Decided Bradbury step runs not yet charged: every one with gas, plus (when
   // `feeLines`) each run's first transaction step even without gas, flagged
-  // `runFee`, so the run's flat fee is charged exactly once.
+  // `runFee`, so the run's flat fee is charged exactly once. Only FINISHED runs
+  // (not RUNNING), with a run's lines adjacent and in step order: `settle`
+  // charges a whole run as ONE line, so the per-run cap covers every step.
   unsettled(network: Network, untilSec: number, maxLines: number, opts?: { feeLines?: boolean }): Promise<ChargeLine[]>;
   // Records the batch and returns its local id and the on-chain settlementId
   // (>= minOnchainId, strictly above every earlier one).
@@ -436,20 +440,21 @@ export class PgRepo implements Repo {
     const r = await this.pool.query(
       `SELECT * FROM (
          SELECT sr.run_id, sr.idx, r.job_id, j.pool_id, coalesce(sr.gas_wei, 0)::text AS amount, sr.resolved_at,
-                sr.settled_in, sr.charge_outcome, sr.charge_attempts, sr.gas_wei,
+                sr.settled_in, sr.charge_outcome, sr.charge_attempts, sr.gas_wei, r.scheduled_for,
+                j.per_run_cap_wei::text AS cap,
                 sr.idx = (SELECT min(s2.idx) FROM step_runs s2 WHERE s2.run_id = sr.run_id AND s2.tx_hash IS NOT NULL) AS run_fee
          FROM step_runs sr JOIN runs r ON r.id = sr.run_id JOIN jobs j ON j.id = r.job_id
-         WHERE j.network = $1 AND NOT j.system
+         WHERE j.network = $1 AND NOT j.system AND r.state <> 'RUNNING'
        ) x
        WHERE x.settled_in IS NULL AND (x.gas_wei > 0 OR ($5 AND x.run_fee))
          AND x.charge_outcome IS DISTINCT FROM 'CHARGED' AND x.charge_attempts < $3
          AND x.resolved_at IS NOT NULL AND x.resolved_at < $2
-       ORDER BY x.resolved_at LIMIT $4`,
+       ORDER BY x.scheduled_for, x.run_id, x.idx LIMIT $4`,
       [network, at(untilSec), MAX_CHARGE_ATTEMPTS, maxLines, !!opts.feeLines]
     );
     return r.rows.map((x) => ({
       runId: String(x.run_id), idx: Number(x.idx), jobId: String(x.job_id), poolId: x.pool_id as string, amountWei: x.amount as string,
-      runFee: x.run_fee === true,
+      runFee: x.run_fee === true, capWei: (x.cap as string | null) ?? null,
     }));
   }
 

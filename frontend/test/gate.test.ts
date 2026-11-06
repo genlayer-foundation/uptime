@@ -10,7 +10,8 @@ import type { GateDeps } from "@/lib/jobs/gate";
 import type { JobRow } from "@/lib/jobs/internal";
 import { POOL_ABI } from "@/lib/pool/abi";
 import { readPrices, runChargeWei } from "@/lib/pricing";
-import { fundingDecision, outcomesFromLogs, settle, type PoolCharger, type PoolView } from "@/lib/jobs/pool/pool";
+import { fundingDecision, outcomesFromLogs, runCharges, settle, type PoolCharger, type PoolView } from "@/lib/jobs/pool/pool";
+import { toJob } from "@/lib/jobs/internal";
 import { templates } from "@/lib/jobs/presets";
 import { createJob, deleteJob, editJob, pauseJob, resumeJob } from "@/lib/jobs/service";
 import { checkAssertion, validateJobInput } from "@/lib/jobs/spec";
@@ -529,5 +530,116 @@ describe("settlement", () => {
     };
     expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => charger })).toMatchObject({ error: expect.stringMatching(/receipt unknown/) });
     expect(await repo.unsettled("bradbury", T0 + 600, 10)).toEqual([]);
+  });
+});
+
+describe("per-run spending cap holds for the whole run", () => {
+  const two = (extra: Record<string, unknown> = {}) =>
+    job("bradbury", {
+      steps: [
+        { id: "a", kind: "write", contract: C1, method: "ping", args: [] },
+        { id: "b", kind: "write", contract: C1, method: "ping", args: [] },
+      ],
+      ...extra,
+    });
+  const prices = { emailWei: BigInt(0), runFeeWei: BigInt(1000), gasPerTxEstimateWei: BigInt(0) };
+
+  async function finishedRun(extra: Record<string, unknown> = {}) {
+    const { deps, repo } = setup();
+    const made = await createJob(deps, MALLORY, two(extra));
+    if (!made.ok) throw new Error("setup");
+    await repo.updateJob(made.value.id, { state: "active" });
+    const priced = { ...deps, runCostWei: () => BigInt(5) };
+    await dispatchDue(priced);
+    for (let i = 0; i < 4 && repo.runs[0].state === "RUNNING"; i++) await reconcile(priced);
+    expect(repo.runs[0].state).toBe("DONE");
+    return { repo, poolId: made.value.poolId };
+  }
+  const chargerFor = (lineCap?: bigint) => {
+    const charge = vi.fn(async (ids: `0x${string}`[]) => ({ hash: "0xfeed" as `0x${string}`, outcomes: ids.map(() => ({ charged: true })), chargedWei: "0" }));
+    const c: PoolCharger = { lastSettlement: async () => BigInt(0), simulate: async () => undefined, charge, ...(lineCap !== undefined ? { lineCap: async () => lineCap } : {}) };
+    return { charge, c };
+  };
+
+  it("charges a multi-step run as ONE line: fee + every step's gas", async () => {
+    const { repo, poolId } = await finishedRun();
+    const { charge, c } = chargerFor();
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => c, prices })).toMatchObject({ lines: 1, charged: 1, capped: 0, totalWei: "1010" });
+    expect(charge).toHaveBeenCalledWith([poolId], [BigInt(1010)], BigInt(1));
+    // Both steps are settled by that one line: nothing is charged twice.
+    expect(await repo.unsettled("bradbury", T0 + 600, 10, { feeLines: true })).toEqual([]);
+  });
+
+  it("clamps the run to the job's off-chain cap, so the on-chain line cap equals the per-run cap", async () => {
+    const { repo, poolId } = await finishedRun({ perRunCapWei: "1007" });
+    const { charge, c } = chargerFor();
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => c, prices })).toMatchObject({ lines: 1, capped: 1, totalWei: "1007" });
+    expect(charge).toHaveBeenCalledWith([poolId], [BigInt(1007)], BigInt(1));
+  });
+
+  it("clamps to the pool's on-chain maxPerCharge when that is lower", async () => {
+    const { repo, poolId } = await finishedRun({ perRunCapWei: "1007" });
+    const { charge, c } = chargerFor(BigInt(1003));
+    await settle(repo, T0 + 600, { enabled: true, charger: async () => c, prices });
+    expect(charge).toHaveBeenCalledWith([poolId], [BigInt(1003)], BigInt(1));
+  });
+
+  it("never charges a run that is still RUNNING (its later steps would be charged apart)", async () => {
+    const { deps, repo } = setup();
+    const made = await createJob(deps, MALLORY, two());
+    if (!made.ok) throw new Error("setup");
+    await repo.updateJob(made.value.id, { state: "active" });
+    await dispatchDue({ ...deps, runCostWei: () => BigInt(5) });
+    expect(repo.runs[0].state).toBe("RUNNING");
+    const { charge, c } = chargerFor();
+    expect(await settle(repo, T0 + 600, { enabled: true, charger: async () => c, prices })).toMatchObject({ lines: 0 });
+    expect(charge).not.toHaveBeenCalled();
+  });
+
+  it("splits a capped run's charge across its steps so the recorded lines add up", () => {
+    const line = (idx: number, gas: string, runFee = false) => ({ runId: "r", idx, jobId: "j", poolId: "0xp", amountWei: gas, runFee, capWei: "1500" });
+    const [r] = runCharges([line(0, "600", true), line(1, "600"), line(2, "600")], prices);
+    expect(r).toMatchObject({ amountWei: BigInt(1500), costWei: BigInt(2800) });
+    expect(r.steps.map((s) => s.amountWei)).toEqual(["1500", "0", "0"]);
+    const [free] = runCharges([{ ...line(0, "6"), capWei: "0" }, { ...line(1, "6"), capWei: "0" }], prices);
+    expect(free.amountWei).toBe(BigInt(12)); // 0 = no cap
+  });
+
+  it("refuses to run a job whose estimated run cost exceeds its cap", () => {
+    const j = { id: 1, owner: MALLORY, perRunCapWei: "50", system: false, steps: [{ kind: "write" }] } as unknown as JobRow;
+    const view: PoolView = { owner: MALLORY, paused: false, balance: BigInt(1000), allowanceActive: true, allowancePaused: false, available: BigInt(500) };
+    expect(fundingDecision(j, view, new Set(), BigInt(40)).ok).toBe(true);
+    expect(fundingDecision(j, view, new Set(), BigInt(60))).toMatchObject({ ok: false, reason: expect.stringMatching(/per-run spending cap/) });
+    expect(fundingDecision({ ...j, perRunCapWei: null }, { ...view, maxPerCharge: BigInt(30) }, new Set(), BigInt(40)).ok).toBe(false);
+    expect(fundingDecision({ ...j, perRunCapWei: null }, { ...view, available: BigInt(10) }, new Set(), BigInt(40))).toMatchObject({ ok: false, unfunded: true });
+  });
+});
+
+describe("job lifecycle as the API reports it", () => {
+  it("a Bradbury job that was never started is a draft, not paused", async () => {
+    const { deps } = setup();
+    const made = await createJob(deps, MALLORY, job("bradbury"));
+    if (!made.ok) throw new Error("setup");
+    expect(toJob(made.value)).toMatchObject({ state: "draft", paused: true });
+  });
+
+  it("marks a job out of funds while its runs are skipped, renders those runs as skipped, and clears it on the next run", async () => {
+    const { deps, repo, setNow } = setup();
+    const made = await createJob(deps, MALLORY, job("bradbury"));
+    if (!made.ok) throw new Error("setup");
+    await repo.updateJob(made.value.id, { state: "active" });
+    const dry: ExecutorDeps = { ...deps, gate: { ...deps.gate, funding: async () => ({ ok: false, unfunded: true, reason: "top up" }) } };
+    await dispatchDue(dry);
+    const j = (await repo.getJob(made.value.id))!;
+    expect(toJob(j)).toMatchObject({ state: "unfunded", stateReason: "top up", paused: false });
+    expect(toPublicRun(repo.runs[0])).toMatchObject({ pass: null, skipped: "top up", unfunded: true });
+
+    setNow(T0 + 300);
+    await dispatchDue(deps);
+    expect(toJob((await repo.getJob(made.value.id))!).state).toBe("active");
+    expect(toPublicRun(repo.runs[1]).skipped).toBeUndefined();
+
+    await repo.updateJob(made.value.id, { state: "paused" });
+    expect(toJob((await repo.getJob(made.value.id))!).state).toBe("paused");
   });
 });

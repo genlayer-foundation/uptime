@@ -8,6 +8,7 @@ import { ButtonLink, CardGrid, EmptyRow, EmptyState, PageContainer, PageHeader, 
 import { HeartbeatExampleCard } from "@/components/marketing/HeartbeatExampleCard";
 import { jobsApi } from "@/lib/jobs/client";
 import type { Job, Run } from "@/lib/jobs/types";
+import { jobPhase, PHASE } from "@/lib/jobs/display";
 import { useSession } from "./session";
 import { ErrorAlert, Loading, MockBadge, NetworkBadge, SignInGate } from "./ui";
 import { cnRate, pct, passRate, runsSince, timeAgo, timeUntil } from "./format";
@@ -41,8 +42,10 @@ function useJobs(kind: "mine" | "public", enabled: boolean) {
 }
 
 function jobState(job: Job, last: Run | undefined): { tone: Tone; label: string } {
-  if (job.paused) return { tone: "neutral", label: "Paused" };
+  const phase = jobPhase(job);
+  if (phase !== "running") return { tone: PHASE[phase].tone, label: PHASE[phase].label };
   if (!last) return { tone: "neutral", label: "Waiting" };
+  if (last.skipped !== undefined) return { tone: "neutral", label: last.unfunded ? "Out of GEN" : "Skipped" };
   if (last.pass === null) return { tone: "warn", label: "Running" };
   return last.pass ? { tone: "success", label: "Passing" } : { tone: "danger", label: "Failing" };
 }

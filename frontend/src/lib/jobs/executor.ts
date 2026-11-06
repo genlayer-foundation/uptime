@@ -79,12 +79,19 @@ export async function dispatchDue(deps: ExecutorDeps, limit = 100): Promise<Disp
     // stop the job at its very next slot.
     const gate = await runGate(job, deps.gate);
     if (!gate.ok) {
-      await repo.createRun({ id: newId(), jobId: job.id, group: group.key, scheduledFor: ds.slot, state: "SKIPPED", error: gate.reason });
+      await repo.createRun({
+        id: newId(), jobId: job.id, group: group.key, scheduledFor: ds.slot, state: "SKIPPED", error: gate.reason,
+        ...(gate.unfunded ? { meta: { unfunded: true } } : {}),
+      });
       if (gate.fatal) await repo.updateJob(job.id, { state: gate.state ?? "errored", stateReason: gate.reason });
+      // Still scheduled, but out of funds: the reason marks it for the UI.
+      else if (gate.unfunded && job.stateReason !== gate.reason) await repo.updateJob(job.id, { stateReason: gate.reason });
       rep.skipped++;
       note("skipped", gate.reason);
       continue;
     }
+
+    if (job.stateReason && job.state === "active") await repo.updateJob(job.id, { stateReason: null });
 
     if (job.system && job.preset === HEARTBEAT) {
       await dispatchHeartbeat(deps, job, group, ds.slot);
@@ -457,5 +464,8 @@ export function toPublicRun(r: RunRow): Run {
     // A slot the gate refused: one ERROR line so the history shows why.
     steps.push({ stepId: r.group, status: "ERROR", error: `skipped: ${r.error}` });
   }
-  return { id: r.id, jobId: r.jobId, startedAt: new Date(r.startedAt * 1000).toISOString(), steps, pass: r.pass };
+  return {
+    id: r.id, jobId: r.jobId, startedAt: new Date(r.startedAt * 1000).toISOString(), steps, pass: r.pass,
+    ...(r.state === "SKIPPED" ? { skipped: r.error ?? "skipped", ...(r.meta?.unfunded === true ? { unfunded: true } : {}) } : {}),
+  };
 }

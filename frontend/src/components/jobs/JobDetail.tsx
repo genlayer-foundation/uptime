@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Download, Pause, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Coins, Download, Pause, Play, Trash2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardBody, CardGrid, CardHeader, EmptyRow, PageContainer, PageHeader, Section, Segmented, Stat, StatusDot, TBody, THead, Table, Td, Th, Tr } from "@/components/ui";
 import { JOBS_MOCK, jobsApi } from "@/lib/jobs/client";
 import type { Job, Run } from "@/lib/jobs/types";
+import { jobPhase, nextRunLabel, PHASE, runVerdict, type JobAction } from "@/lib/jobs/display";
+import { readPool } from "./pool";
 import { useSession } from "./session";
 import { ErrorAlert, Loading, MockBadge, NetworkBadge, SignInGate, StepStatus } from "./ui";
 import { describeAssertion, evaluate } from "./assert";
@@ -39,12 +41,18 @@ export function JobDetail({ id }: { id: string }) {
   const [days, setDays] = useState<number>(7);
   const [shown, setShown] = useState(50);
   const [now, setNow] = useState(() => Date.now());
+  // Never-started Bradbury job: can its pool already cover a run? (Draft vs Ready)
+  const [funded, setFunded] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [j, r] = await Promise.all([jobsApi.getJob(id), jobsApi.listRuns(id, 2000)]);
       setJob(j);
       setRuns(r);
+      if (j.state === "draft" && j.poolId) {
+        const p = await readPool(j.poolId).catch(() => null);
+        setFunded(!!p && !p.paused && p.owner.toLowerCase() === j.owner.toLowerCase() && p.availableToSchedulerWei > BigInt(0));
+      }
       setError(null);
       setNow(Date.now());
     } catch (e) {
@@ -62,12 +70,16 @@ export function JobDetail({ id }: { id: string }) {
 
   const isOwner = !!(job && me?.wallet && job.owner.toLowerCase() === me.wallet.toLowerCase());
 
-  async function togglePause() {
+  async function act(action: JobAction) {
     if (!job) return;
+    if (action === "fund" || action === "top-up") {
+      document.getElementById("funding")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     setBusy("pause");
     setActionError(null);
     try {
-      setJob(job.paused ? await jobsApi.resumeJob(job.id) : await jobsApi.pauseJob(job.id));
+      setJob(action === "pause" ? await jobsApi.pauseJob(job.id) : await jobsApi.resumeJob(job.id));
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -133,6 +145,9 @@ export function JobDetail({ id }: { id: string }) {
   const last = runs[0];
   const lats = windowRuns.map(runLatencyMs).filter((x): x is number => x != null).sort((a, b) => a - b);
   const p50 = lats.length ? lats[Math.floor(lats.length / 2)] : null;
+  const phase = jobPhase(job, funded);
+  const ph = PHASE[phase];
+  const notRunning = nextRunLabel(phase);
   const next = job.paused ? null : nextRun(job.schedule, new Date(now));
   const rowsUrl = jobsApi.runsUrl(job.id, { format: "rows", limit: 1000 });
 
@@ -143,7 +158,7 @@ export function JobDetail({ id }: { id: string }) {
         eyebrow={
           <span className="inline-flex items-center gap-2">
             Job <NetworkBadge network={job.network} />
-            {job.paused ? <Badge tone="warn">paused</Badge> : <Badge tone="success">active</Badge>}
+            <Badge tone={ph.tone}>{ph.label}</Badge>
             {job.public && <Badge>public</Badge>}
             <MockBadge />
           </span>
@@ -158,10 +173,21 @@ export function JobDetail({ id }: { id: string }) {
         actions={
           isOwner ? (
             <>
-              <Button variant="secondary" onClick={togglePause} disabled={!!busy}>
-                {job.paused ? <Play className="h-3.5 w-3.5" aria-hidden /> : <Pause className="h-3.5 w-3.5" aria-hidden />}
-                {busy === "pause" ? "…" : job.paused ? "Resume" : "Pause"}
+              <Button variant={ph.action === "pause" ? "secondary" : "primary"} onClick={() => act(ph.action)} disabled={!!busy} title={job.stateReason}>
+                {ph.action === "pause" ? (
+                  <Pause className="h-3.5 w-3.5" aria-hidden />
+                ) : ph.action === "fund" || ph.action === "top-up" ? (
+                  <Coins className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <Play className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {busy === "pause" ? "…" : ph.actionLabel}
               </Button>
+              {phase === "out-of-gen" && (
+                <Button variant="secondary" onClick={() => act("pause")} disabled={!!busy}>
+                  <Pause className="h-3.5 w-3.5" aria-hidden /> {busy === "pause" ? "…" : "Pause"}
+                </Button>
+              )}
               {confirmDelete ? (
                 <>
                   <Button variant="danger" onClick={remove} disabled={!!busy}>
@@ -197,18 +223,18 @@ export function JobDetail({ id }: { id: string }) {
             <Stat label={`Pass rate ${days === 1 ? "24h" : `${days}d`}`} value={pct(rate)} sub={`${windowRuns.filter((r) => r.pass !== null).length} decided runs`} empty={rate == null} />
             <Stat
               label="Last run"
-              value={last ? (last.pass === null ? "running" : last.pass ? "pass" : "fail") : "—"}
+              value={last ? runVerdict(last).label : "—"}
               sub={last ? timeAgo(last.startedAt, now) : "never"}
               empty={!last}
             />
             <Stat label="Time to accepted p50" value={seconds(p50)} sub="slowest step per run" empty={p50 == null} />
-            <Stat label="Next run" value={job.paused ? "paused" : next ? timeUntil(next, now) : "—"} sub={next ? dateTime(next) : undefined} empty={!next} />
+            <Stat label="Next run" value={notRunning ?? (next ? timeUntil(next, now) : "—")} sub={next ? dateTime(next) : undefined} empty={!next} />
           </CardGrid>
           <RunCharts runs={windowRuns} />
         </div>
 
         {job.network === "bradbury" && (
-          <Section title="Funding" subtitle="This job's GEN pool on GenLayer Testnet Bradbury. Only the owner's wallet can move it.">
+          <Section id="funding" title="Funding" subtitle="This job's GEN pool on GenLayer Testnet Bradbury. Only the owner's wallet can move it.">
             {job.poolId ? (
               <PoolPanel poolId={job.poolId} isOwner={isOwner} wallet={me?.wallet ?? null} />
             ) : (
@@ -294,9 +320,18 @@ export function JobDetail({ id }: { id: string }) {
               </tr>
             </THead>
             <TBody>
-              {runs.length === 0 && <EmptyRow colSpan={6}>No runs yet. The first one starts at the next slot.</EmptyRow>}
+              {runs.length === 0 && (
+                <EmptyRow colSpan={6}>
+                  {phase === "draft" || phase === "ready"
+                    ? "No runs yet. Start the job to schedule its first run."
+                    : notRunning
+                      ? "No runs yet."
+                      : "No runs yet. The first one starts at the next slot."}
+                </EmptyRow>
+              )}
               {runs.slice(0, shown).map((r) => {
                 const failed = r.pass === false ? failedAssertions(job, r) : [];
+                const verdict = runVerdict(r);
                 const gas = r.steps.reduce((acc, s) => acc + (s.gasGen ? Number(s.gasGen) : 0), 0);
                 const errs = r.steps.filter((s) => s.error).map((s) => `${s.stepId}: ${s.error}`);
                 return (
@@ -307,8 +342,8 @@ export function JobDetail({ id }: { id: string }) {
                     </Td>
                     <Td>
                       <span className="inline-flex items-center gap-2">
-                        <StatusDot tone={r.pass === null ? "warn" : r.pass ? "success" : "danger"} pulse={r.pass === null} />
-                        {r.pass === null ? "running" : r.pass ? "pass" : "fail"}
+                        <StatusDot tone={verdict.tone} pulse={verdict.pulse} />
+                        {verdict.label}
                       </span>
                     </Td>
                     <Td>

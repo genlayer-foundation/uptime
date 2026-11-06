@@ -158,7 +158,7 @@ export class MemoryRepo implements Repo {
     const out: ChargeLine[] = [];
     for (const r of this.runs) {
       const j = this.jobs.get(r.jobId)!;
-      if (j.network !== n || j.system) continue;
+      if (j.network !== n || j.system || r.state === "RUNNING") continue;
       const txIdx = r.steps.filter((s) => s.txHash).map((s) => s.idx);
       const feeIdx = txIdx.length ? Math.min(...txIdx) : null;
       for (const s of r.steps) {
@@ -168,7 +168,7 @@ export class MemoryRepo implements Repo {
         if (!(gas > BigInt(0) || (opts.feeLines && runFee))) continue;
         if (b.settledIn || b.outcome === "CHARGED" || b.attempts >= MAX_CHARGE_ATTEMPTS) continue;
         if (s.resolvedAt === null || s.resolvedAt >= until) continue;
-        out.push({ runId: r.id, idx: s.idx, jobId: j.id, poolId: j.poolId, amountWei: gas.toString(), runFee });
+        out.push({ runId: r.id, idx: s.idx, jobId: j.id, poolId: j.poolId, amountWei: gas.toString(), runFee, capWei: j.perRunCapWei ?? null });
       }
     }
     return out.slice(0, max);

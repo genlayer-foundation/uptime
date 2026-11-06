@@ -2,9 +2,17 @@
 // and are what the API returns; these carry what only the backend needs.
 
 import type { ScheduleRow } from "./schedule";
-import type { Assertion, Job, Network, Schedule, Step, StepRun } from "./types";
+import type { Assertion, Job, JobLifecycle, Network, Schedule, Step, StepRun } from "./types";
 
+// state_reason on an ACTIVE job means the scheduler is skipping its runs
+// because the pool cannot cover the next one (set and cleared by the executor).
 export type JobState = "draft" | "active" | "paused" | "errored" | "deleted";
+
+export function lifecycle(j: Pick<JobRow, "state" | "stateReason">): JobLifecycle {
+  if (j.state === "active") return j.stateReason ? "unfunded" : "active";
+  if (j.state === "deleted") return "paused";
+  return j.state;
+}
 
 export interface JobRow {
   id: string; // UUID
@@ -81,6 +89,8 @@ export function toJob(j: JobRow): Job {
     assertions: j.assertions,
     poolId: j.network === "bradbury" ? j.poolId : undefined,
     paused: j.state !== "active",
+    state: lifecycle(j),
+    ...(j.stateReason ? { stateReason: j.stateReason } : {}),
     ...(j.preset ? { preset: j.preset } : {}),
     public: j.public,
     createdAt: new Date(j.createdAt * 1000).toISOString(),

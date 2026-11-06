@@ -19,13 +19,15 @@ export interface FundingCheck {
   paused?: boolean;
   // The pool is owned by another wallet (ids are first-come): never run.
   foreign?: boolean;
+  // The pool exists but its balance or allowance cannot cover the next run.
+  unfunded?: boolean;
 }
 
 export type GateResult =
   | { ok: true }
   // fatal: the job cannot run until a human changes something.
   // state: what the job becomes ("paused" mirrors an on-chain pause).
-  | { ok: false; fatal: boolean; reason: string; state?: "paused" | "errored" };
+  | { ok: false; fatal: boolean; reason: string; state?: "paused" | "errored"; unfunded?: boolean };
 
 export function studioGate(wallet: string, allowlist: ReadonlySet<string>): GateResult {
   return isStudioAllowed(wallet, allowlist)
@@ -41,5 +43,5 @@ export async function runGate(j: JobRow, deps: GateDeps): Promise<GateResult> {
   const reason = f.reason ?? "Pool cannot cover the next run";
   if (f.foreign) return { ok: false, fatal: true, reason, state: "errored" };
   if (f.paused) return { ok: false, fatal: true, reason, state: "paused" };
-  return { ok: false, fatal: false, reason };
+  return { ok: false, fatal: false, reason, ...(f.unfunded ? { unfunded: true } : {}) };
 }

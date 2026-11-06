@@ -39,6 +39,12 @@ export type Assertion = {
   expected?: unknown;
 };
 
+// Where a job is in its life, for the UI. `paused` above stays true for every
+// job that is not scheduling; this says why: never started (a Bradbury draft
+// waiting for its pool), paused, stopped by the scheduler (errored), or
+// scheduling but skipping runs because its pool cannot cover the next one.
+export type JobLifecycle = "draft" | "active" | "unfunded" | "paused" | "errored";
+
 export type Job = {
   id: string;
   owner: string;
@@ -49,6 +55,8 @@ export type Job = {
   assertions: Assertion[];
   poolId?: string;
   paused: boolean;
+  state?: JobLifecycle; // absent from older backends: fall back to `paused`
+  stateReason?: string;
   preset?: string;
   public?: boolean;
   createdAt: string;
@@ -64,4 +72,14 @@ export type StepRun = {
   error?: string;
 };
 
-export type Run = { id: string; jobId: string; startedAt: string; steps: StepRun[]; pass: boolean | null };
+// `skipped`: the scheduler refused this slot (why); `unfunded`: because the
+// pool could not cover it. A skipped run has pass === null but is NOT running.
+export type Run = {
+  id: string;
+  jobId: string;
+  startedAt: string;
+  steps: StepRun[];
+  pass: boolean | null;
+  skipped?: string;
+  unfunded?: boolean;
+};
