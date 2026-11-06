@@ -60,6 +60,7 @@ async function refreshWallet() {
   } else $("bal").textContent = "—";
   updatePool();
   updateDlgButtons();
+  updateMailer();
 }
 
 $("connect").onclick = async () => {
@@ -238,6 +239,59 @@ $("d-go").onclick = async () => {
     $("d-summary").textContent = `Stopped: ${errText(e)}. Click Deploy again to resume.`;
   } finally { busy = false; updateDlgButtons(); updatePool(); }
 };
+
+// ---------------------------------------------------------------- 3. Set mailer (spender role 2)
+
+const LIVE_POOL = "0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A"; // UPTIME_POOL_BRADBURY, INTEGRATIONS.md
+$("m-pool").value = LIVE_POOL;
+$("m-addr").value = "0xb69619D3D7923316bb442C1A4D2aD9DE88aF4774"; // "Uptime Mailer (Bradbury)", 1Password vault Uptime Production
+let mSeq = 0;
+
+async function updateMailer() {
+  const seq = ++mSeq;
+  const pool = $("m-pool").value.trim(), addr = $("m-addr").value.trim();
+  $("m-propose").disabled = true; $("m-execute").disabled = true;
+  if (!L.isAddress(pool)) { $("m-state").innerHTML = `<span class="bad">pool is not an address</span>`; return; }
+  try {
+    const st = await L.readPool(reader, pool);
+    const p = await L.readPendingSpender(reader, pool, L.ROLE_MAILER);
+    if (seq !== mSeq) return;
+    const now = Math.floor(Date.now() / 1000);
+    const pend = p.exists ? `pending ${p.spender}, executable ${p.eta <= now ? "now" : new Date(p.eta * 1000).toISOString()}` : "nothing pending";
+    let msg = `On-chain: admin ${st.admin}, rotationDelay ${st.rotationDelay}s, scheduler ${st.scheduler}, mailer ${st.mailer}; role 2 ${pend}.`;
+    let err = null;
+    if (!account) err = "Connect MetaMask.";
+    else if (account.toLowerCase() !== st.admin.toLowerCase()) err = `Connected account is not the pool admin ${st.admin}.`;
+    $("m-execute").disabled = busy || !!err || !p.exists || p.eta > now;
+    if (!err && !L.isAddress(addr)) err = "Enter the new mailer address.";
+    else if (!err && addr.toLowerCase() === st.scheduler.toLowerCase()) err = "That is the scheduler: one address can hold only one role (SpenderHasRole).";
+    else if (!err && addr.toLowerCase() === st.mailer.toLowerCase()) msg += ' <span class="ok">Already the mailer.</span>';
+    $("m-state").innerHTML = msg + (err ? ` <span class="bad">${err}</span>` : "");
+    $("m-propose").disabled = busy || !!err || addr.toLowerCase() === st.mailer.toLowerCase();
+  } catch (e) {
+    if (seq === mSeq) $("m-state").innerHTML = `<span class="bad">read failed: ${errText(e)}</span>`;
+  }
+}
+for (const id of ["m-pool", "m-addr"]) $(id).addEventListener("input", updateMailer);
+
+async function mailerTx(build) {
+  if (busy) return;
+  busy = true; $("m-propose").disabled = true; $("m-execute").disabled = true;
+  try {
+    const tx = build();
+    await L.runCall({ reader, from: account, send: sendViaMetaMask, log,
+      status: (s, x = {}) => {
+        if (s === "signing") $("m-summary").textContent = "CONFIRM IN METAMASK: " + x.summary;
+        if (s === "mining") $("m-summary").textContent = `Sent ${x.hash}, waiting for receipt…`;
+      } }, tx);
+    $("m-summary").textContent = `${tx.name}: done.`;
+  } catch (e) {
+    log(`mailer: ${errText(e)}`);
+    $("m-summary").textContent = `Stopped: ${errText(e)}`;
+  } finally { busy = false; updateMailer(); updateDlgButtons(); }
+}
+$("m-propose").onclick = () => mailerTx(() => L.buildProposeSpenderTx($("m-pool").value.trim(), L.ROLE_MAILER, $("m-addr").value.trim()));
+$("m-execute").onclick = () => mailerTx(() => L.buildExecuteSpenderTx($("m-pool").value.trim(), L.ROLE_MAILER));
 
 // ---------------------------------------------------------------- boot
 

@@ -64,6 +64,17 @@
   <div class="tablewrap"><table><thead><tr><th>#</th><th>Contract</th><th>Expected address</th><th>State</th><th>Gas est / sent</th><th>Tx</th></tr></thead><tbody id="d-rows"></tbody></table></div>
 </section>
 
+<section id="mailer">
+  <h2>3. Set mailer on a deployed UptimePool — 2 transactions</h2>
+  <p class="muted">Admin only. <code>proposeSpender(2, mailer)</code>, then <code>executeSpender(2)</code> once <code>rotationDelay</code> has passed (0 on the live pool, so right away). The mailer must differ from the scheduler (<code>SpenderHasRole</code>). Only the address goes on chain; its key stays in 1Password.</p>
+  <label>UptimePool address</label><input id="m-pool">
+  <label>new mailer address (ROLE_MAILER, role 2)</label><input id="m-addr">
+  <div id="m-state" class="muted"></div>
+  <div class="summary" id="m-summary"></div>
+  <button id="m-propose" disabled>1. Propose mailer</button>
+  <button id="m-execute" disabled>2. Execute</button>
+</section>
+
 <section>
   <h2>Log</h2>
   <div id="log"></div>

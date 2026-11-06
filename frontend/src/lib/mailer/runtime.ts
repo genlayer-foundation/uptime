@@ -11,7 +11,7 @@
 import { providerToken, readConfig } from "./config";
 import { evmPoolCharger, type PoolCharger } from "./charger";
 import type { MailerDeps } from "./policy";
-import { postmarkProvider, type MailProvider } from "./provider";
+import { postmarkProvider, resendProvider, type MailProvider } from "./provider";
 import type { AlertsRepo } from "./repo";
 import type { AlertJob, AlertRun } from "./types";
 
@@ -42,8 +42,10 @@ export function resetMailer(): void {
 function defaultProvider(): MailProvider | null {
   const cfg = readConfig();
   const token = providerToken();
-  if (cfg.provider !== "postmark" || !token) return null;
-  return postmarkProvider({ token, stream: cfg.stream, apiBase: cfg.apiBase });
+  if (!token) return null;
+  if (cfg.provider === "resend") return resendProvider({ token, apiBase: cfg.apiBase });
+  if (cfg.provider === "postmark") return postmarkProvider({ token, stream: cfg.stream, apiBase: cfg.apiBase });
+  return null;
 }
 
 export function mailerDeps(): MailerDeps | null {

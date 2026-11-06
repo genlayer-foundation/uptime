@@ -9,7 +9,7 @@
 import { PRICE_ENV, readPrices } from "../pricing";
 import { isValidEmail } from "./address";
 
-/** Name of the env var holding the provider credential (Postmark server token). */
+/** Name of the env var holding the provider credential (Resend API key or Postmark server token). */
 export const PROVIDER_TOKEN_ENV = "MAILER_PROVIDER_TOKEN";
 /** Name of the env var holding the mailer's EVM key (pool spender role 2). */
 export const MAILER_KEY_ENV = "MAILER_KEY";
@@ -21,7 +21,7 @@ export const VERIFY_TTL_SEC = 24 * 3600;
 /** Max length of the job name as it appears in an email (§11.4.3). */
 export const JOB_NAME_MAX = 60;
 
-export type ProviderName = "none" | "postmark";
+export type ProviderName = "none" | "resend" | "postmark";
 
 /**
  * OPERATOR limits. The per-job cap, the job cooldown and the per-mailbox daily
@@ -61,13 +61,15 @@ function int(name: string, dflt: number, min: number, max: number): number {
 }
 
 export function readConfig(): MailerConfig {
-  const provider = env("MAILER_PROVIDER") === "postmark" ? "postmark" : "none";
+  const p = env("MAILER_PROVIDER");
+  const provider: ProviderName = p === "resend" || p === "postmark" ? p : "none";
   return {
     enabled: env("MAILER_ENABLED") === "1" || env("MAILER_ENABLED") === "true",
     provider,
     from: env("MAILER_FROM") ?? null,
     fromName: (env("MAILER_FROM_NAME") ?? "GenLayer Uptime").replace(/[\r\n"<>]/g, "").slice(0, 60),
     replyTo: env("MAILER_REPLY_TO") ?? null,
+    // Postmark only; Resend has no message streams.
     stream: env("MAILER_STREAM") ?? "outbound",
     apiBase: env("MAILER_API_BASE") ?? null,
     publicUrl: env("MAILER_PUBLIC_URL")?.replace(/\/+$/, "") ?? null,

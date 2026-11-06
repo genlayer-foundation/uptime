@@ -19,6 +19,9 @@ Then open http://127.0.0.1:8799/ and click **Connect MetaMask**. The page switch
    Contracts that already have code are skipped. The txs go out one at a time, and each one
    waits for its receipt and checks the code. You can reload at any point: progress is read
    back from the chain, and a stored tx hash is waited on, never sent a second time.
+3. **Set mailer: 2 signatures.** For the deployed pool (default the live
+   `0x5ea3…1d0A`): `proposeSpender(2, mailer)`, then `executeSpender(2)` (rotationDelay is 0 on
+   the live pool). Admin only; refuses the scheduler's address (`SpenderHasRole`).
 
 Before every MetaMask prompt the page runs `eth_estimateGas` on Bradbury and sets the gas to the
 estimate + 30% + 100k (no cap). It also shows a one-line summary of the tx.

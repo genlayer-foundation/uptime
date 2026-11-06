@@ -260,3 +260,44 @@ export async function runTx(env, tx) {
   log(`${tx.name}: deployed at ${tx.expected} (gasUsed ${BigInt(r.gasUsed)})`);
   return { state: "deployed", hash, gasUsed: BigInt(r.gasUsed) };
 }
+
+// ------------------------------------------------------------------ spender rotation (admin)
+
+export const ROLE_SCHEDULER = 1;
+export const ROLE_MAILER = 2;
+
+/** proposeSpender(role, spender): admin only; executable after rotationDelay (0 on the live pool). */
+export function buildProposeSpenderTx(pool, role, spender) {
+  return { key: `spender:propose:${pool.toLowerCase()}:${role}:${spender.toLowerCase()}`, name: `proposeSpender(${role}, ${checksum(spender)})`,
+    to: checksum(pool), data: "0x" + selector("proposeSpender(uint8,address)") + encUint(role) + encAddress(spender) };
+}
+
+/** executeSpender(role): admin only; applies the pending proposal (reverts SpenderHasRole if the address holds the other role). */
+export function buildExecuteSpenderTx(pool, role) {
+  return { key: `spender:execute:${pool.toLowerCase()}:${role}`, name: `executeSpender(${role})`,
+    to: checksum(pool), data: "0x" + selector("executeSpender(uint8)") + encUint(role) };
+}
+
+/** pendingSpender(role) -> { spender, eta, exists }. */
+export async function readPendingSpender(reader, pool, role) {
+  const r = await reader.call("eth_call", [{ to: pool, data: "0x" + selector("pendingSpender(uint8)") + encUint(role) }, "latest"]);
+  const w = strip(r);
+  return { spender: checksum("0x" + w.slice(24, 64)), eta: Number(BigInt("0x" + w.slice(64, 128))), exists: BigInt("0x" + w.slice(128, 192)) !== 0n };
+}
+
+/** Send one plain contract call (no CREATE2 check) and require a successful receipt. */
+export async function runCall(env, tx) {
+  const { reader, from, send, log } = env;
+  const est = await estimate(reader, from, tx);
+  const gas = gasWithHeadroom(est);
+  const summary = `${tx.name} on ${tx.to}, estimate ${est.toLocaleString("en-US")} gas, sending with gas ${gas.toLocaleString("en-US")}, value 0`;
+  env.status?.("signing", { summary });
+  log(`SIGN: ${summary}`);
+  const hash = await send({ from, to: tx.to, data: tx.data, value: "0x0", gas: "0x" + gas.toString(16) });
+  env.status?.("mining", { hash });
+  log(`${tx.name}: sent ${hash}`);
+  const r = await waitReceipt(reader, hash);
+  if (r.status !== "0x1") throw new Error(`${tx.name}: tx ${hash} reverted (status ${r.status})`);
+  log(`${tx.name}: mined (gasUsed ${BigInt(r.gasUsed)})`);
+  return { hash, gasUsed: BigInt(r.gasUsed) };
+}

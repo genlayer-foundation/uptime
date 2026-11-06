@@ -284,6 +284,15 @@ live value-transfer path.
    curl -s "https://dns.google/resolve?name=<selector>._domainkey.<domain>&type=TXT" \
      | jq -r '.Answer[0].data' | tr -d '" ' | sed 's/.*p=//' | base64 -d | shasum -a 256
    ```
+   **If the provider is Resend** (the Foundation account the portal already uses, now supported
+   by the mailer as `MAILER_PROVIDER=resend`): domain `genlayer.foundation`, selector `resend`,
+   a Resend-generated RSA-1024 key (the verifier handles 1024; the RFC 8463 vector is 1024), key
+   sha256 `c394e4673d3dcd6b71a9c94590761ad39af052c852fadbe39a30affc147e757b` as of 2026-11-06.
+   Resend holds the private half, so provenance (§5.1) holds. That key also signs the portal's
+   mail; the escrow still binds recipient and receipt token from signed bytes, but a dedicated
+   `uptime.genlayer.foundation` domain in Resend would give Uptime its own key. Resend exposes no
+   raw-source API, so step 3 must use the **BCC evidence mailbox** (`genlayer.foundation` MX is
+   Google Workspace).
 2. **One real test email** through the production Postmark stream, to confirm: the signature has
    `d=<our domain>` (not only `pm.mtasv.net`), `h=` includes `to`, there is no `l=`, the text part is
    quoted-printable or 7bit (the receipt token must appear literally; base64 parts would hide it),
