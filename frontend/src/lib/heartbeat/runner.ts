@@ -148,13 +148,19 @@ export async function runTick(deps: RunnerDeps = defaultDeps()): Promise<ProbeRe
   return out;
 }
 
+const AGREE_VOTES = new Set(["AGREE", "FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR"]);
+const DISAGREE_VOTES = new Set(["DISAGREE", "NONDET_DISAGREE", "DETERMINISTIC_VIOLATION"]);
+
 function votes(tx: RunnerTx): VoteCounts | undefined {
   const names = tx.lastRound?.validatorVotesName;
   if (!names?.length) return undefined;
   const v: VoteCounts = { agree: 0, disagree: 0, timeout: 0, other: 0 };
   for (const n of names) {
-    if (n === "AGREE") v.agree++;
-    else if (n === "DISAGREE" || n === "DETERMINISTIC_VIOLATION") v.disagree++;
+    // Phase 2 names a vote by the result the validator agreed to
+    // (FINISHED_WITH_RETURN/ERROR); a mismatch is NONDET_DISAGREE or
+    // DETERMINISTIC_VIOLATION. AGREE/DISAGREE are the pre-Phase 2 names.
+    if (AGREE_VOTES.has(n)) v.agree++;
+    else if (DISAGREE_VOTES.has(n)) v.disagree++;
     else if (n === "TIMEOUT") v.timeout++;
     else v.other++;
   }

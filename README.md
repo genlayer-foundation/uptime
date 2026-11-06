@@ -102,7 +102,7 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 
 ## Cost
 
-Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Fees in GEN: not yet measured. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
+Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Each tx deposits ~0.05 GEN of Phase 2 fees (`BRADBURY_TX_FEES`, see INTEGRATIONS.md), ~0.25 GEN per tick; unused budget is refunded at finalization. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
 
 ## Uptime contracts (in progress, not deployed)
 
@@ -163,7 +163,7 @@ The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in
 
 ### Bradbury Phase 2 chain config
 
-`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. Only addresses are overridden; whether the 0.26.5 ABIs match Phase 2 is still unverified (a relayer smoke write is the check).
+`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. `genlayer-js` is pinned at `2.0.0-rc.2`, whose ABIs are Phase 2's (fee-aware `addTransaction`); every Bradbury deploy/write carries a fee deposit from `frontend/src/lib/genlayer/fees.ts`.
 
 ## Jobs backend (a generic paid cron)
 

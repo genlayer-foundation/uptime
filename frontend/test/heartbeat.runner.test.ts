@@ -184,6 +184,23 @@ describe("runReconcile", () => {
     expect(by["1:llm:r2-answer42"]).toMatchObject({ answer: "54", grade: "wrong" });
   });
 
+  it("counts Phase 2 vote names (FINISHED_WITH_*, NONDET_DISAGREE, TIMEOUT)", async () => {
+    const { store, client, deps } = setup();
+    const [, , f0] = await runTick(deps);
+    client.txs.set(
+      f0.txHash!,
+      decided("ACCEPTED", {
+        lastRound: {
+          validatorVotesName: ["FINISHED_WITH_RETURN", "FINISHED_WITH_RETURN", "FINISHED_WITH_ERROR", "NONDET_DISAGREE", "TIMEOUT", "NOT_VOTED"],
+        },
+      })
+    );
+    client.views.set('get_probe:["1:f0-status"]', { answer: "x", grade: "correct", error: "" });
+    await runReconcile(deps);
+    const f = store.results.find((r) => r.id === "1:fetch:f0-status");
+    expect(f?.votes).toEqual({ agree: 3, disagree: 1, timeout: 1, other: 1 });
+  });
+
   it("grades the write probe by get_last_tick, or get_bump when a later bump landed", async () => {
     const { store, client, deps } = setup();
     const [, w] = await runTick(deps);

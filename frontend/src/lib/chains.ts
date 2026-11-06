@@ -3,7 +3,7 @@
 //   import { CHAINS } from "@/lib/chains";      // or "../chains" from src/lib/genlayer/
 //   createClient({ chain: CHAINS.bradbury.chain, account });
 //
-// Why: genlayer-js (0.26.5 installed; 1.1.8 too, per docs/PRODUCT.md §2) ships `testnetBradbury`
+// Why: genlayer-js 0.26.5 and 1.1.8 (per docs/PRODUCT.md §2) shipped `testnetBradbury`
 // with the SUNSET Bradbury Phase 1 contracts. The RPC host it uses, rpc-bradbury.genlayer.com,
 // now serves Phase 2 (genesis hash below matched on 2026-11-02), so the SDK talks to the right
 // chain with the wrong consensus/staking addresses.
@@ -19,9 +19,10 @@
 // treating them as permanent. These are pinned for a deterministic client; re-check them
 // against `AddressManager.getAllContractAddresses()` when Labs announces a redeploy.
 //
-// Caveat (unverified): only ADDRESSES are overridden. The ABIs stay the installed SDK's. Whether
-// the 0.26.5 ConsensusMain/ConsensusData ABIs match the Phase 2 deployment has not been tested;
-// a smoke write from the relayer is the check.
+// genlayer-js 2.0.0-rc.2 (pinned) ships Phase 2 ABIs and the same addresses in its own
+// testnetBradbury; the override stays to pin the RPC host and catch a future SDK drift. 0.26.x
+// encoded the legacy 5-arg addTransaction, which Phase 2 lacks: every submit reverted.
+// Fees: lib/genlayer/fees.ts.
 
 import { localnet, studionet, testnetBradbury } from "genlayer-js/chains";
 import type { GenLayerChain } from "genlayer-js/types";
