@@ -2,13 +2,17 @@
 #
 # - pg_dump custom format (-Fc, same format as the team's gym dumps), client 17 = Neon's server major.
 # - Encrypted in the pipe with age: the plaintext dump never touches the runner's disk.
-# - Stored as a GitHub Actions artifact, kept 30 days. Restore: README "Backups".
+# - Streamed straight into private S3 (s3://genlayer-uptime-db-backups/uptime/YYYY/MM/DD/),
+#   SSE-KMS at rest, 30-day lifecycle. Infra + policies: infra/backups/backup-bucket.yml.
+#   The job assumes uptime-db-backup-writer via GitHub OIDC (no AWS keys stored); that role
+#   can PutObject and nothing else. Restore: README "Backups".
 #
 # Inputs (names only; values are set by the owner, never committed):
 #   secrets.UPTIME_DATABASE_URL          Neon DIRECT connection string (not the -pooler host)
 #   vars.UPTIME_BACKUP_AGE_RECIPIENT     age public key (age1...). The private key lives in
 #                                        1Password vault "Uptime Production", never in GitHub.
-# Fails closed: either input missing = red run, no artifact.
+#   vars.UPTIME_BACKUP_ROLE_ARN          writer role ARN (not secret)
+# Fails closed: any input missing = red run, nothing uploaded.
 name: db-backup
 
 on:
@@ -18,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # OIDC token for the AWS writer role
 
 concurrency:
   group: db-backup
@@ -29,13 +34,18 @@ jobs:
     timeout-minutes: 30
     env:
       PG_MAJOR: "17"
+      BUCKET: genlayer-uptime-db-backups
     steps:
       - name: Check inputs (fail closed)
         env:
           UPTIME_DATABASE_URL: ${{ secrets.UPTIME_DATABASE_URL }}
           AGE_RECIPIENT: ${{ vars.UPTIME_BACKUP_AGE_RECIPIENT }}
+          ROLE_ARN: ${{ vars.UPTIME_BACKUP_ROLE_ARN }}
         run: |
           set -euo pipefail
+          if [[ "${ROLE_ARN}" != arn:aws:iam::*:role/* ]]; then
+            echo "::error::variable UPTIME_BACKUP_ROLE_ARN is not set to an IAM role ARN"; exit 1
+          fi
           if [ -z "${UPTIME_DATABASE_URL}" ]; then
             echo "::error::secret UPTIME_DATABASE_URL is not set"; exit 1
           fi
@@ -60,31 +70,34 @@ jobs:
           "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version
           age --version
 
-      - name: Dump and encrypt
-        id: dump
+      - name: Assume the backup writer role (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.UPTIME_BACKUP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: uptime-db-backup-${{ github.run_id }}
+
+      - name: Dump, encrypt and upload (streamed; no plaintext on disk)
         env:
           UPTIME_DATABASE_URL: ${{ secrets.UPTIME_DATABASE_URL }}
           AGE_RECIPIENT: ${{ vars.UPTIME_BACKUP_AGE_RECIPIENT }}
         run: |
           set -euo pipefail
-          name="uptime-$(date -u +%Y-%m-%dT%H%MZ).dump.age"
-          mkdir -p out
+          key="uptime/$(date -u +%Y/%m/%d)/uptime-$(date -u +%Y-%m-%dT%H%MZ).dump.age"
+          # The role cannot read back (no Get/Head/List), so the size check counts the
+          # encrypted bytes going through the pipe (a FIFO, not a file) instead.
+          mkfifo "${RUNNER_TEMP}/count"
+          wc -c < "${RUNNER_TEMP}/count" > "${RUNNER_TEMP}/size" &
+          counter=$!
           "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" \
               --format=custom --compress=6 --no-owner --no-privileges \
               --dbname="${UPTIME_DATABASE_URL}" \
-            | age --encrypt --recipient "${AGE_RECIPIENT}" --output "out/${name}"
-          size=$(stat -c %s "out/${name}")
+            | age --encrypt --recipient "${AGE_RECIPIENT}" \
+            | tee "${RUNNER_TEMP}/count" \
+            | aws s3 cp - "s3://${BUCKET}/${key}" --only-show-errors
+          wait "${counter}"
+          size=$(tr -d ' ' < "${RUNNER_TEMP}/size")
           if [ "${size}" -lt 1024 ]; then
-            echo "::error::encrypted dump is only ${size} bytes"; exit 1
+            echo "::error::encrypted dump is only ${size} bytes (uploaded as ${key}; inspect it)"; exit 1
           fi
-          echo "name=${name}" >> "$GITHUB_OUTPUT"
-          echo "${name}: ${size} bytes" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload artifact (30 days)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.dump.outputs.name }}
-          path: out/${{ steps.dump.outputs.name }}
-          retention-days: 30
-          if-no-files-found: error
-          compression-level: 0
+          echo "s3://${BUCKET}/${key}: ${size} bytes" >> "$GITHUB_STEP_SUMMARY"

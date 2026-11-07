@@ -226,10 +226,18 @@ Production data is planned on Neon via the Vercel Marketplace. Nothing is provis
 
 ### Backups
 
-`.github/workflows/db-backup.yml` runs nightly at 03:30 UTC (and on demand): `pg_dump -Fc` (client 17, Neon's major) piped through `age` to the public key in repo variable `UPTIME_BACKUP_AGE_RECIPIENT`, uploaded as an Actions artifact kept 30 days. It reads only the secret `UPTIME_DATABASE_URL` (Neon DIRECT string) and fails closed without it. Restore:
+`.github/workflows/db-backup.yml` runs nightly at 03:30 UTC (and on demand): `pg_dump -Fc` (client 17, Neon's major) piped through `age` to the public key in repo variable `UPTIME_BACKUP_AGE_RECIPIENT` and streamed into the private bucket `s3://genlayer-uptime-db-backups/uptime/YYYY/MM/DD/uptime-<ts>.dump.age` (GenLayer Foundation AWS account 245374728431, us-east-1). Nothing touches the runner's disk in plaintext. It reads the secret `UPTIME_DATABASE_URL` (Neon DIRECT string) and the variable `UPTIME_BACKUP_ROLE_ARN`, and fails closed without any of the three.
 
-1. `gh run list --repo genlayer-foundation/uptime --workflow db-backup.yml` and pick a green run id.
-2. `gh run download <run-id> --repo genlayer-foundation/uptime --dir restore/` (one `uptime-<ts>.dump.age`).
-3. `op document get uptime-backup-age --vault "Uptime Production" > /tmp/k && age -d -i /tmp/k -o restore/uptime.dump restore/*/*.dump.age && rm /tmp/k`
-4. `pg_restore --list restore/uptime.dump | head` to check it, then restore into a NEW Neon branch/database, never over prod: `pg_restore --no-owner --no-privileges --dbname="$TARGET_URL" restore/uptime.dump`.
-5. Point `DATABASE_URL` at it only after checking row counts; delete `restore/` when done.
+Who can do what (all in `infra/backups/backup-bucket.yml`, CloudFormation stack `uptime-db-backups`):
+
+- **Upload:** only GitHub Actions on this repo's `main` (this workflow), via GitHub OIDC into role `uptime-db-backup-writer` (no stored AWS keys). That role can `PutObject` under `uptime/` and nothing else: no read, list or delete.
+- **Read:** only the account's SSO `AdministratorAccess` holders (and the account root user, break-glass). Every other principal, in this account or any other, is denied by the bucket policy; the KMS key policy repeats the same split.
+- **Delete:** nobody. Backups leave only by lifecycle: 30 days, overwritten versions 7 days.
+- **Double encryption:** SSE-KMS (`alias/uptime-db-backups`) at rest, and `age` inside. The age private key exists only in 1Password vault "Uptime Production" (document `uptime-backup-age`), so an S3 reader still needs 1Password.
+
+Restore (admin SSO session, `op` signed in):
+
+1. `aws s3 ls --recursive s3://genlayer-uptime-db-backups/uptime/ | tail` and pick a key.
+2. Check it: `aws s3 cp s3://genlayer-uptime-db-backups/<key> - | age -d -i <(op document get uptime-backup-age --vault "Uptime Production") | pg_restore --list | head`
+3. Restore into a NEW Neon branch/database, never over prod: `aws s3 cp s3://genlayer-uptime-db-backups/<key> - | age -d -i <(op document get uptime-backup-age --vault "Uptime Production") | pg_restore --no-owner --no-privileges --dbname="$TARGET_URL"`
+4. Point `DATABASE_URL` at it only after checking row counts.

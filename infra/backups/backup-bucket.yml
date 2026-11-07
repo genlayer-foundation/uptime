@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Uptime nightly Postgres backups: private, write-only-from-GitHub S3 bucket.
+  Only the GitHub Actions workflow on genlayer-foundation/uptime@main can upload
+  (PutObject, nothing else); only the account's SSO AdministratorAccess holders
+  (plus the account root user, break-glass) can read. Dumps are age-encrypted
+  before upload AND SSE-KMS at rest with a dedicated key. Stack uptime-db-backups,
+  account 245374728431, us-east-1. Apply (admin SSO profile):
+  aws cloudformation deploy --region us-east-1 --stack-name uptime-db-backups
+  --template-file infra/backups/backup-bucket.yml --capabilities CAPABILITY_NAMED_IAM
+  Reuses the account's existing token.actions.githubusercontent.com OIDC provider.
+  Object Lock: not enabled. NoDeletes covers every principal, and the writer can only
+  add versions (an overwrite leaves the previous one recoverable for 7 days).
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: genlayer-uptime-db-backups
+  GitHubSub:
+    Type: String
+    Default: repo:genlayer-foundation/uptime:ref:refs/heads/main
+    Description: Exact OIDC sub claim allowed to assume the writer role.
+  ReaderRolePattern:
+    Type: String
+    Default: AWSReservedSSO_AdministratorAccess_*
+    Description: >-
+      Role-name pattern (under aws-reserved/sso.amazonaws.com/) of the readers.
+      Wildcarded so a permission-set re-provision (new suffix) does not lock us out.
+
+Resources:
+  # ---------------------------------------------------------------- writer role
+  WriterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: uptime-db-backup-writer
+      Description: GitHub Actions db-backup.yml on genlayer-foundation/uptime@main; PutObject only.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubSub
+
+  WriterPolicy:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      RoleName: !Ref WriterRole
+      PolicyName: put-uptime-backups
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PutBackupObjects
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${BucketName}/uptime/*
+          # GenerateDataKey encrypts each object. Decrypt is required by S3 to
+          # COMPLETE a multipart upload under SSE-KMS (a streamed `aws s3 cp -`
+          # over 8 MB is multipart). It is pinned to S3 and to this bucket's
+          # uptime/ objects; with no GetObject/HeadObject the role never sees a
+          # stored data key, so it still cannot read a backup.
+          - Sid: KmsForPutOnly
+            Effect: Allow
+            Action:
+              - kms:GenerateDataKey
+              - kms:Decrypt
+            Resource: !GetAtt BackupKey.Arn
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+              StringLike:
+                kms:EncryptionContext:aws:s3:arn: !Sub arn:aws:s3:::${BucketName}/uptime/*
+
+  # ---------------------------------------------------------------- KMS key
+  BackupKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: SSE-KMS for s3://genlayer-uptime-db-backups (Uptime DB backups)
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          # No blanket "root = kms:*" delegation: only the reader set (and the
+          # root user, break-glass) can administer or decrypt with this key.
+          - Sid: AdminsManageAndDecrypt
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+            Condition:
+              ArnLike:
+                aws:PrincipalArn:
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-reserved/sso.amazonaws.com/${ReaderRolePattern}
+                  - !Sub arn:aws:iam::${AWS::AccountId}:root
+          - Sid: WriterEncryptViaS3
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt WriterRole.Arn
+            Action:
+              - kms:GenerateDataKey
+              - kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+              StringLike:
+                kms:EncryptionContext:aws:s3:arn: !Sub arn:aws:s3:::${BucketName}/uptime/*
+
+  BackupKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/uptime-db-backups
+      TargetKeyId: !Ref BackupKey
+
+  # ---------------------------------------------------------------- bucket
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt BackupKey.Arn
+            # Off on purpose: per-object encryption context lets the key policy
+            # pin the writer to uptime/* objects. One object a night = trivial KMS cost.
+            BucketKeyEnabled: false
+      LifecycleConfiguration:
+        Rules:
+          - Id: retention
+            Status: Enabled
+            Prefix: ""
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: purge-delete-markers
+            Status: Enabled
+            Prefix: ""
+            ExpiredObjectDeleteMarker: true
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyNonTLS
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${BucketName}
+              - !Sub arn:aws:s3:::${BucketName}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          # Everyone not on the list -- other roles/users in this account and
+          # every principal in any other account -- gets nothing at all.
+          - Sid: DenyEveryoneElse
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${BucketName}
+              - !Sub arn:aws:s3:::${BucketName}/*
+            Condition:
+              ArnNotLike:
+                aws:PrincipalArn:
+                  - !GetAtt WriterRole.Arn
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-reserved/sso.amazonaws.com/${ReaderRolePattern}
+                  - !Sub arn:aws:iam::${AWS::AccountId}:root
+          - Sid: DenyOutsideAccount
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${BucketName}
+              - !Sub arn:aws:s3:::${BucketName}/*
+            Condition:
+              StringNotEquals:
+                aws:PrincipalAccount: !Ref AWS::AccountId
+          # The writer may do exactly one thing: PutObject under uptime/.
+          - Sid: WriterPutOnly
+            Effect: Deny
+            Principal: "*"
+            NotAction: s3:PutObject
+            Resource:
+              - !Sub arn:aws:s3:::${BucketName}
+              - !Sub arn:aws:s3:::${BucketName}/*
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !GetAtt WriterRole.Arn
+          - Sid: WriterUptimePrefixOnly
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            NotResource: !Sub arn:aws:s3:::${BucketName}/uptime/*
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !GetAtt WriterRole.Arn
+          # Nobody else uploads -- admins included.
+          - Sid: OnlyWriterUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${BucketName}/*
+            Condition:
+              ArnNotEquals:
+                aws:PrincipalArn: !GetAtt WriterRole.Arn
+          # Nobody deletes or rewrites history; the lifecycle rule (not subject
+          # to bucket policy) is the only thing that removes backups.
+          - Sid: NoDeletes
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+              - s3:PutObjectAcl
+              - s3:PutObjectVersionAcl
+            Resource: !Sub arn:aws:s3:::${BucketName}/*
+
+Outputs:
+  BucketName:
+    Value: !Ref BackupBucket
+  WriterRoleArn:
+    Description: Set as repo variable UPTIME_BACKUP_ROLE_ARN.
+    Value: !GetAtt WriterRole.Arn
+  KmsKeyArn:
+    Value: !GetAtt BackupKey.Arn
