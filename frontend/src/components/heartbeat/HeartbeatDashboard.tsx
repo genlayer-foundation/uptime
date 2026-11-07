@@ -8,6 +8,7 @@ import { TrendCharts } from "./TrendCharts";
 import { Breakdown } from "./Breakdown";
 import { RecentProbes } from "./RecentProbes";
 import { RunSteps } from "./RunSteps";
+import { HeartbeatRunNow } from "./HeartbeatRunNow";
 import { Ago } from "./Ago";
 import { verdict } from "./verdict";
 import { DataSourceSwitch, DEV_BUILD } from "./DataSourceSwitch";
@@ -123,6 +124,7 @@ export function HeartbeatDashboard() {
           ) : shown ? (
             <span>Heartbeat contract not deployed yet</span>
           ) : null}
+          {shown?.source !== "demo" && <HeartbeatRunNow />}
         </div>
       </PageHeader>
 

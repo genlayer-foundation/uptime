@@ -36,6 +36,7 @@ export interface RunPatch {
   cursor?: number;
   pass?: boolean | null;
   error?: string | null;
+  meta?: Record<string, unknown>; // replaces the whole object
 }
 
 export interface DueItem {
@@ -89,6 +90,11 @@ export interface Repo {
   updateRun(id: string, p: RunPatch): Promise<void>;
   saveStepRun(runId: string, s: StepRunRow): Promise<void>;
   getRun(id: string): Promise<RunRow | null>;
+  // "Run now" (lib/jobs/manual.ts). Atomic per job: refuses while another manual
+  // run is RUNNING (and younger than `staleSec`) or one started < gapSec ago.
+  createManualRun(r: NewRunRow, nowSec: number, gapSec: number, staleSec: number): Promise<RunRow | null>;
+  manualRunBlocked(jobId: string, nowSec: number, gapSec: number, staleSec: number): Promise<boolean>;
+  txHashUsed(hash: string): Promise<boolean>;
   runningRuns(limit: number): Promise<RunRow[]>;
   listRuns(jobId: string, limit: number): Promise<RunRow[]>;
   lastDeployAddress(jobId: string, stepId: string): Promise<string | null>;
@@ -195,6 +201,15 @@ async function insertSchedules(c: PoolClient, id: string, schedules: ScheduleRow
       [id, s.action, s.intervalSec ?? null, s.cron ?? null, at(s.anchorAt), at(s.nextDueAt), s.lastSlotAt ? at(s.lastSlotAt) : null]
     );
   }
+}
+
+async function manualBlocked(c: PoolClient, jobId: string, nowSec: number, gapSec: number, staleSec: number) {
+  const r = await c.query(
+    `SELECT 1 FROM runs WHERE job_id = $1 AND grp = 'manual'
+       AND ((state = 'RUNNING' AND scheduled_for > $2) OR scheduled_for > $3) LIMIT 1`,
+    [jobId, at(nowSec - staleSec), at(nowSec - gapSec)]
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 export class PgRepo implements Repo {
@@ -376,6 +391,7 @@ export class PgRepo implements Repo {
     if (p.cursor !== undefined) add("cursor", p.cursor);
     if (p.pass !== undefined) add("pass", p.pass);
     if (p.error !== undefined) add("error", p.error);
+    if (p.meta !== undefined) add("meta", json(p.meta));
     if (!sets.length) return;
     vals.push(id);
     await this.pool.query(`UPDATE runs SET ${sets.join(", ")} WHERE id = $${vals.length}`, vals);
@@ -395,6 +411,35 @@ export class PgRepo implements Repo {
         s.submittedAt ? at(s.submittedAt) : null, s.resolvedAt ? at(s.resolvedAt) : null, capped,
         s.timeToAcceptedMs ?? null, s.rounds ?? null, json(s.votes), s.gasWei ?? null, s.error ?? null]
     );
+  }
+
+  async createManualRun(n: NewRunRow, nowSec: number, gapSec: number, staleSec: number) {
+    return this.tx(async (c) => {
+      // Serialize manual starts per job, so two visitors cannot both pass the check.
+      await c.query("SELECT pg_advisory_xact_lock(hashtext('manual:' || $1))", [n.jobId]);
+      if (await manualBlocked(c, n.jobId, nowSec, gapSec, staleSec)) return null;
+      const r = await c.query(
+        `INSERT INTO runs (job_id, grp, scheduled_for, state, cursor, pass, error, meta, id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (job_id, grp, scheduled_for) DO NOTHING RETURNING *`,
+        [n.jobId, n.group, at(n.scheduledFor), n.state, n.cursor ?? 0, null, null, json(n.meta ?? {}), n.id]
+      );
+      return r.rows[0] ? toRun(r.rows[0], []) : null;
+    });
+  }
+
+  async manualRunBlocked(jobId: string, nowSec: number, gapSec: number, staleSec: number) {
+    const c = await this.pool.connect();
+    try {
+      return await manualBlocked(c, jobId, nowSec, gapSec, staleSec);
+    } finally {
+      c.release();
+    }
+  }
+
+  async txHashUsed(hash: string) {
+    const r = await this.pool.query("SELECT 1 FROM step_runs WHERE lower(tx_hash) = lower($1) LIMIT 1", [hash]);
+    return (r.rowCount ?? 0) > 0;
   }
 
   async getRun(id: string) {
@@ -429,8 +474,8 @@ export class PgRepo implements Repo {
   async consecutiveFailures(jobId: string) {
     const r = await this.pool.query(
       `SELECT count(*)::int AS n FROM runs
-       WHERE job_id = $1 AND state = 'DONE' AND pass = false
-         AND scheduled_for > coalesce((SELECT max(scheduled_for) FROM runs WHERE job_id = $1 AND state = 'DONE' AND pass), '-infinity')`,
+       WHERE job_id = $1 AND state = 'DONE' AND pass = false AND grp <> 'manual'
+         AND scheduled_for > coalesce((SELECT max(scheduled_for) FROM runs WHERE job_id = $1 AND state = 'DONE' AND pass AND grp <> 'manual'), '-infinity')`,
       [jobId]
     );
     return Number(r.rows[0].n);
@@ -445,6 +490,7 @@ export class PgRepo implements Repo {
                 sr.idx = (SELECT min(s2.idx) FROM step_runs s2 WHERE s2.run_id = sr.run_id AND s2.tx_hash IS NOT NULL) AS run_fee
          FROM step_runs sr JOIN runs r ON r.id = sr.run_id JOIN jobs j ON j.id = r.job_id
          WHERE j.network = $1 AND NOT j.system AND r.state <> 'RUNNING'
+           AND r.grp <> 'manual' -- a visitor's "Run now" was paid by the visitor, never the pool
        ) x
        WHERE x.settled_in IS NULL AND (x.gas_wei > 0 OR ($5 AND x.run_fee))
          AND x.charge_outcome IS DISTINCT FROM 'CHARGED' AND x.charge_attempts < $3

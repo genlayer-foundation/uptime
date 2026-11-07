@@ -61,7 +61,13 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
 - Migrations are append-only `frontend/migrations/NNN_*.sql`, applied by
   `npm run db:migrate`. 001 is the jobs schema, 010 the mailer's, 011 the Heartbeat's results, 012 the self-serve alert settings,
   013 lets the Heartbeat record `write` probes (KV is only a fallback without `DATABASE_URL` or before
-  011 + 013; see README "Store").
+  011 + 013; see README "Store"), 014 indexes manual runs.
+- **"Run now" is the visitor's, end to end** (`lib/jobs/manual.ts`): their wallet signs and pays,
+  the server records a tx only after reading it from the chain (sender, contract, byte-exact
+  calldata, age, unused hash). Manual runs (group `manual`) are never billed to the pool, never
+  alert, and are never advanced by reconcile (that would sign with the relayer).
+- **UptimePool v2** (`contracts/evm/src/UptimePoolV2.sol`, community pools) is switched on by
+  `UPTIME_POOL_V2_BRADBURY` alone; unset = v1 everywhere and the backing UI hidden.
 
 ## Verify
 

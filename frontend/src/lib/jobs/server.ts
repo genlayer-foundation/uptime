@@ -7,7 +7,10 @@ import { CANARY_SOURCES } from "@/lib/heartbeat/canary";
 import { runTick } from "@/lib/heartbeat/runner";
 import { studioAllowlist } from "./allowlist";
 import { getSession, requestHost, sessionSecret, type Session } from "./auth/session";
-import { genlayerClient, relayerAddress, type ChainClient } from "./chain";
+import { genlayerClient, readerClient, relayerAddress, type ChainClient } from "./chain";
+import { feesFor } from "@/lib/genlayer/fees";
+import type { ManualDeps } from "./manual";
+import type { WireFees } from "./manualPlan";
 import { hasDatabase } from "./db";
 import { isId } from "./ids";
 import type { ExecutorDeps } from "./executor";
@@ -37,7 +40,7 @@ export async function executorDeps(): Promise<ExecutorDeps> {
       return clients.get(n)!;
     },
     relayerFor: (n) => relayerAddress(n) ?? "0x0000000000000000000000000000000000000000",
-    deployPresets: { studio: { canary: CANARY_SOURCES.studio }, bradbury: { canary: CANARY_SOURCES.bradbury } },
+    deployPresets: DEPLOY_PRESETS,
     heartbeatTick: async () => {
       const recs = await runTick();
       return {
@@ -47,6 +50,33 @@ export async function executorDeps(): Promise<ExecutorDeps> {
     },
     runCostWei,
     onRunDecided,
+  };
+}
+
+const DEPLOY_PRESETS = { studio: { canary: CANARY_SOURCES.studio }, bradbury: { canary: CANARY_SOURCES.bradbury } };
+
+function wireFees(n: Network): WireFees {
+  const f = feesFor(n);
+  if (!f) return null;
+  return Object.fromEntries(
+    Object.entries(f.distribution).map(([k, v]) => [k, Array.isArray(v) ? v.map(String) : String(v)])
+  );
+}
+
+// "Run now" (lib/jobs/manual.ts): keyless readers, the visitor signs.
+export function manualDeps(): ManualDeps {
+  const readers = new Map<Network, ReturnType<typeof readerClient>>();
+  return {
+    repo: getRepo(),
+    allowlist: studioAllowlist(),
+    reader: (n) => {
+      if (!readers.has(n)) readers.set(n, readerClient(n));
+      return readers.get(n)!;
+    },
+    nowSec: now,
+    deployPresets: DEPLOY_PRESETS,
+    secret: sessionSecret(),
+    fees: wireFees,
   };
 }
 

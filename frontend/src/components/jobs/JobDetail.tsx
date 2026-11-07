@@ -16,6 +16,8 @@ import { dateTime, download, pct, passRate, runLatencyMs, runsSince, seconds, sh
 import { describeSchedule, nextRun } from "./schedule";
 import { RunCharts } from "./RunCharts";
 import { PoolPanel } from "./PoolPanel";
+import { RunNow } from "./RunNow";
+import { Backers } from "./Backers";
 import { JobAlerts } from "@/components/alerts/JobAlerts";
 
 const WINDOWS = [
@@ -171,7 +173,9 @@ export function JobDetail({ id }: { id: string }) {
           </>
         }
         actions={
-          isOwner ? (
+          <>
+            {job.public || isOwner ? <RunNow job={job} heartbeat={job.preset === "heartbeat"} onDone={load} /> : null}
+            {isOwner ? (
             <>
               <Button variant={ph.action === "pause" ? "secondary" : "primary"} onClick={() => act(ph.action)} disabled={!!busy} title={job.stateReason}>
                 {ph.action === "pause" ? (
@@ -203,7 +207,8 @@ export function JobDetail({ id }: { id: string }) {
                 </Button>
               )}
             </>
-          ) : undefined
+            ) : null}
+          </>
         }
       />
 
@@ -234,9 +239,12 @@ export function JobDetail({ id }: { id: string }) {
         </div>
 
         {job.network === "bradbury" && (
-          <Section id="funding" title="Funding" subtitle="This job's GEN pool on GenLayer Testnet Bradbury. Only the owner's wallet can move it.">
+          <Section id="funding" title="Funding" subtitle="This job's GEN pool on GenLayer Testnet Bradbury. Only the owner's wallet can change its caps or pause it.">
             {job.poolId ? (
-              <PoolPanel poolId={job.poolId} isOwner={isOwner} wallet={me?.wallet ?? null} />
+              <div className="grid gap-4">
+                {job.preset !== "heartbeat" && <Backers poolId={job.poolId} wallet={me?.wallet ?? null} />}
+                <PoolPanel poolId={job.poolId} isOwner={isOwner} wallet={me?.wallet ?? null} />
+              </div>
             ) : (
               <Alert tone="warn" title="No pool id">
                 This job was created without a pool, so the scheduler has nothing to charge.
@@ -345,6 +353,7 @@ export function JobDetail({ id }: { id: string }) {
                         <StatusDot tone={verdict.tone} pulse={verdict.pulse} />
                         {verdict.label}
                       </span>
+                      {r.manual && <p className="text-xs text-muted">run by {shortHex(r.manual.by, 4)} (manual)</p>}
                     </Td>
                     <Td>
                       <div className="flex flex-wrap">

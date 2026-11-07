@@ -11,6 +11,7 @@ import { parseEther, type Address, type Hex } from "viem";
 import { JOBS_MOCK } from "@/lib/jobs/client";
 import { poolAddress } from "@/lib/chains";
 import { ROLE_MAILER, ROLE_SCHEDULER, UPTIME_POOL_ABI } from "./poolAbi";
+import { UPTIME_POOL_V2_ABI } from "@/lib/pool/abiV2";
 import { ensureBradbury, publicClient, requestAccount, walletClient } from "./wallet";
 
 export type PoolInfo = {
@@ -26,9 +27,29 @@ export type PoolInfo = {
 export type PoolTerms = { perRunWei: bigint; perDayWei: bigint };
 
 let reported: Address | null = null;
-/** Address /api/presets reported, preferred over the build-time env. */
-export function setReportedPoolAddress(a: string | null | undefined) {
+let reportedV2 = false;
+let config: Promise<{ address: Address | null; v2: boolean }> | null = null;
+/** Address /api/presets reported, preferred over the build-time env. `v2` = community pools (UptimePoolV2). */
+export function setReportedPoolAddress(a: string | null | undefined, v2?: boolean) {
   reported = a && /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as Address) : null;
+  reportedV2 = !!v2 && !!reported;
+  config = Promise.resolve({ address: poolContract(), v2: reportedV2 });
+}
+
+/**
+ * The pool the server uses (UPTIME_POOL_V2_BRADBURY wins over v1 there), asked
+ * once per page from /api/presets. Falls back to the build-time env (v1).
+ */
+export function ensurePoolConfig(): Promise<{ address: Address | null; v2: boolean }> {
+  if (JOBS_MOCK) return Promise.resolve({ address: poolContract(), v2: false });
+  config ??= fetch("/api/presets", { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((r: { pool?: { bradbury?: string | null; v2?: boolean } } | null) => {
+      if (r?.pool) setReportedPoolAddress(r.pool.bradbury, r.pool.v2);
+      return { address: poolContract(), v2: reportedV2 };
+    })
+    .catch(() => ({ address: poolContract(), v2: false }));
+  return config;
 }
 
 export function poolContract(): Address | null {
@@ -59,7 +80,7 @@ export async function readPool(poolId: string): Promise<PoolInfo | null> {
       perDayWei: BigInt(p.perDayWei),
     };
   }
-  const address = poolContract();
+  const address = (await ensurePoolConfig()).address;
   if (!address) return null;
   const [owner, paused, balance] = (await publicClient.readContract({
     address,
@@ -94,7 +115,7 @@ export async function readPool(poolId: string): Promise<PoolInfo | null> {
 type Write = { hash: Hex | "mock" };
 
 async function send(functionName: "deposit" | "topUp" | "withdraw" | "setPaused", args: readonly unknown[], value?: bigint): Promise<Write> {
-  const address = poolContract();
+  const address = (await ensurePoolConfig()).address;
   if (!address) throw new Error("The UptimePool is not deployed yet (NEXT_PUBLIC_UPTIME_POOL_BRADBURY is unset).");
   const account = await requestAccount();
   await ensureBradbury();
@@ -194,7 +215,7 @@ export async function readMailerAllowance(poolId: string): Promise<MailerAllowan
       ? { active: true, perDayWei: BigInt(p.mailerPerDayWei), perChargeWei: BigInt(p.mailerPerChargeWei ?? "0"), paused: false }
       : { active: false, perDayWei: 0n, perChargeWei: 0n, paused: false };
   }
-  const address = poolContract();
+  const address = (await ensurePoolConfig()).address;
   if (!address) return null;
   const [terms, , , paused, active] = (await publicClient.readContract({
     address,
@@ -218,7 +239,7 @@ export async function setMailerAllowance(
     (await mock()).setMailerAllowance(poolId, terms.periodAmount, terms.maxPerCharge);
     return { hash: "mock" };
   }
-  const address = poolContract();
+  const address = (await ensurePoolConfig()).address;
   if (!address) throw new Error("The UptimePool is not deployed yet (NEXT_PUBLIC_UPTIME_POOL_BRADBURY is unset).");
   const account = await requestAccount();
   await ensureBradbury();
@@ -233,3 +254,39 @@ export async function setMailerAllowance(
   await publicClient.waitForTransactionReceipt({ hash });
   return { hash };
 }
+
+// ------------------------------------------------------------- community pools (v2)
+
+export type Backing = {
+  backers: number;
+  balanceWei: bigint;
+  /** First page of backers with their current (pro-rata) balance, largest first. */
+  list: { who: Address; wei: bigint }[];
+  /** The viewer's own unspent share, when a wallet is known. */
+  mineWei: bigint;
+};
+
+/** Who backs this pool and with how much. Null unless UptimePool v2 is on. */
+export async function readBacking(poolId: string, wallet: string | null): Promise<Backing | null> {
+  const { address, v2 } = await ensurePoolConfig();
+  if (!address || !v2) return null;
+  const [owner] = (await publicClient.readContract({ address, abi: UPTIME_POOL_V2_ABI, functionName: "getPool", args: [poolId as Hex] })) as unknown as readonly [Address];
+  if (/^0x0{40}$/i.test(owner)) return null; // only the job's owner can open its pool
+  const [[backers, balance], [who, wei]] = (await Promise.all([
+    publicClient.readContract({ address, abi: UPTIME_POOL_V2_ABI, functionName: "getBacking", args: [poolId as Hex] }),
+    publicClient.readContract({ address, abi: UPTIME_POOL_V2_ABI, functionName: "getContributors", args: [poolId as Hex, 0n, 50n] }),
+  ])) as unknown as [readonly [bigint, bigint], readonly [readonly Address[], readonly bigint[], bigint]];
+  const list = who.map((w, i) => ({ who: w, wei: wei[i] })).filter((x) => x.wei > 0n).sort((a, b) => (b.wei > a.wei ? 1 : b.wei < a.wei ? -1 : 0));
+  let mineWei = 0n;
+  if (wallet && /^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+    mineWei = (await publicClient.readContract({
+      address, abi: UPTIME_POOL_V2_ABI, functionName: "balanceOf", args: [poolId as Hex, wallet as Address],
+    })) as bigint;
+  }
+  return { backers: Number(backers), balanceWei: balance, list, mineWei };
+}
+
+/** v2: anyone adds GEN to a job's pool; it stays theirs to withdraw until spent. */
+export const backJob = (poolId: string, valueWei: bigint) => send("topUp", [poolId as Hex], valueWei);
+/** v2: withdraw the caller's own unspent share (the contract's ALL sentinel). */
+export const withdrawMyShare = (poolId: string) => send("withdraw", [poolId as Hex, 2n ** 256n - 1n]);

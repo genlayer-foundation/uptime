@@ -144,7 +144,7 @@ export function JobWizard() {
     jobsApi
       .presets()
       .then((r) => {
-        setReportedPoolAddress(r.pool?.bradbury);
+        setReportedPoolAddress(r.pool?.bradbury, r.pool?.v2);
         setPoolAddr(poolContract());
         setPresets(r.presets);
       })

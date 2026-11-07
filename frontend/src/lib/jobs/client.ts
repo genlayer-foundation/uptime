@@ -42,7 +42,7 @@ export function presetTemplate(p: Preset, n: Network): PresetTemplate | undefine
 
 export type PresetsResponse = {
   minIntervalSec?: number;
-  pool?: { bradbury?: string | null };
+  pool?: { bradbury?: string | null; v2?: boolean };
   presets: Preset[];
 };
 

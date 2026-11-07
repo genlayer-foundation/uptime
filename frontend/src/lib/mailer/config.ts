@@ -128,9 +128,9 @@ export function bradburyMissing(cfg: MailerConfig): string[] {
   return missing;
 }
 
-/** The UptimePool address. Same var as INTEGRATIONS.md; the backend branch's public twin is accepted too. */
+/** The UptimePool address: v2 when UPTIME_POOL_V2_BRADBURY is set, else v1 (INTEGRATIONS.md). */
 export function poolAddress(): `0x${string}` | null {
-  const a = env("UPTIME_POOL_BRADBURY") ?? env("NEXT_PUBLIC_UPTIME_POOL_BRADBURY");
+  const a = env("UPTIME_POOL_V2_BRADBURY") ?? env("UPTIME_POOL_BRADBURY") ?? env("NEXT_PUBLIC_UPTIME_POOL_BRADBURY");
   return a && /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : null;
 }
 

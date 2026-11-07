@@ -118,6 +118,20 @@ export class MemoryRepo implements Repo {
     else r.steps.push(this.clone(s));
     r.steps.sort((a, b) => a.idx - b.idx);
   }
+  async manualRunBlocked(jobId: string, nowSec: number, gapSec: number, staleSec: number) {
+    return this.runs.some(
+      (r) =>
+        r.jobId === jobId && r.group === "manual" &&
+        ((r.state === "RUNNING" && r.scheduledFor > nowSec - staleSec) || r.scheduledFor > nowSec - gapSec)
+    );
+  }
+  async createManualRun(n: NewRunRow, nowSec: number, gapSec: number, staleSec: number) {
+    if (await this.manualRunBlocked(n.jobId, nowSec, gapSec, staleSec)) return null;
+    return this.createRun(n);
+  }
+  async txHashUsed(hash: string) {
+    return this.runs.some((r) => r.steps.some((s) => s.txHash?.toLowerCase() === hash.toLowerCase()));
+  }
   async getRun(id: string) {
     const r = this.runs.find((x) => x.id === id);
     return r ? this.clone(r) : null;
@@ -141,7 +155,7 @@ export class MemoryRepo implements Repo {
     return ((cands[0]?.result as { address?: string } | undefined)?.address as string | undefined) ?? null;
   }
   async consecutiveFailures(jobId: string) {
-    const done = this.runs.filter((r) => r.jobId === jobId && r.state === "DONE").sort((a, b) => b.scheduledFor - a.scheduledFor);
+    const done = this.runs.filter((r) => r.jobId === jobId && r.state === "DONE" && r.group !== "manual").sort((a, b) => b.scheduledFor - a.scheduledFor);
     let n = 0;
     for (const r of done) {
       if (r.pass) break;
@@ -158,7 +172,7 @@ export class MemoryRepo implements Repo {
     const out: ChargeLine[] = [];
     for (const r of this.runs) {
       const j = this.jobs.get(r.jobId)!;
-      if (j.network !== n || j.system || r.state === "RUNNING") continue;
+      if (j.network !== n || j.system || r.state === "RUNNING" || r.group === "manual") continue;
       const txIdx = r.steps.filter((s) => s.txHash).map((s) => s.idx);
       const feeIdx = txIdx.length ? Math.min(...txIdx) : null;
       for (const s of r.steps) {

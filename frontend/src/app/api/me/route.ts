@@ -3,7 +3,7 @@ import { isAdmin, isStudioAllowed } from "@/lib/jobs/allowlist";
 import { getSession, sessionSecret } from "@/lib/jobs/auth/session";
 import { relayerAddress } from "@/lib/jobs/chain";
 import { hasDatabase } from "@/lib/jobs/db";
-import { poolAddress } from "@/lib/pool/abi";
+import { poolAddress, poolV2Address } from "@/lib/pool/abi";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 //   isAdmin        operator: may list all jobs and pause any (UPTIME_ADMIN_WALLETS)
 //   relayers       the address each network's runs are signed by ({{relayer}}),
 //                  which owner-gated contracts must authorize
-//   pool           the Bradbury UptimePool address (null = not deployed yet)
+//   pool           the Bradbury UptimePool address (null = not deployed yet); v2 = community pools on
 export async function GET(request: Request) {
   const ok = hasDatabase() && !!sessionSecret();
   const s = ok ? getSession(request) : null;
@@ -23,6 +23,6 @@ export async function GET(request: Request) {
     studioAllowed: s ? isStudioAllowed(s.wallet) : false,
     isAdmin: s ? isAdmin(s.wallet) : false,
     relayers: { studio: relayerAddress("studio"), bradbury: relayerAddress("bradbury") },
-    pool: { bradbury: poolAddress() },
+    pool: { bradbury: poolAddress(), v2: !!poolV2Address() },
   });
 }

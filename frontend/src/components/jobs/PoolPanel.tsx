@@ -5,7 +5,7 @@ import { Alert, Badge, Button, Card, CardBody, CardGrid, CardHeader, Field, Inpu
 import { JOBS_MOCK } from "@/lib/jobs/client";
 import { MoneyNotice } from "./ui";
 import { gen, shortHex } from "./format";
-import { depositPool, parseGen, poolContract, readPool, setPoolPaused, topUpPool, withdrawPool, type PoolInfo } from "./pool";
+import { depositPool, ensurePoolConfig, parseGen, poolContract, readPool, setPoolPaused, topUpPool, withdrawPool, type PoolInfo } from "./pool";
 
 type Busy = null | "topup" | "withdraw" | "pause" | "deposit";
 
@@ -19,7 +19,10 @@ export function PoolPanel({ poolId, isOwner, wallet }: { poolId: string; isOwner
   const [topUp, setTopUp] = useState("1");
   const [withdraw, setWithdraw] = useState("");
   const [dep, setDep] = useState({ amount: "1", perRun: "0.01", perDay: "0.5" });
-  const address = poolContract();
+  const [address, setAddress] = useState(poolContract());
+  useEffect(() => {
+    void ensurePoolConfig().then((c) => setAddress(c.address));
+  }, []);
 
   const load = useCallback(async () => {
     try {

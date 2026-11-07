@@ -63,6 +63,12 @@ export function genlayerClient(n: Network): ChainClient {
   return withFees(createClient({ chain: CHAINS[n].chain, account: createAccount(key) }), n) as unknown as ChainClient;
 }
 
+/** A keyless client for reads and getTransaction (verifying a visitor's "Run now" txs). */
+export function readerClient(n: Network): Pick<ChainClient, "getTransaction" | "readContract"> {
+  if (n === "studio") return studioClient() as unknown as ChainClient;
+  return createClient({ chain: CHAINS[n].chain }) as unknown as ChainClient;
+}
+
 export const BRADBURY_EVM = defineChain({
   id: BRADBURY_PHASE2.chainId,
   name: "GenLayer Testnet Bradbury",

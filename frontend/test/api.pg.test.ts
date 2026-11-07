@@ -168,6 +168,39 @@ describe.skipIf(!url)("API against Postgres", () => {
     expect((await (await jobs.GET(new Request(`${BASE}/api/jobs?public=1`))).json()).jobs).toEqual([]);
   });
 
+  it("manual runs (Run now): one in flight, 60 s apart, hash recorded once, never billed", async () => {
+    const { PgRepo } = await import("@/lib/jobs/repo");
+    const { getPool } = await import("@/lib/jobs/db");
+    const { newId, poolIdFor } = await import("@/lib/jobs/ids");
+    const repo = new PgRepo(getPool());
+    const now = Math.floor(Date.now() / 1000);
+    const id = newId();
+    await repo.createJob({
+      id, owner: account.address.toLowerCase(), name: "m", network: "bradbury", preset: null,
+      schedule: { everyMinutes: 60 }, steps: [{ id: "w", kind: "write", contract: C1, method: "ping", args: [] }],
+      assertions: [], state: "active", public: false, poolId: poolIdFor(id),
+      schedules: [{ action: "job", intervalSec: 3600, cron: null, anchorAt: now, nextDueAt: now + 3600, lastSlotAt: null }],
+    });
+    const mk = (t: number) => ({ id: newId(), jobId: id, group: "manual", scheduledFor: t, state: "RUNNING" as const, cursor: 1, meta: { manual: true, runner: C1, total: 1 } });
+    const first = await repo.createManualRun(mk(now), now, 60, 1800);
+    expect(first).not.toBeNull();
+    // concurrent starts: at most one more gets through, and only after the gap AND once the first is done
+    const racing = await Promise.all([repo.createManualRun(mk(now + 1), now + 1, 60, 1800), repo.createManualRun(mk(now + 2), now + 2, 60, 1800)]);
+    expect(racing).toEqual([null, null]);
+    expect(await repo.createManualRun(mk(now + 120), now + 120, 60, 1800)).toBeNull(); // first still RUNNING
+    const hash = `0x${"ab".repeat(32)}`;
+    await repo.saveStepRun(first!.id, { idx: 0, stepId: "w", kind: "write", status: "ACCEPTED", txHash: hash, submittedAt: now, resolvedAt: now + 5, gasWei: "9" });
+    await repo.updateRun(first!.id, { state: "DONE", pass: false, meta: { manual: true, runner: C1, total: 1 } });
+    expect(await repo.txHashUsed(hash.toUpperCase().replace("0X", "0x"))).toBe(true);
+    expect(await repo.manualRunBlocked(id, now + 30, 60, 1800)).toBe(true);
+    expect(await repo.manualRunBlocked(id, now + 61, 60, 1800)).toBe(false);
+    expect(await repo.createManualRun(mk(now + 61), now + 61, 60, 1800)).not.toBeNull();
+    expect((await repo.unsettled("bradbury", now + 10_000, 100, { feeLines: true })).filter((l) => l.jobId === id)).toEqual([]);
+    expect(await repo.consecutiveFailures(id)).toBe(0);
+    expect((await repo.getRun(first!.id))!.meta).toEqual({ manual: true, runner: C1, total: 1 });
+    await getPool().query("DELETE FROM jobs WHERE id = $1", [id]);
+  });
+
   it("the SQL executor path: claim once, chain steps, record, export, settle", async () => {
     const { PgRepo } = await import("@/lib/jobs/repo");
     const { getPool } = await import("@/lib/jobs/db");

@@ -77,7 +77,21 @@ export const SKIP_REASONS = [
   "ZeroAmount", "OverLineCap", "OverPeriodCap", "InsufficientBalance",
 ] as const;
 
+/**
+ * UptimePool v2 (community pools: anyone can back a job, each backer withdraws
+ * their own share; contracts/evm/src/UptimePoolV2.sol). Setting this is THE
+ * feature flag: once set, the scheduler, the settler, the mailer and the UI all
+ * use v2. Its getPool/getAllowance/available views and Charged/ChargeSkipped/
+ * Settled events match v1, so POOL_ABI reads and decodes both.
+ */
+export function poolV2Address(): `0x${string}` | null {
+  const a = process.env.UPTIME_POOL_V2_BRADBURY?.trim();
+  return a && /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : null;
+}
+
 export function poolAddress(): `0x${string}` | null {
+  const v2 = poolV2Address();
+  if (v2) return v2;
   const a = (process.env.UPTIME_POOL_BRADBURY || process.env.NEXT_PUBLIC_UPTIME_POOL_BRADBURY)?.trim();
   return a && /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : null;
 }

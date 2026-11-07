@@ -15,6 +15,7 @@ import { toJob, type JobRow, type RunRow, type StepRunRow } from "./internal";
 import { newId, poolIdFor } from "./ids";
 import { dueSlot, initialSchedule, toSpec } from "./schedule";
 import type { Repo } from "./repo";
+import { MANUAL_GROUP } from "./manualPlan";
 import { expand, groupsOf, jsonSafe, MissingDeploy, OK_STATUSES, runPass, stepStatus, toCalldata, type Group } from "./spec";
 import type { Job, Network, Run, Step, StepRun } from "./types";
 
@@ -263,7 +264,7 @@ function deployedAddress(tx: ChainTx): string | null {
 }
 
 // Fill a step run from a decided tx. Returns false while undecided.
-function measure(sr: StepRunRow, tx: ChainTx, costWei: bigint): boolean {
+export function measure(sr: StepRunRow, tx: ChainTx, costWei: bigint): boolean {
   const chain = String(tx.statusName ?? tx.status ?? "");
   const status = stepStatus(chain);
   if (!status) return false;
@@ -312,10 +313,18 @@ export async function reconcile(deps: ExecutorDeps, limit = 200): Promise<Reconc
       await repo.updateRun(run.id, { state: "DONE", pass: false, error: "job deleted" });
       continue;
     }
+    const manual = run.group === MANUAL_GROUP;
     const client = deps.clientFor(job.network);
-    const cost = job.network === "bradbury" && !job.system ? (deps.runCostWei?.() ?? BigInt(0)) : BigInt(0);
+    // A manual run was paid by the visitor's wallet: it costs the pool nothing.
+    const cost = job.network === "bradbury" && !job.system && !manual ? (deps.runCostWei?.() ?? BigInt(0)) : BigInt(0);
     let failed: StepRunRow | null = null;
     let progressed = false;
+
+    if (manual && run.steps.every((s) => s.status !== "PENDING")) {
+      // Waiting on the visitor's browser, not on the chain.
+      if (await abandonManual(deps, job, run)) rep.finished++;
+      continue;
+    }
 
     for (const sr of run.steps.filter((s) => s.status === "PENDING")) {
       rep.checked++;
@@ -340,6 +349,18 @@ export async function reconcile(deps: ExecutorDeps, limit = 200): Promise<Reconc
       if (!OK_STATUSES.has(sr.status) || sr.error) failed = sr;
     }
     if (!progressed) continue;
+
+    if (manual) {
+      // Never advance a manual run here: its next step is the visitor's to sign
+      // (lib/jobs/manual.ts). Finish it on a failure; otherwise wait for them.
+      if (failed) {
+        await finishManual(deps, job, run, failed.error ?? `step "${failed.stepId}" ended ${failed.status}`);
+        rep.finished++;
+      } else if (run.steps.every((s) => s.status !== "PENDING") && (await abandonManual(deps, job, run))) {
+        rep.finished++;
+      }
+      continue;
+    }
 
     const isHeartbeat = job.system && job.preset === HEARTBEAT;
     if (isHeartbeat) {
@@ -370,6 +391,30 @@ export async function reconcile(deps: ExecutorDeps, limit = 200): Promise<Reconc
     if (after?.state === "DONE") rep.finished++;
   }
   return rep;
+}
+
+// ---------------------------------------------------------------------------
+// Manual runs ("Run now", lib/jobs/manual.ts): finished without alerts, since a
+// visitor's run must never send the owner email nor be charged to the pool.
+
+export const MANUAL_ABANDON_SEC = 30 * 60;
+
+export async function finishManual(deps: Pick<ExecutorDeps, "repo">, job: JobRow, run: RunRow, error: string | null = null) {
+  const pass = error ? false : runPass(run.steps, job.assertions, true);
+  await deps.repo.updateRun(run.id, { state: "DONE", pass, error, meta: { ...run.meta, expect: undefined } });
+}
+
+/** Finish a manual run whose steps are all done, or whose runner walked away. */
+export async function abandonManual(deps: Pick<ExecutorDeps, "repo" | "nowSec">, job: JobRow, run: RunRow): Promise<boolean> {
+  const total = Number(run.meta.total ?? 0);
+  if (total > 0 && run.cursor >= total) {
+    await finishManual(deps, job, run);
+    return true;
+  }
+  if (deps.nowSec() - run.scheduledFor <= MANUAL_ABANDON_SEC) return false;
+  const next = (run.meta.expect as { stepId?: string } | undefined)?.stepId;
+  await finishManual(deps, job, run, `manual run abandoned: nobody signed${next ? ` step "${next}"` : " the next step"}`);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -468,5 +513,6 @@ export function toPublicRun(r: RunRow): Run {
   return {
     id: r.id, jobId: r.jobId, startedAt: new Date(r.startedAt * 1000).toISOString(), steps, pass: r.pass,
     ...(r.state === "SKIPPED" ? { skipped: r.error ?? "skipped", ...(r.meta?.unfunded === true ? { unfunded: true } : {}) } : {}),
+    ...(r.group === MANUAL_GROUP && typeof r.meta?.runner === "string" ? { manual: { by: r.meta.runner } } : {}),
   };
 }

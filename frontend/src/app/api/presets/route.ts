@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { presetContracts, templates } from "@/lib/jobs/presets";
 import { MIN_INTERVAL_SEC } from "@/lib/jobs/schedule";
 import type { Network } from "@/lib/jobs/types";
-import { poolAddress } from "@/lib/pool/abi";
+import { poolAddress, poolV2Address } from "@/lib/pool/abi";
 
 export const dynamic = "force-dynamic";
 
 const NETWORKS: Network[] = ["studio", "bradbury"];
 
 // Prefilled job templates. Shape (lib/jobs/client.ts `PresetsResponse`):
-//   { minIntervalSec, pool: { bradbury }, presets: [{ id, name, description,
+//   { minIntervalSec, pool: { bradbury, v2 }, presets: [{ id, name, description,
 //     networks, availability: { studio, bradbury }, template: { steps, schedule, assertions },
 //     templates: { studio, bradbury } }] }
 // `template` carries the contract addresses of ?network= (default bradbury);
@@ -39,5 +39,5 @@ export async function GET(request: Request) {
       jobName: t.name,
     };
   });
-  return NextResponse.json({ minIntervalSec: MIN_INTERVAL_SEC, pool: { bradbury: poolAddress() }, presets });
+  return NextResponse.json({ minIntervalSec: MIN_INTERVAL_SEC, pool: { bradbury: poolAddress(), v2: !!poolV2Address() }, presets });
 }

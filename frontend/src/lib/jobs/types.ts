@@ -74,6 +74,8 @@ export type StepRun = {
 
 // `skipped`: the scheduler refused this slot (why); `unfunded`: because the
 // pool could not cover it. A skipped run has pass === null but is NOT running.
+// `manual`: an extra run a visitor started with "Run now", signed and paid by
+// their own wallet `by` (never the job's pool).
 export type Run = {
   id: string;
   jobId: string;
@@ -82,4 +84,5 @@ export type Run = {
   pass: boolean | null;
   skipped?: string;
   unfunded?: boolean;
+  manual?: { by: string };
 };

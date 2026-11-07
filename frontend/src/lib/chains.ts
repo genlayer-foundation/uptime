@@ -114,6 +114,7 @@ export const LOCALNET = localnet;
 /** Uptime pool contract address per network, from env (not deployed yet). */
 export function poolAddress(network: NetworkKey): Address | undefined {
   if (network !== "bradbury") return undefined;
-  const v = process.env.UPTIME_POOL_BRADBURY || process.env.NEXT_PUBLIC_UPTIME_POOL_BRADBURY;
+  // Server-side, UPTIME_POOL_V2_BRADBURY (v2) wins; the browser learns it from /api/presets.
+  const v = process.env.UPTIME_POOL_V2_BRADBURY || process.env.UPTIME_POOL_BRADBURY || process.env.NEXT_PUBLIC_UPTIME_POOL_BRADBURY;
   return v && v !== "undefined" ? (v.trim() as Address) : undefined;
 }
