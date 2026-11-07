@@ -258,7 +258,7 @@ $("d-go").onclick = async () => {
 // ---------------------------------------------------------------- 3. Set mailer (spender role 2)
 
 const LIVE_POOL = "0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A"; // UPTIME_POOL_BRADBURY, INTEGRATIONS.md
-$("m-pool").value = LIVE_POOL;
+$("m-pool").value = store.get("v:last") || "0xcEb88f1f41AE2a12f50330C8c474C640D71dF355";
 $("m-addr").value = "0xb69619D3D7923316bb442C1A4D2aD9DE88aF4774"; // "Uptime Mailer (Bradbury)", 1Password vault Uptime Production
 let mSeq = 0;
 
