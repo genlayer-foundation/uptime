@@ -1,6 +1,7 @@
 // Small helpers for the /api/alerts/** routes.
 
 import { NextResponse } from "next/server";
+import { ensureMailerWired } from "@/lib/jobs/mailerWiring";
 import { readConfig } from "./config";
 import type { MailerDeps } from "./policy";
 import { mailerDeps } from "./runtime";
@@ -15,6 +16,10 @@ export function json(body: unknown, status = 200): NextResponse {
 /** Deps, or the 503 that every alerts route answers while the mailer is off or unwired. */
 export function depsOr503(): MailerDeps | NextResponse {
   if (!readConfig().enabled) return json({ error: "email alerts are not enabled" }, 503);
+  // Wire here, not only in instrumentation.ts: on Vercel the instrumentation hook
+  // is a separate bundle, so its configureMailer() sets a DIFFERENT copy of the
+  // runtime module than the one this route reads. Idempotent per instance.
+  ensureMailerWired();
   const deps = mailerDeps();
   return deps ?? json({ error: "email alerts are not enabled" }, 503);
 }
