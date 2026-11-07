@@ -8,10 +8,11 @@ import { depsOr503, page } from "@/lib/mailer/http";
 
 export const dynamic = "force-dynamic";
 
-const done = () => page("Unsubscribed", "GenLayer Uptime will not email this address again.");
+const done = () =>
+  page("Unsubscribed", "Uptime will not email this address again.", { tone: "success", link: { href: "/", label: "Back to Uptime" } });
 
 export async function GET() {
-  return page("Stop Uptime email", "Stop all GenLayer Uptime email to this address.", { label: "Unsubscribe" });
+  return page("Stop Uptime email", "Stop all Uptime email to this address.", { form: { label: "Unsubscribe" } });
 }
 
 export async function POST(request: Request) {
