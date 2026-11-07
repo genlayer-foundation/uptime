@@ -15,3 +15,6 @@ video/film/fonts/
 video/explainer/fonts/
 *.wav
 .venv-studio/
+# video/music: generated fal.ai music beds (owner picks; never committed)
+video/music/*.mp3
+video/music/*.wav
