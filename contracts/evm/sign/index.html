@@ -53,6 +53,21 @@
   <button id="p-go" disabled>Deploy UptimePool (1 signature)</button>
 </section>
 
+<section id="poolv2">
+  <h2>1b. UptimePool v2 (community pools) — 1 transaction</h2>
+  <p class="muted">CREATE2 through <code>0x4e59…956C</code>, same calldata as <code>script/DeployUptimePoolV2.s.sol</code>. Same constructor as v1; anyone can back a pool, each backer withdraws only their own pro-rata share. v1 keeps running: the app switches only when <code>UPTIME_POOL_V2_BRADBURY</code> is set to the address below. Set its mailer afterwards in section 3 (paste this address as the pool).</p>
+  <label>admin (the connected account)</label><input id="v-admin" readonly>
+  <label>rotationDelay (seconds)</label><input id="v-delay">
+  <label>scheduler (ROLE_SCHEDULER spender)</label><input id="v-scheduler">
+  <label>mailer (ROLE_MAILER spender; zero = unset)</label><input id="v-mailer">
+  <label>salt (bytes32)</label><input id="v-salt">
+  <p>Predicted UptimePoolV2 address:</p>
+  <div id="v-addr" class="big">—</div>
+  <div id="v-state" class="muted"></div>
+  <div class="summary" id="v-summary"></div>
+  <button id="v-go" disabled>Deploy UptimePool v2 (1 signature)</button>
+</section>
+
 <section id="dlg">
   <h2>2. MetaMask Delegation Framework v1.3.0 + EntryPoint v0.7 — up to 44 transactions</h2>
   <p class="muted">Canonical CREATE2 replay from <code>contracts/delegation/manifest/canonical-v1.3.0.json</code>, same as <code>script/DeployCanonical.s.sol</code>. Contracts that already have code are skipped. Sent one at a time; each waits for its receipt and checks code at the expected address. Safe to reload: progress is re-read from the chain, and a sent-but-unmined tx hash is kept and awaited rather than sent again.</p>
@@ -66,7 +81,7 @@
 
 <section id="mailer">
   <h2>3. Set mailer on a deployed UptimePool — 2 transactions</h2>
-  <p class="muted">Admin only. <code>proposeSpender(2, mailer)</code>, then <code>executeSpender(2)</code> once <code>rotationDelay</code> has passed (0 on the live pool, so right away). The mailer must differ from the scheduler (<code>SpenderHasRole</code>). Only the address goes on chain; its key stays in 1Password.</p>
+  <p class="muted">Works on v1 or v2 (paste the pool address). Admin only. <code>proposeSpender(2, mailer)</code>, then <code>executeSpender(2)</code> once <code>rotationDelay</code> has passed (0 on the live pool, so right away). The mailer must differ from the scheduler (<code>SpenderHasRole</code>). Only the address goes on chain; its key stays in 1Password.</p>
   <label>UptimePool address</label><input id="m-pool">
   <label>new mailer address (ROLE_MAILER, role 2)</label><input id="m-addr">
   <div id="m-state" class="muted"></div>

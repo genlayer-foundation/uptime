@@ -1,6 +1,7 @@
 // Read-only and fork checks for the signing page, using the page's own lib.js + data.js.
 //
-//   node check.mjs estimate [rpc]      Bradbury, READ-ONLY: predicted addresses, eth_getCode,
+//   node check.mjs estimate [rpc]      Bradbury, READ-ONLY: predicted addresses (UptimePool, UptimePoolV2,
+//                                      the 44 delegation contracts), eth_getCode,
 //                                      eth_estimateGas for every tx from FROM (nothing is signed).
 //   node check.mjs fork http://127.0.0.1:8545
 //                                      Full flow against an anvil fork, sending from anvil's
@@ -23,7 +24,8 @@ console.log(`rpc ${rpc} chainId ${parseInt(chain, 16)}; ${dlg.length} delegation
 if (mode === "estimate") {
   const from = process.env.FROM || "0x3B49b8ed8b0f59eea6805F87673920f2Fd43Da97";
   const pool = L.buildPoolTx(DATA, { admin: from, rotationDelay: D.rotationDelay, scheduler, mailer, salt: D.salt });
-  const all = [pool, ...dlg];
+  const poolV2 = L.buildPoolV2Tx(DATA, { admin: from, rotationDelay: D.rotationDelay, scheduler, mailer, salt: D.salt });
+  const all = [pool, poolV2, ...dlg];
   const codes = await L.codeMap(reader, all);
   let ok = 0, fail = 0, total = 0n;
   for (const t of all) {
@@ -58,6 +60,12 @@ if (mode === "fork") {
   if (st.admin.toLowerCase() !== from.toLowerCase() || st.rotationDelay !== 0 ||
       st.scheduler.toLowerCase() !== scheduler.toLowerCase() || st.mailer.toLowerCase() !== mailer.toLowerCase())
     throw new Error("pool state mismatch");
+  const poolV2 = L.buildPoolV2Tx(DATA, { admin: from, rotationDelay: D.rotationDelay, scheduler, mailer, salt: D.salt });
+  const r2 = await L.runTx(env, poolV2);
+  const st2 = await L.readPool(reader, poolV2.expected);
+  console.log(`poolV2 ${r2.state} at ${poolV2.expected} gasUsed ${r2.gasUsed} ->`, st2);
+  if (st2.admin.toLowerCase() !== from.toLowerCase() || st2.scheduler.toLowerCase() !== scheduler.toLowerCase())
+    throw new Error("poolV2 state mismatch");
   // Resume path: send tx #1 outside runTx and leave only its (unmined) hash in the store, as a
   // reload mid-flight would; runTx must wait for that hash instead of sending a second tx.
   const nonce0 = parseInt(await reader.call("eth_getTransactionCount", [from, "latest"]), 16);

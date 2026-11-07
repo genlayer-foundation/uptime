@@ -109,12 +109,22 @@ export function create2Address(salt, initcodeHex, factory = FACTORY) {
 
 /** UptimePool through the CREATE2 factory, exactly as script/DeployUptimePool.s.sol does it:
  *  calldata = salt ++ creationCode ++ abi.encode(admin, rotationDelay, scheduler, mailer). */
-export function buildPoolTx(data, { admin, rotationDelay = 0, scheduler, mailer, salt }) {
+export function buildPoolTx(data, args) {
+  return buildCreate2PoolTx(data.pool.creationCode, "UptimePool", "pool", args);
+}
+
+/** UptimePoolV2 (community-backed pools), exactly as script/DeployUptimePoolV2.s.sol does it.
+ *  Same constructor as v1, so the same calldata layout; only the creation code differs. */
+export function buildPoolV2Tx(data, args) {
+  return buildCreate2PoolTx(data.poolV2.creationCode, "UptimePoolV2", "poolv2", args);
+}
+
+function buildCreate2PoolTx(creationCode, name, keyPrefix, { admin, rotationDelay = 0, scheduler, mailer, salt }) {
   const args = encAddress(admin) + encUint(rotationDelay) + encAddress(scheduler) + encAddress(mailer);
-  const initcode = "0x" + strip(data.pool.creationCode) + args;
+  const initcode = "0x" + strip(creationCode) + args;
   const expected = create2Address(salt, initcode);
   return {
-    key: `pool:${expected.toLowerCase()}`, name: "UptimePool", to: FACTORY,
+    key: `${keyPrefix}:${expected.toLowerCase()}`, name, to: FACTORY,
     data: "0x" + strip(salt) + strip(initcode), expected,
     args: { admin, rotationDelay, scheduler, mailer, salt },
   };

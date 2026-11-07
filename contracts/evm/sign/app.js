@@ -87,86 +87,101 @@ const sendViaMetaMask = async (tx) => {
   return eth.request({ method: "eth_sendTransaction", params: [{ ...tx, nonce }] });
 };
 
-// ---------------------------------------------------------------- 1. UptimePool
+// ---------------------------------------------------------------- 1. UptimePool (v1) and 1b. UptimePoolV2
+// Two copies of one section: same constructor, same CREATE2 path, different creation code.
+// Element ids: <prefix>-delay, -scheduler, -mailer, -salt, -admin, -addr, -state, -summary, -go.
 
 const D = DATA.pool.defaults;
-$("p-delay").value = D.rotationDelay;
-$("p-scheduler").value = D.scheduler;
-$("p-mailer").value = D.mailer;
-$("p-salt").value = D.salt;
-let poolTx = null;
-let poolSeq = 0;
 
-function poolArgs() {
-  const scheduler = $("p-scheduler").value.trim(), mailer = $("p-mailer").value.trim(), salt = $("p-salt").value.trim();
-  const delay = $("p-delay").value.trim();
-  if (!account) return { err: "Connect MetaMask: admin is the connected account." };
-  if (!L.isAddress(scheduler)) return { err: "scheduler is not an address" };
-  if (!L.isAddress(mailer)) return { err: "mailer is not an address" };
-  if (scheduler.toLowerCase() !== ZERO && scheduler.toLowerCase() === mailer.toLowerCase())
-    return { err: "scheduler and mailer are the same address: the constructor reverts (SpenderHasRole). Use distinct addresses or zero for one." };
-  if (!/^0x[0-9a-fA-F]{64}$/.test(salt)) return { err: "salt must be 32 bytes hex" };
-  if (!/^\d+$/.test(delay) || BigInt(delay) >= 2n ** 64n) return { err: "rotationDelay must be a uint64" };
-  return { admin: account, rotationDelay: Number(delay), scheduler: L.checksum(scheduler), mailer: L.checksum(mailer), salt };
-}
+function poolSection(prefix, build, label) {
+  const el = (k) => $(`${prefix}-${k}`);
+  el("delay").value = D.rotationDelay;
+  el("scheduler").value = D.scheduler;
+  el("mailer").value = D.mailer;
+  el("salt").value = D.salt;
+  let tx = null;
+  let seq = 0;
 
-async function showPoolDeployed(addr) {
-  const st = await L.readPool(reader, addr);
-  const a = poolTx?.args;
-  const match = a && st.admin === L.checksum(a.admin) && st.rotationDelay === a.rotationDelay &&
-    st.scheduler === L.checksum(a.scheduler) && st.mailer === L.checksum(a.mailer);
-  $("p-state").innerHTML = `<span class="ok">DEPLOYED — code present.</span> On-chain: admin ${st.admin}, rotationDelay ${st.rotationDelay}, scheduler ${st.scheduler}, mailer ${st.mailer} ` +
-    (match ? `<span class="ok">(matches)</span>` : `<span class="bad">(does NOT match the fields above)</span>`);
-  store.set("pool:last", addr);
-}
-
-async function updatePool() {
-  const seq = ++poolSeq;
-  $("p-admin").value = account || "(connect MetaMask)";
-  const a = poolArgs();
-  $("p-go").disabled = true;
-  if (a.err) { poolTx = null; $("p-addr").textContent = "—"; $("p-state").innerHTML = `<span class="bad">${a.err}</span>`; $("p-summary").textContent = ""; return; }
-  poolTx = L.buildPoolTx(DATA, a);
-  $("p-addr").textContent = poolTx.expected;
-  $("p-state").textContent = "checking chain…";
-  $("p-summary").textContent = "";
-  try {
-    const code = await reader.call("eth_getCode", [poolTx.expected, "latest"]);
-    if (seq !== poolSeq) return;
-    if (L.hasCode(code)) { await showPoolDeployed(poolTx.expected); return; }
-    const est = await L.estimate(reader, account, poolTx);
-    if (seq !== poolSeq) return;
-    const pending = store.get(poolTx.key);
-    $("p-state").innerHTML = pending ? `<span class="warn">Not deployed yet; an earlier tx ${pending} is stored and will be awaited first.</span>` : "Not deployed yet.";
-    $("p-summary").textContent = `On click: 1 MetaMask prompt — call CREATE2 factory 0x4e59…956C, deploys UptimePool at ${poolTx.expected}, admin ${a.admin}, est ${est.toLocaleString("en-US")} gas, sent with gas ${L.gasWithHeadroom(est).toLocaleString("en-US")}, value 0.`;
-    $("p-go").disabled = busy;
-  } catch (e) {
-    if (seq === poolSeq) $("p-state").innerHTML = `<span class="bad">eth_estimateGas failed: ${errText(e)} — not sendable as-is.</span>`;
+  function args() {
+    const scheduler = el("scheduler").value.trim(), mailer = el("mailer").value.trim(), salt = el("salt").value.trim();
+    const delay = el("delay").value.trim();
+    if (!account) return { err: "Connect MetaMask: admin is the connected account." };
+    if (!L.isAddress(scheduler)) return { err: "scheduler is not an address" };
+    if (!L.isAddress(mailer)) return { err: "mailer is not an address" };
+    if (scheduler.toLowerCase() !== ZERO && scheduler.toLowerCase() === mailer.toLowerCase())
+      return { err: "scheduler and mailer are the same address: the constructor reverts (SpenderHasRole). Use distinct addresses or zero for one." };
+    if (!/^0x[0-9a-fA-F]{64}$/.test(salt)) return { err: "salt must be 32 bytes hex" };
+    if (!/^\d+$/.test(delay) || BigInt(delay) >= 2n ** 64n) return { err: "rotationDelay must be a uint64" };
+    return { admin: account, rotationDelay: Number(delay), scheduler: L.checksum(scheduler), mailer: L.checksum(mailer), salt };
   }
-}
-for (const id of ["p-delay", "p-scheduler", "p-mailer", "p-salt"]) $(id).addEventListener("input", updatePool);
 
-$("p-go").onclick = async () => {
-  if (!poolTx || busy) return;
-  busy = true; $("p-go").disabled = true; updateDlgButtons();
-  const tx = poolTx;
-  try {
-    await L.runTx({
-      reader, from: account, send: sendViaMetaMask, store, log,
-      status: (k, s, x = {}) => {
-        if (s === "signing") $("p-summary").textContent = "CONFIRM IN METAMASK: " + x.summary;
-        if (s === "mining") $("p-summary").textContent = `Sent ${x.hash} — waiting for receipt…`;
-        if (s === "waiting") $("p-summary").textContent = `Waiting for earlier tx ${x.hash}…`;
-        if (s === "deployed") $("p-summary").textContent = `Deployed. Tx ${x.hash || ""}`;
-      },
-    }, tx);
-    await showPoolDeployed(tx.expected);
-    log(`UptimePool at ${tx.expected}`);
-  } catch (e) {
-    log(`UptimePool: ${errText(e)}`);
-    $("p-summary").textContent = `Stopped: ${errText(e)}`;
-  } finally { busy = false; updateDlgButtons(); updatePool(); }
-};
+  async function showDeployed(addr) {
+    const st = await L.readPool(reader, addr);
+    const a = tx?.args;
+    const match = a && st.admin === L.checksum(a.admin) && st.rotationDelay === a.rotationDelay &&
+      st.scheduler === L.checksum(a.scheduler) && st.mailer === L.checksum(a.mailer);
+    el("state").innerHTML = `<span class="ok">DEPLOYED — code present.</span> On-chain: admin ${st.admin}, rotationDelay ${st.rotationDelay}, scheduler ${st.scheduler}, mailer ${st.mailer} ` +
+      (match ? `<span class="ok">(matches)</span>` : `<span class="bad">(does NOT match the fields above)</span>`);
+    store.set(`${prefix}:last`, addr);
+  }
+
+  async function update() {
+    const my = ++seq;
+    el("admin").value = account || "(connect MetaMask)";
+    const a = args();
+    el("go").disabled = true;
+    if (a.err) { tx = null; el("addr").textContent = "—"; el("state").innerHTML = `<span class="bad">${a.err}</span>`; el("summary").textContent = ""; return; }
+    tx = build(DATA, a);
+    el("addr").textContent = tx.expected;
+    el("state").textContent = "checking chain…";
+    el("summary").textContent = "";
+    try {
+      const code = await reader.call("eth_getCode", [tx.expected, "latest"]);
+      if (my !== seq) return;
+      if (L.hasCode(code)) { await showDeployed(tx.expected); return; }
+      const est = await L.estimate(reader, account, tx);
+      if (my !== seq) return;
+      const pending = store.get(tx.key);
+      el("state").innerHTML = pending ? `<span class="warn">Not deployed yet; an earlier tx ${pending} is stored and will be awaited first.</span>` : "Not deployed yet.";
+      el("summary").textContent = `On click: 1 MetaMask prompt — call CREATE2 factory 0x4e59…956C, deploys ${label} at ${tx.expected}, admin ${a.admin}, est ${est.toLocaleString("en-US")} gas, sent with gas ${L.gasWithHeadroom(est).toLocaleString("en-US")}, value 0.`;
+      el("go").disabled = busy;
+    } catch (e) {
+      if (my === seq) el("state").innerHTML = `<span class="bad">eth_estimateGas failed: ${errText(e)} — not sendable as-is.</span>`;
+    }
+  }
+  for (const k of ["delay", "scheduler", "mailer", "salt"]) el(k).addEventListener("input", update);
+
+  el("go").onclick = async () => {
+    if (!tx || busy) return;
+    busy = true; disablePoolButtons(); updateDlgButtons();
+    const t = tx;
+    try {
+      await L.runTx({
+        reader, from: account, send: sendViaMetaMask, store, log,
+        status: (k, s, x = {}) => {
+          if (s === "signing") el("summary").textContent = "CONFIRM IN METAMASK: " + x.summary;
+          if (s === "mining") el("summary").textContent = `Sent ${x.hash} — waiting for receipt…`;
+          if (s === "waiting") el("summary").textContent = `Waiting for earlier tx ${x.hash}…`;
+          if (s === "deployed") el("summary").textContent = `Deployed. Tx ${x.hash || ""}`;
+        },
+      }, t);
+      await showDeployed(t.expected);
+      log(`${label} at ${t.expected}`);
+    } catch (e) {
+      log(`${label}: ${errText(e)}`);
+      el("summary").textContent = `Stopped: ${errText(e)}`;
+    } finally { busy = false; updateDlgButtons(); updatePool(); }
+  };
+
+  return { update, disable: () => { el("go").disabled = true; } };
+}
+
+const poolSections = [
+  poolSection("p", L.buildPoolTx, "UptimePool"),
+  poolSection("v", L.buildPoolV2Tx, "UptimePoolV2"),
+];
+function updatePool() { for (const s of poolSections) s.update(); }
+function disablePoolButtons() { for (const s of poolSections) s.disable(); }
 
 // ---------------------------------------------------------------- 2. Delegation
 
@@ -214,7 +229,7 @@ $("d-rescan").onclick = scan;
 $("d-stop").onclick = () => { stopRequested = true; updateDlgButtons(); log("stop requested: will stop after the current tx"); };
 $("d-go").onclick = async () => {
   if (busy) return;
-  busy = true; stopRequested = false; updateDlgButtons(); $("p-go").disabled = true;
+  busy = true; stopRequested = false; updateDlgButtons(); disablePoolButtons();
   const from = account;
   try {
     for (const t of dlg) {
@@ -297,8 +312,10 @@ $("m-execute").onclick = () => mailerTx(() => L.buildExecuteSpenderTx($("m-pool"
 
 (async () => {
   if (!rpcOverride) try { await reader.call("eth_chainId"); } catch { reader = L.makeReader(L.RPC_URLS[1]); $("rpc").textContent = reader.url; }
-  const last = store.get("pool:last");
+  const last = store.get("p:last") || store.get("pool:last");
   if (last) log(`last UptimePool deployed from this browser: ${last}`);
+  const lastV2 = store.get("v:last");
+  if (lastV2) log(`last UptimePoolV2 deployed from this browser: ${lastV2}`);
   await refreshWallet().catch((e) => log(errText(e)));
   await scan();
 })();
