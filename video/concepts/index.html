@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uptime Video Concepts</title>
+<!-- Local board, opened from disk. Frames: node src/frames.mjs · music: src/music.mjs (both gitignored outputs) -->
+<style>
+  :root { --bg:#fff; --fg:#0a0a0a; --muted:#6b6b6b; --line:#e5e5e5; --card:#f6f6f7; --accent:#110fff; --red:#d92d20; --green:#0a7a3d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0b0b0c; --fg:#f2f2f2; --muted:#9a9a9a; --line:#2a2a2d; --card:#161618; --accent:#7b7aff; --red:#ff6b5e; --green:#3ccf7a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 120px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 12px; }
+  .round { display:inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px 0; }
+  .card.killed { opacity: .45; }
+  .card.kept { border-color: var(--accent); }
+  .head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .letter { font-weight: 700; color: var(--accent); font-size: 22px; }
+  .log { font-size: 17px; margin: 4px 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .chip { font-size: 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px; }
+  .meta { display: grid; grid-template-columns: 70px 1fr; gap: 2px 10px; font-size: 14px; margin: 0 0 12px; }
+  .meta b { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  figure { margin: 0; }
+  figure img { width: 100%; aspect-ratio: 16/9; display: block; border-radius: 6px; border: 1px solid var(--line); background: #fff; }
+  figcaption { font-size: 12.5px; color: var(--muted); margin: 4px 0; line-height: 1.35; }
+  figcaption .t { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--fg); }
+  figcaption .w { color: var(--fg); font-weight: 600; }
+  textarea { width: 100%; min-height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; resize: vertical; }
+  audio { width: 100%; max-width: 520px; height: 36px; margin: 2px 0 6px; }
+  .fb { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .stars button { background: none; border: 0; padding: 0 2px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--line); }
+  .stars button.on { color: var(--accent); }
+  .opts { display: flex; gap: 6px; }
+  .opts label { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; background: var(--bg); font-size: 14px; }
+  .opts input { display: none; }
+  .opts label:has(input:checked) { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .opts label.kill:has(input:checked) { border-color: var(--red); color: var(--red); }
+  select { border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; background: var(--bg); color: var(--fg); font: inherit; font-size: 14px; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .then { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .then img { width: 100%; border-radius: 6px; border: 1px solid var(--line); }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 10px; justify-content: center; align-items: center; }
+  .bar button { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: #fff; }
+  .bar button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  #status { color: var(--muted); font-size: 13px; }
+  @media (max-width: 600px) { .then { grid-template-columns: 1fr; } .meta { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <span class="round" id="round"></span>
+  <h1>Uptime Video Concepts</h1>
+  <p class="sub">5 different films, not 5 versions of one. Rate each, Keep / Kill / Merge, note any frame, then press <b>Copy feedback</b> and paste it in chat. Killed ideas get replaced next round. Drafts stay in this browser.</p>
+
+  <div class="card">
+    <h3 style="margin:0 0 6px">Why the current cuts feel like AI slop</h3>
+    <ul>
+      <li><b>One shot, repeated 15 times:</b> "Word [tiny box] word", centred. It reads like a slide deck, not a film</li>
+      <li><b>The text does all the work.</b> The objects are ~5 % of the frame, so you read and never look</li>
+      <li><b>No person, no joke, no surprise.</b> Nobody to root for; nothing you'd quote or send to a friend</li>
+      <li><b>No rhythm.</b> Cuts follow the sentence, not the music; the music is a polite pad, so nothing lands</li>
+      <li><b>Generic beats:</b> "3 AM, site down, dashboard lied" is every monitoring ad. Nothing only Uptime could say</li>
+      <li><b>Nothing real.</b> We have a live Heartbeat on Bradbury and showed mock cards instead</li>
+    </ul>
+    <details><summary>See the current cuts (contact sheets)</summary>
+      <div class="then"><img src="frames/then-explainer.png" alt="Explainer contact sheet"><img src="frames/then-film.png" alt="Film contact sheet"></div>
+    </details>
+  </div>
+
+  <div id="concepts"></div>
+
+  <div class="card">
+    <h3 style="margin:0 0 6px">Global notes</h3>
+    <textarea id="global" placeholder="Anything across all concepts: tone, music, what to try next round"></textarea>
+  </div>
+  <p class="sub">Frames are storyboard sketches, not finished art. Music sketches: ElevenLabs Music via fal, 20–30 s each, $3.00 total; check ElevenLabs' music terms before a public release. Numbers on frames (latencies, 99.86 %, heatmap) are placeholders until captured live.</p>
+</main>
+
+<div class="bar">
+  <button id="copy">Copy feedback</button>
+  <button class="ghost" id="clear">Clear</button>
+  <span id="status"></span>
+</div>
+
+<script>
+const ROUND = 1;
+const CONCEPTS = [
+  { id: "A", slug: "a", title: "The Status Update",
+    log: "3:04 a.m. The CTO types “All systems operational”. The jury disagrees",
+    len: "30 s", ch: "X", tone: "Comedy · human",
+    why: "Every engineer has seen a status page lie. Uptime is the status nobody can fudge — the joke is the product",
+    music: "112 BPM live funk — Vulfpeck “Dean Town”, The Meters “Cissy Strut”, Cory Wong. Hi-hat = pager; groove hits on the first cut (3 s); band stops dead as the jury arrives (11 s); horn stab IS the [DOWN] stamp (13 s); button ending on the logo",
+    need: "No voice. A chat + status-page UI we draw ourselves (no real brands). Typing SFX. Comic timing in the edit",
+    audio: "music/a-status-update.mp3",
+    frames: [
+      ["a1", "0–3 s", "Pager pills shake in on each hi-hat", "3:04"],
+      ["a2", "3–7 s", "Messages stack, one per beat", "is it down? / CEO is asking"],
+      ["a3", "7–11 s", "CTO types the lie, cursor to Publish", "All systems operational"],
+      ["a4", "11–13 s", "Silence. Dots slide in, ring closes", "—"],
+      ["a5", "13–17 s", "Horn hit: [DOWN] stamps, blue line closes", "[DOWN]"],
+      ["a6", "17–22 s", "CTO deletes, retypes. The laugh", "ok. it's down"],
+      ["a7", "22–27 s", "Line rises from below on the beat", "Uptime you can prove"],
+      ["end", "27–30 s", "Wordmark, url, testnet line", "—"],
+    ] },
+  { id: "B", slug: "b", title: "UP UP UP",
+    log: "Every beat is a check. Every check says UP — until one doesn't",
+    len: "15 s", ch: "X teaser · launch", tone: "Kinetic type",
+    why: "Uptime is literally a rhythm. One giant word per beat makes the heartbeat audible, and the red DOWN lands like a drop",
+    music: "128 BPM French filter house — Justice “D.A.N.C.E.”, Daft Punk “Harder, Better, Faster, Stronger”, Fred again.. “Delilah”. Every UP on a kick, ground flips each beat; filter drop on DOWN (3.75 s); full drop on “The jury” (7.5 s); last stab on the logo. Sketch runs 20 s",
+    need: "Nothing but type and music. Cheapest and fastest to finish",
+    audio: "music/b-up-up-up.mp3",
+    frames: [
+      ["b1", "0.0 s", "UP slams in on the kick, clock ticks", "UP"],
+      ["b2", "0.47 s", "Ground flips blue on beat 2", "UP"],
+      ["b3", "0.94 s", "Ground flips black; 8 more beats like this", "UP"],
+      ["b4", "3.75 s", "Filter drop. Red word fills the frame", "DOWN"],
+      ["b5", "4.2 s", "DOWN shrinks; dots gather around it", "Says who"],
+      ["b6", "7.5 s", "Full drop. Majority turns blue, line closes", "The jury"],
+      ["b7", "11.2 s", "Stacked lines punch in on bars", "Uptime you can prove"],
+      ["end", "13.1–15 s", "Wordmark on the final stab", "—"],
+    ] },
+  { id: "C", slug: "c", title: "The Receipt",
+    log: "Your uptime, printed every hour on a receipt nobody can tear off",
+    len: "30 s (loops)", ch: "Landing hero loop", tone: "Object story · witty",
+    why: "“Recorded on-chain” is abstract; a receipt is not. Everyone knows a receipt is proof, and it loops forever on the site",
+    music: "120 BPM playful electro — Kraftwerk “Pocket Calculator”, Four Tet “Baby”, Floating Points “LesAlpx”. Printer clicks become the beat (0–6 s); bass joins as the strip runs (6 s); break with one alarm stab on the red row (14 s); full groove on the footer (18 s); tear-stab at the end",
+    need: "Printer + tear SFX. A loop cut without the end card for the hero",
+    audio: "music/c-receipt.mp3",
+    frames: [
+      ["c1", "0–3 s", "Printer feeds the first line", "—"],
+      ["c2", "3–8 s", "Hour after hour, strip races down", "—"],
+      ["c3", "8–12 s", "Camera pulls up: it reaches the floor", "Every hour"],
+      ["c4", "12–16 s", "Push in. One red row prints", "—"],
+      ["c5", "16–20 s", "Cursor tries to white it out. Can't", "Try tearing it off"],
+      ["c6", "20–25 s", "The footer: totals and the jury's seal", "—"],
+      ["c7", "25–30 s", "Strip keeps printing beside the line", "Uptime with a receipt"],
+      ["end", "end", "Wordmark (dropped in the loop version)", "—"],
+    ] },
+  { id: "D", slug: "d", title: "Every Hour",
+    log: "The real Bradbury Heartbeat: five checks, every hour, in public. We tested ourselves first",
+    len: "45 s", ch: "Launch film", tone: "Documentary · real data",
+    why: "Real data is the opposite of AI slop. It proves the thing exists and runs, and gives a link people can check",
+    music: "124 BPM driving electronica — Jon Hopkins “Open Eye Signal”, Moderat “A New Error”, Bicep “Glue”. Clock pulse to 13:59:58; kick lands exactly on :00 (4 s); full drums on the hour grid (12 s); hard stop on the url. Sketch runs 30 s",
+    need: "Screen capture of the live site + explorer. A real run's timestamps and tx hashes. Real Heartbeat history for the grid",
+    audio: "music/d-every-hour.mp3",
+    frames: [
+      ["d1", "0–4 s", "Real clock counts to the hour", "—"],
+      ["d2", "4–10 s", "On :00 the five actions fire, results land", "—"],
+      ["d3", "10–16 s", "Screen capture: the live Heartbeat page", "—"],
+      ["d4", "16–24 s", "Grid fills hour by hour; red hours stay", "Every hour, in public"],
+      ["d5", "24–30 s", "The real contract address types out", "Check it yourself"],
+      ["d6", "30–36 s", "Line rises in", "We test ourselves first"],
+      ["d7", "36–42 s", "Url pill presses in", "Now test yours"],
+      ["end", "42–45 s", "Wordmark", "—"],
+    ] },
+  { id: "E", slug: "e", title: "The Ring",
+    log: "Your site is a dot. The jury is a ring. Agreement is one blue line",
+    len: "15 s (loops)", ch: "Landing hero loop · X", tone: "Abstract · brand",
+    why: "One image we can own: an abstract jury, no lists, no clutter. Reusable as the logo-like motif across site, socials and alerts",
+    music: "122 BPM afro house — Keinemusik “Move”, Black Coffee “Drive”, Caribou “Sun”. Congas only on the dot; bass as the dots gather (4 s); full groove when the line closes (10 s); one big hit as the ring seals into a cube. Sketch runs 20 s",
+    need: "Nothing external. All motion craft — the ring must feel alive",
+    audio: "music/e-the-ring.mp3",
+    frames: [
+      ["e1", "0–2 s", "A dot pulses on the kick", "—"],
+      ["e2", "2–4 s", "Dots fly in on curves from every side", "—"],
+      ["e3", "4–7 s", "They lock into a ring; most turn blue", "—"],
+      ["e4", "7–9 s", "Blue line closes round the group", "[UP]"],
+      ["e5", "9–11 s", "Ring snaps into a sealed cube", "—"],
+      ["e6", "11–13 s", "Camera pulls back: a chain of hours", "—"],
+      ["e7", "13–15 s", "Ring opens around the line", "Uptime you can prove"],
+      ["end", "end", "Wordmark (dropped in the loop version)", "—"],
+    ] },
+];
+
+const KEY = `uptime-video-concepts:r${ROUND}`;
+let S = {};
+try { S = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const st = (id) => (S[id] ||= { f: {} });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+document.getElementById("round").textContent = `Round ${ROUND}`;
+const root = document.getElementById("concepts");
+CONCEPTS.forEach((c) => {
+  const s = st(c.id);
+  const el = document.createElement("section");
+  el.className = "card"; el.id = `c-${c.id}`;
+  const others = CONCEPTS.filter((o) => o.id !== c.id).map((o) => `<option value="${o.id}" ${s.m === o.id ? "selected" : ""}>${o.id} · ${esc(o.title)}</option>`).join("");
+  el.innerHTML = `
+    <div class="head"><span class="letter">${c.id}</span><h2>${esc(c.title)}</h2></div>
+    <p class="log">${esc(c.log)}</p>
+    <div class="chips"><span class="chip">${esc(c.len)}</span><span class="chip">${esc(c.ch)}</span><span class="chip">${esc(c.tone)}</span></div>
+    <div class="meta">
+      <b>Why</b><span>${esc(c.why)}</span>
+      <b>Music</b><span>${esc(c.music)}<br><audio controls preload="none" src="${c.audio}"></audio></span>
+      <b>Needs</b><span>${esc(c.need)}</span>
+    </div>
+    <div class="frames">${c.frames.map(([img, t, mv, w], i) => `
+      <figure>
+        <img src="frames/${img}.png" alt="${esc(c.id + (i + 1))}" loading="lazy">
+        <figcaption><span class="t">${c.id}${i + 1} · ${esc(t)}</span> · ${esc(mv)}${w !== "—" ? ` · <span class="w">“${esc(w)}”</span>` : ""}</figcaption>
+        <textarea data-c="${c.id}" data-f="${i + 1}" placeholder="note on ${c.id}${i + 1}">${esc(s.f[i + 1] || "")}</textarea>
+      </figure>`).join("")}
+    </div>
+    <div class="fb">
+      <span class="stars" data-c="${c.id}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-label="${n} stars">★</button>`).join("")}</span>
+      <span class="opts">
+        <label><input type="radio" name="v-${c.id}" value="Keep" ${s.v === "Keep" ? "checked" : ""}>Keep</label>
+        <label class="kill"><input type="radio" name="v-${c.id}" value="Kill" ${s.v === "Kill" ? "checked" : ""}>Kill</label>
+        <label><input type="radio" name="v-${c.id}" value="Merge" ${s.v === "Merge" ? "checked" : ""}>Merge with…</label>
+      </span>
+      <select data-c="${c.id}" ${s.v === "Merge" ? "" : "hidden"}><option value="">pick one</option>${others}</select>
+    </div>
+    <textarea data-c="${c.id}" data-f="note" placeholder="note on ${c.id} as a whole">${esc(s.n || "")}</textarea>`;
+  root.appendChild(el);
+});
+
+function paint() {
+  CONCEPTS.forEach((c) => {
+    const s = st(c.id), el = document.getElementById(`c-${c.id}`);
+    el.querySelectorAll(".stars button").forEach((b) => b.classList.toggle("on", +b.dataset.n <= (s.r || 0)));
+    el.classList.toggle("killed", s.v === "Kill"); el.classList.toggle("kept", s.v === "Keep");
+    el.querySelector("select").hidden = s.v !== "Merge";
+  });
+}
+paint();
+root.addEventListener("click", (e) => {
+  const b = e.target.closest(".stars button"); if (!b) return;
+  const s = st(b.parentElement.dataset.c); const n = +b.dataset.n; s.r = s.r === n ? 0 : n; save(); paint();
+});
+root.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.type === "radio") { st(t.name.slice(2)).v = t.value; }
+  if (t.tagName === "SELECT") { st(t.dataset.c).m = t.value; }
+  save(); paint();
+});
+root.addEventListener("input", (e) => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const s = st(t.dataset.c); if (t.dataset.f === "note") s.n = t.value; else s.f[t.dataset.f] = t.value; save();
+});
+const g = document.getElementById("global");
+g.value = S.global || ""; g.addEventListener("input", () => { S.global = g.value; save(); });
+
+function feedback() {
+  const L = [`Video concepts · Round ${ROUND}`];
+  CONCEPTS.forEach((c) => {
+    const s = st(c.id);
+    const v = s.v === "Merge" ? `Merge with ${s.m || "?"}` : s.v || "—";
+    const notes = Object.entries(s.f).filter(([, x]) => x && x.trim());
+    if (!s.r && !s.v && !(s.n || "").trim() && !notes.length) { L.push(`${c.id} ${c.title}: no feedback`); return; }
+    L.push(`${c.id} ${c.title}: ${s.r ? "★".repeat(s.r) + ` (${s.r}/5)` : "unrated"} · ${v}${(s.n || "").trim() ? " — " + s.n.trim() : ""}`);
+    notes.forEach(([k, x]) => L.push(`  ${c.id}${k}: ${x.trim()}`));
+  });
+  if ((S.global || "").trim()) L.push(`Global: ${S.global.trim()}`);
+  return L.join("\n");
+}
+document.getElementById("copy").onclick = async () => {
+  const text = feedback(); const ok = () => (document.getElementById("status").textContent = "Copied — paste it into chat");
+  try { await navigator.clipboard.writeText(text); ok(); }
+  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); ok(); }
+};
+document.getElementById("clear").onclick = () => { if (!confirm("Clear all feedback for this round?")) return; S = {}; save(); location.reload(); };
+</script>
+</body>
+</html>

@@ -18,3 +18,7 @@ video/explainer/fonts/
 # video/music: generated fal.ai music beds (owner picks; never committed)
 video/music/*.mp3
 video/music/*.wav
+# video/concepts: storyboard frames, music sketches and fonts stay local (html + src may be committed)
+video/concepts/frames/
+video/concepts/music/*.mp3
+video/concepts/fonts/
