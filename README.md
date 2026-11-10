@@ -8,7 +8,7 @@ A paid cron for GenLayer: schedule any call, deploy or read, pay for it in GEN, 
 
 ## Example job: Bradbury Heartbeat
 
-The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs five test types against GenLayer's **Bradbury** testnet, each one way real contracts depend on the network, plus an appeal every fifth hour. When a type goes red, that capability is broken for real contracts. Prompts and the answer key are constants in `contracts/src/heartbeat.py`, which grades every answer itself. Dashboard: `/examples/bradbury-heartbeat`.
+The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs five test types against GenLayer's **Bradbury** testnet, each one way real contracts depend on the network. It is also built to appeal one answer every fifth hour; the dashboard counts the appeals actually sent. When a type goes red, that capability is broken for real contracts. Prompts and the answer key are constants in `contracts/src/heartbeat.py`, which grades every answer itself. Dashboard: `/examples/bradbury-heartbeat`.
 
 ## What a tick does
 
@@ -18,7 +18,7 @@ The first job running on Uptime is **Bradbury Heartbeat**. Every hour it runs fi
 | WRITE | bump | `bump(tick)`: a plain state write, no web, no LLM | none | `get_last_tick() == tick` (or `get_bump(tick)` once a later bump landed) |
 | WEB | `f0-status` | `probe_status(tick)`: `web.get` of `status.json`, no LLM | `strict_eq` | exact canonical JSON |
 | 2 rotating | `r1`…`r9` | `probe(tick, id)`, 2 of 9 per tick, each every 4.5 h | see below | on-chain: `correct` / `wrong` / `injected` |
-| appeal | — | every 5th tick, appeals the tick's first rotating probe once decided (ACCEPTED or UNDETERMINED) | | `upheld` / `overturned` / `withdrawn` |
+| appeal | — | scheduled every 5th tick: appeals the tick's first rotating probe once decided (ACCEPTED or UNDETERMINED). Appeals actually sent: `appeals.total` in `/api/heartbeat` | | `upheld` / `overturned` / `withdrawn` |
 
 The rotating pool (`frontend/src/lib/heartbeat/probes.ts` lists it in rotation order; prompts and key live only in the contract):
 
@@ -34,7 +34,7 @@ The rotating pool (`frontend/src/lib/heartbeat/probes.ts` lists it in rotation o
 | `r8-shot` | IMAGE | `web.render(shot.html, mode="screenshot")` | custom validator | `CONDORCET` |
 | `r9-namesake` | LLM | closed-book | `prompt_comparative` | contains `451` |
 
-The appealed index for the m-th appeal is (m − 2) mod 9, so every probe, images included, is appealed once every 45 hours.
+The appealed index for the m-th appeal is (m − 2) mod 9, so by schedule every probe, images included, is appealed once every 45 hours.
 
 **Fixtures** (`frontend/public/heartbeat/`, served `immutable` by `next.config.ts`) are frozen. Each HTML page carries a sentinel `HB2-<id>`; `card.png` is pinned by sha256 in the contract. A missing sentinel or another card is stored as an agreed `[EXTERNAL] fixture drift` error, never as a wrong answer. `card.png` and `shot.html` are generated, deterministically, by `frontend/scripts/heartbeat-fixtures.mjs` (`--check` verifies the committed bytes). The answer in each exists only as pixels.
 
@@ -102,17 +102,18 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 
 ## Cost
 
-Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal (bond: `getMinAppealBond`). Each tx deposits ~0.05 GEN of Phase 2 fees (`BRADBURY_TX_FEES`, see INTEGRATIONS.md), ~0.25 GEN per tick; unused budget is refunded at finalization. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
+Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal when one is sent (bond: `getMinAppealBond`). Each tx deposits ~0.05 GEN of Phase 2 fees (`BRADBURY_TX_FEES`, see INTEGRATIONS.md), ~0.25 GEN per tick; unused budget is refunded at finalization. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
 
-## Uptime contracts (in progress, not deployed)
+## Uptime contracts
 
-The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. Nothing below is deployed yet.
+The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. All of them are deployed on Bradbury at the addresses below; none is audited. `INTEGRATIONS.md` (On-chain) is the reference for addresses.
 
 Every Python contract is built per network GenVM from one source: deploy `contracts/build/bradbury/<name>.py` on Bradbury and `contracts/build/studio/<name>.py` on Studio (GenVM v0.2.16). The app picks the build for the job's network (`contracts/README.md`).
 
 | Contract | Network | What it is |
 |---|---|---|
-| `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time Deployed at `0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A` (`UPTIME_POOL_BRADBURY`; admin `0x3B49…7Da97`, scheduler `0xDcA4…84dd`, mailer unset) |
+| `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time Deployed at `0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A` (`UPTIME_POOL_BRADBURY`; admin `0x3B49…Da97`, scheduler `0xDcA4…84dd`, mailer `0xb696…4774`, read on-chain 2026-11-10). Production now uses v2 |
+| `contracts/evm/src/UptimePoolV2.sol` | Bradbury only (same chain) | Community pools: anyone can back a job, each backer withdraws only their own share. Deployed and set in production (`UPTIME_POOL_V2_BRADBURY`); current address in `INTEGRATIONS.md` (On-chain) |
 | `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`); Studio: `0x4574A36757da191D34CE3a38060b229928766024` (`UPTIME_WEBPROBE_STUDIO`) |
 | `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`); Studio: `0x3E6A11b37a94F7dA45E052aE6A2D289d3E8128e6` (`UPTIME_ASK_STUDIO`) |
 | `contracts/src/heartbeat.py`, `contracts/src/canary.py` | Bradbury (canary: any network, per-network build) | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |

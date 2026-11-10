@@ -82,7 +82,7 @@ const STEPS: { icon: LucideIcon; title: string; line: string }[] = [
 function faqs(runFee: string) {
   return [
     { q: "Does it replace my monitoring?", a: "No. It checks every 5 minutes at most. Use it for numbers others must trust." },
-    { q: "Can Uptime fake a result?", a: "No. Validators decide it. We can only fail to send a check, and that never counts as a pass." },
+    { q: "Can Uptime fake a result?", a: "Not the votes: validators decide every transaction, on-chain. The pass or fail label is ours, computed from those transactions and a read from one node. Each run lists its transaction hashes, so you can check them yourself." },
     { q: "What does it cost?", a: `${runFee} per run plus network fees, within your limits. Charging is off during the beta.` },
     { q: "Is my GEN safe?", a: "Testnet only, not audited. Only you can withdraw your budget." },
   ];
