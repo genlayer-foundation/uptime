@@ -16,7 +16,10 @@ import { newId, poolIdFor } from "./ids";
 import { dueSlot, initialSchedule, toSpec } from "./schedule";
 import type { Repo } from "./repo";
 import { MANUAL_GROUP } from "./manualPlan";
-import { expand, groupsOf, jsonSafe, MissingDeploy, OK_STATUSES, runPass, stepStatus, toCalldata, type Group } from "./spec";
+import { callRefusal } from "./targets";
+import {
+  expand, groupsOf, jsonSafe, MissingDeploy, OK_STATUSES, runPass, sendsValue, stepStatus, toCalldata, VALUE_REFUSED, type Group,
+} from "./spec";
 import type { Job, Network, Run, Step, StepRun } from "./types";
 
 export const RUN_TIMEOUT_SEC = 6 * 3600;
@@ -204,6 +207,20 @@ export async function advance(deps: ExecutorDeps, job: JobRow, group: Group, run
       continue;
     }
 
+    // Hard checks before anything is signed: they also stop jobs stored before
+    // the rules existed. Never send the relayer's GEN, and never let a user job
+    // act as the relayer against a system contract or another job's record.
+    const refused =
+      step.kind === "write" && sendsValue(step.value)
+        ? VALUE_REFUSED
+        : job.system
+          ? null
+          : callRefusal(job, step, call.address, call.args, deps.relayerFor(job.network));
+    if (refused) {
+      Object.assign(sr, { status: "ERROR", error: `refused: ${refused}`, resolvedAt: now() });
+      return saveAndFinish(deps, job, run, sr);
+    }
+
     try {
       if (step.kind === "deploy") {
         const code = step.code ?? deps.deployPresets[job.network]?.[step.preset ?? ""];
@@ -215,7 +232,7 @@ export async function advance(deps: ExecutorDeps, job: JobRow, group: Group, run
             address: call.address!,
             functionName: step.method,
             args: call.args,
-            value: BigInt(step.value ?? "0"),
+            value: BigInt(0), // steps never carry value (refused above)
           })
         );
       }

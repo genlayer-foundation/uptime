@@ -42,3 +42,11 @@ export function studioMaxJobs(): number {
   const n = Number(process.env.STUDIO_MAX_JOBS_PER_WALLET);
   return Number.isInteger(n) && n > 0 ? n : 10;
 }
+
+// Per-wallet quota on Bradbury: until pool charging is on, the relayer pays the
+// fee deposit of every run, and a job may deploy arbitrary code every 5 minutes.
+// System jobs (the Heartbeat) are not counted.
+export function bradburyMaxJobs(): number {
+  const n = Number(process.env.BRADBURY_MAX_JOBS_PER_WALLET);
+  return Number.isInteger(n) && n > 0 ? n : 10;
+}

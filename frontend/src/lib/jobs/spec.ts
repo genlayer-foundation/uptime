@@ -16,6 +16,15 @@ export const MAX_ASSERTIONS = 20;
 export const MAX_CODE = 64 * 1024;
 export const DEPLOY_PRESETS = ["canary"] as const;
 
+export const VALUE_REFUSED = "a step cannot send GEN: value must be 0";
+
+/** True when a write step's `value` is anything but zero (malformed counts as non-zero). */
+export function sendsValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return false;
+  const s = String(value).trim();
+  return !/^\d{1,78}$/.test(s) || BigInt(s) !== BigInt(0);
+}
+
 export class InvalidJob extends Error {}
 function fail(msg: string): never {
   throw new InvalidJob(msg);
@@ -85,9 +94,13 @@ export function validateSteps(raw: unknown): Step[] {
       case "write": {
         const value = s.value === undefined || s.value === "" ? undefined : String(s.value);
         if (value !== undefined && !/^\d{1,40}$/.test(value)) fail(`${L}: value must be whole wei`);
+        // Steps are signed by the Uptime relayer, whose GEN is not the job's to
+        // send: a call that carries value is refused (the executor refuses it
+        // again before every submit, for jobs stored before this rule).
+        if (value !== undefined && sendsValue(value)) fail(`${L}: ${VALUE_REFUSED}`);
         return {
           ...base, kind: "write", contract: contract(s.contract, L, s, idx), method: ident(s.method, `${L} method`),
-          args: args(s.args, `${L} args`), ...(value && value !== "0" ? { value } : {}),
+          args: args(s.args, `${L} args`),
         };
       }
       case "read":

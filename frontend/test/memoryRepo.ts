@@ -66,7 +66,7 @@ export class MemoryRepo implements Repo {
     return [...this.jobs.values()].filter((j) => j.state !== "deleted").slice(0, limit).map((j) => this.clone(j));
   }
   async countLiveJobs(owner: string, n: Network) {
-    return [...this.jobs.values()].filter((j) => j.owner === owner && j.network === n && j.state !== "deleted").length;
+    return [...this.jobs.values()].filter((j) => j.owner === owner && j.network === n && j.state !== "deleted" && !j.system).length;
   }
   async findSystemJob(n: Network, preset: string) {
     const j = [...this.jobs.values()].find((x) => x.system && x.network === n && x.preset === preset);

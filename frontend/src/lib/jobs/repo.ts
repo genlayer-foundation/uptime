@@ -306,7 +306,7 @@ export class PgRepo implements Repo {
 
   async countLiveJobs(owner: string, network: Network) {
     const r = await this.pool.query(
-      "SELECT count(*)::int AS n FROM jobs WHERE owner = $1 AND network = $2 AND state <> 'deleted'",
+      "SELECT count(*)::int AS n FROM jobs WHERE owner = $1 AND network = $2 AND state <> 'deleted' AND NOT system",
       [owner.toLowerCase(), network]
     );
     return Number(r.rows[0].n);

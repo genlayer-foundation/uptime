@@ -1,7 +1,7 @@
 // Job CRUD rules, independent of HTTP so the gate is testable without a
 // server. Routes in app/api/jobs/* are thin wrappers over these.
 
-import { studioMaxJobs } from "./allowlist";
+import { bradburyMaxJobs, studioMaxJobs } from "./allowlist";
 import { runGate, studioGate, type GateDeps } from "./gate";
 import { isId, newId, poolIdFor } from "./ids";
 import type { JobRow } from "./internal";
@@ -9,6 +9,7 @@ import type { JobPatch, Repo } from "./repo";
 import { initialSchedule, resumeSchedule, toSpec } from "./schedule";
 import { groupsOf, InvalidJob, validateAssertions, validateJobInput, validateSteps } from "./spec";
 import { validateSchedule } from "./schedule";
+import { stepsRefusal } from "./targets";
 import type { Schedule, Step } from "./types";
 
 export interface ServiceDeps {
@@ -36,6 +37,9 @@ export async function createJob(deps: ServiceDeps, wallet: string, body: Record<
       return fail(429, `GenLayer Studio quota reached: at most ${studioMaxJobs()} jobs per wallet`);
     }
   }
+  if (body.network === "bradbury" && (await deps.repo.countLiveJobs(owner, "bradbury")) >= bradburyMaxJobs()) {
+    return fail(429, `Bradbury quota reached: at most ${bradburyMaxJobs()} jobs per wallet (delete one first)`);
+  }
   if (body.preset === "heartbeat") return fail(403, "The Bradbury Heartbeat is run by the Foundation and cannot be created");
 
   let input;
@@ -45,6 +49,8 @@ export async function createJob(deps: ServiceDeps, wallet: string, body: Record<
     if (e instanceof InvalidJob) return fail(400, e.message);
     throw e;
   }
+  const refused = stepsRefusal(input.steps);
+  if (refused) return fail(400, refused);
   const cap = body.perRunCapWei;
   if (cap !== undefined && cap !== null && cap !== "" && !(typeof cap === "string" && WEI.test(cap))) {
     return fail(400, "perRunCapWei must be a whole number of wei");
@@ -144,7 +150,11 @@ export async function editJob(deps: ServiceDeps, wallet: string, id: string, bod
       patch.schedule = s.cron ? { cron: s.cron.trim() } : { everyMinutes: s.everyMinutes };
     }
     const steps = body.steps !== undefined ? validateSteps(body.steps) : j.steps;
-    if (body.steps !== undefined) patch.steps = steps;
+    if (body.steps !== undefined) {
+      const refused = stepsRefusal(steps);
+      if (refused) throw new InvalidJob(refused);
+      patch.steps = steps;
+    }
     if (body.assertions !== undefined || body.steps !== undefined) {
       patch.assertions = validateAssertions(body.assertions ?? j.assertions, steps);
     }
