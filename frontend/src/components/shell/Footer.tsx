@@ -23,7 +23,7 @@ export function Footer() {
         </a>
       </div>
       <p className="mt-4 text-xs text-subtle">
-        Testnet beta by the GenLayer Foundation. Not audited. GenLayer validators decide every result.
+        Testnet beta by the GenLayer Foundation. Not audited. GenLayer validators decide every transaction.
       </p>
     </footer>
   );
