@@ -32,6 +32,12 @@ export async function addPending(rec: ProbeRecord): Promise<void> {
   await redis().hset(PENDING, { [rec.id]: JSON.stringify(rec) });
 }
 
+// Fallback store only: atomic among PENDING records (HSETNX). Once a record is
+// resolved it leaves this hash, so the guarantee is weaker than Postgres's.
+export async function claim(rec: ProbeRecord): Promise<boolean> {
+  return (await redis().hsetnx(PENDING, rec.id, JSON.stringify(rec))) === 1;
+}
+
 export async function getPending(): Promise<ProbeRecord[]> {
   const all = await redis().hgetall<Record<string, unknown>>(PENDING);
   return Object.values(all ?? {}).map((v) => parse<ProbeRecord>(v));

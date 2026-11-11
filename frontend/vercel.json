@@ -13,6 +13,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/appeals",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/settle",
       "schedule": "15 * * * *"
     },

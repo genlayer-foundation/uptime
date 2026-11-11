@@ -49,6 +49,17 @@ export async function addPending(rec: ProbeRecord): Promise<void> {
   await getPool().query(UPSERT.replace("%SEQ%", "NULL"), params(rec));
 }
 
+// Insert a pending record only if its id is free. One statement, so of two
+// callers racing for the same id exactly one gets true.
+export async function claim(rec: ProbeRecord): Promise<boolean> {
+  const { rowCount } = await getPool().query(
+    `INSERT INTO heartbeat_probes (id, tick, kind, submitted_at, resolved_seq, record)
+     VALUES ($1, $2, $3, $4, NULL, $5::json) ON CONFLICT (id) DO NOTHING`,
+    params(rec)
+  );
+  return rowCount === 1;
+}
+
 export async function getPending(): Promise<ProbeRecord[]> {
   const { rows } = await getPool().query(
     "SELECT record FROM heartbeat_probes WHERE resolved_seq IS NULL ORDER BY submitted_at, id"

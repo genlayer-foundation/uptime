@@ -2,7 +2,7 @@
 // chain client and an in-memory store. No network, no database.
 import { describe, expect, it } from "vitest";
 import { POOL, PROBE_SET, appealDue, rotation } from "@/lib/heartbeat/probes";
-import { runReconcile, runTick, tickPlan, type RunnerClient, type RunnerDeps, type RunnerTx } from "@/lib/heartbeat/runner";
+import { runAppealWatch, runReconcile, runTick, tickPlan, type RunnerClient, type RunnerDeps, type RunnerTx } from "@/lib/heartbeat/runner";
 import { latestRun, runsSummary, summarize } from "@/lib/heartbeat/summary";
 import type { ProbeRecord } from "@/lib/heartbeat/types";
 
@@ -18,6 +18,12 @@ function memStore() {
     results,
     nextTick: async () => ++tick,
     addPending: async (r: ProbeRecord) => void pending.set(r.id, JSON.parse(JSON.stringify(r))),
+    // Like the Postgres store: the id is free only if no record, pending or resolved, has it.
+    claim: async (r: ProbeRecord) => {
+      if (pending.has(r.id) || results.some((x) => x.id === r.id)) return false;
+      pending.set(r.id, JSON.parse(JSON.stringify(r)));
+      return true;
+    },
     getPending: async () => [...pending.values()].map((r) => JSON.parse(JSON.stringify(r)) as ProbeRecord),
     resolve: async (r: ProbeRecord) => {
       pending.delete(r.id);
@@ -347,6 +353,95 @@ describe("runReconcile", () => {
     for (const r of recs) if (r.qid) client.views.set(`get_probe:["2:${r.qid}"]`, { answer: "x", grade: "wrong", error: "" });
     await runReconcile(deps);
     expect(client.appeals).toEqual([]);
+  });
+});
+
+describe("runAppealWatch", () => {
+  async function dueTick() {
+    const s = setup();
+    for (let i = 0; i < 4; i++) await runTick(s.deps);
+    s.store.pending.clear();
+    s.store.results.length = 0;
+    const recs = await runTick(s.deps); // tick 5
+    const first = recs[3];
+    s.client.views.set(`get_probe:["5:${first.qid}"]`, { answer: "42", grade: "correct", error: "" });
+    for (const r of recs) s.client.txs.set(r.txHash!, { statusName: "PROPOSING" });
+    return { ...s, recs, first };
+  }
+  // A fake clock: sleeping advances it, and runs a step of the test's script.
+  function timeline(steps: Record<number, () => void> = {}) {
+    let ms = 0;
+    const slept: number[] = [];
+    return {
+      slept,
+      opts: {
+        everyMs: 5_000,
+        budgetMs: 100_000,
+        nowMs: () => ms,
+        sleep: async (d: number) => {
+          slept.push(d);
+          ms += d;
+          steps[ms]?.();
+        },
+      },
+    };
+  }
+
+  it("returns at once, reading no tx, when no probe is waiting for an appeal", async () => {
+    const s = setup();
+    const recs = await runTick(s.deps); // tick 1: nothing is appeal-due
+    let reads = 0;
+    const get = s.client.getTransaction;
+    s.client.getTransaction = async (a) => (reads++, get(a));
+    const t = timeline();
+    expect(await runAppealWatch(s.deps, t.opts)).toEqual({ polls: 0, resolved: 0, waiting: 0 });
+    expect(reads).toBe(0);
+    expect(t.slept).toEqual([]);
+    expect(s.store.pending.size).toBe(recs.length);
+  });
+
+  it("polls every few seconds and appeals within one poll of the decision", async () => {
+    const { store, client, deps, first } = await dueTick();
+    const t = timeline({ 35_000: () => client.txs.set(first.txHash!, decided("ACCEPTED")) });
+    const out = await runAppealWatch(deps, t.opts);
+    expect(out).toEqual({ polls: 8, resolved: 1, waiting: 0 });
+    expect(t.slept).toHaveLength(7); // decided at 35 s, appealed by the poll at 35 s
+    expect(client.appeals).toEqual([first.txHash]);
+    expect(store.pending.get(`5:appeal:${first.qid}`)).toMatchObject({ kind: "appeal", statusBefore: "ACCEPTED", gradeBefore: "correct" });
+    expect(store.results.find((r) => r.id === first.id)).toMatchObject({ status: "ACCEPTED", grade: "correct" });
+    // The watch touches nothing else: the tick's other four probes are reconcile's.
+    expect(store.pending.size).toBe(5);
+  });
+
+  it("stops at its budget and reports what is still waiting", async () => {
+    const { client, deps } = await dueTick();
+    const t = timeline();
+    expect(await runAppealWatch(deps, t.opts)).toEqual({ polls: 21, resolved: 0, waiting: 1 });
+    expect(t.slept.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(100_000);
+    expect(client.appeals).toEqual([]);
+  });
+
+  it("appeals exactly once when two watchers and reconcile see the decision together", async () => {
+    const { store, client, deps, first } = await dueTick();
+    client.txs.set(first.txHash!, decided("ACCEPTED"));
+    await Promise.all([runAppealWatch(deps, timeline().opts), runAppealWatch(deps, timeline().opts), runReconcile(deps)]);
+    expect(client.appeals).toEqual([first.txHash]);
+    expect([...store.pending.values()].filter((r) => r.kind === "appeal")).toHaveLength(1);
+    // And never again, once the appeal record exists.
+    await store.addPending({ ...first });
+    await runAppealWatch(deps, timeline().opts);
+    expect(client.appeals).toHaveLength(1);
+  });
+
+  it("records a refused appeal as SUBMIT_FAILED and does not retry it", async () => {
+    const { store, client, deps, first } = await dueTick();
+    client.txs.set(first.txHash!, decided("ACCEPTED"));
+    client.appealTransaction = async () => {
+      throw new Error("Transaction has no active decision to appeal");
+    };
+    await runAppealWatch(deps, timeline().opts);
+    expect(store.results.find((r) => r.kind === "appeal")).toMatchObject({ status: "SUBMIT_FAILED", error: expect.stringMatching(/no active decision/) });
+    expect(store.pending.has(`5:appeal:${first.qid}`)).toBe(false);
   });
 });
 

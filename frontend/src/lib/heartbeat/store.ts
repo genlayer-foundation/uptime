@@ -12,7 +12,7 @@ import type { ProbeRecord } from "./types";
 
 export type { ProbeKind, ProbeRecord, VoteCounts } from "./types";
 
-type Backend = Pick<typeof kv, "nextTick" | "addPending" | "getPending" | "resolve" | "getResults">;
+type Backend = Pick<typeof kv, "nextTick" | "addPending" | "claim" | "getPending" | "resolve" | "getResults">;
 
 // Something to read or write: Postgres, KV, or neither (the API answers 503).
 export function storeConfigured(): boolean {
@@ -35,6 +35,10 @@ export async function nextTick(): Promise<number> {
 
 export async function addPending(rec: ProbeRecord): Promise<void> {
   return (await backend()).addPending(rec);
+}
+
+export async function claim(rec: ProbeRecord): Promise<boolean> {
+  return (await backend()).claim(rec);
 }
 
 export async function getPending(): Promise<ProbeRecord[]> {

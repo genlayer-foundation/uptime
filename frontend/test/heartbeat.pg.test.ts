@@ -67,6 +67,18 @@ describe.skipIf(!url)("Heartbeat store on Postgres", () => {
     await getPoolTruncate();
   });
 
+  it("claims an id once: of ten racing callers one wins, and never again once it is pending or resolved", async () => {
+    const store = await import("@/lib/heartbeat/store");
+    const ap = rec({ id: "5:appeal:r1-extract", tick: 5, kind: "appeal", type: "web", qid: "r1-extract" });
+    const won = await Promise.all(Array.from({ length: 10 }, () => store.claim(ap)));
+    expect(won.filter(Boolean)).toHaveLength(1);
+    expect(await store.getPending()).toEqual([ap]);
+    await store.resolve({ ...ap, status: "SUBMIT_FAILED" });
+    expect(await store.claim(ap)).toBe(false);
+    expect(await store.getPending()).toEqual([]);
+    await getPoolTruncate();
+  });
+
   it("round-trips records exactly (same text, same key order) through pending and resolve", async () => {
     const store = await import("@/lib/heartbeat/store");
     const r = rec({ id: "43:llm:r2-answer42", tick: 43, kind: "llm", type: "llm", qid: "r2-answer42", txHash: "0xabc", appealDue: true });

@@ -1,8 +1,14 @@
-// Two phases, both cheap enough for a 60s function:
-//   tick       submit this hour's probes and return — never wait on consensus
+// Three phases, none of which waits on consensus:
+//   tick       submit this hour's probes and return
 //   reconcile  read back every pending tx; copy the decided ones' ON-CHAIN
-//              grades; fire due appeals; keep canary deploys pending until
-//              FINALIZED so both of their times are recorded
+//              grades; keep canary deploys pending until FINALIZED so both of
+//              their times are recorded
+//   appeals    the same pass, on the appeal-due probes only, every few seconds
+//              (runAppealWatch, /api/cron/appeals every minute). An appeal is
+//              only possible between a decision and its finalization, a window
+//              of about a minute on Bradbury: the 10-minute reconcile always
+//              arrived after it. Whoever sees the decision first appeals; an
+//              atomic claim in the store keeps it to one appeal per probe.
 // Latency comes from the chain's own timestamps, so how often reconcile runs
 // only bounds freshness. The one exception is time to FINALIZED: the chain
 // exposes no finalization timestamp, so it is measured when reconcile first
@@ -70,6 +76,8 @@ export interface RunnerClient {
 export interface RunnerStore {
   nextTick(): Promise<number>;
   addPending(rec: ProbeRecord): Promise<void>;
+  // Add a pending record only if no record has its id yet. True = it is ours.
+  claim(rec: ProbeRecord): Promise<boolean>;
   getPending(): Promise<ProbeRecord[]>;
   resolve(rec: ProbeRecord): Promise<void>;
 }
@@ -274,10 +282,14 @@ async function appeal(deps: RunnerDeps, client: RunnerClient, rec: ProbeRecord):
     rounds: rec.rounds,
     submittedAt: deps.now(),
   };
+  // One appeal per probe, whoever gets here first (reconcile and the appeal
+  // watch overlap on purpose): the claim is atomic, and it is taken BEFORE the
+  // appeal is sent, so a crash in between leaves a pending appeal record that
+  // reconcile settles as "withdrawn", never a second bond.
+  if (!(await deps.store.claim(ap))) return;
   try {
     const bond = await client.getMinAppealBond({ txId: rec.txHash! });
     await client.appealTransaction({ txId: rec.txHash!, value: bond });
-    await deps.store.addPending(ap);
   } catch (e) {
     Object.assign(ap, { status: "SUBMIT_FAILED", error: errMsg(e), resolvedAt: deps.now() });
     await deps.store.resolve(ap);
@@ -291,9 +303,12 @@ export function appealOutcome(ap: ProbeRecord): AppealOutcome {
   return "upheld";
 }
 
-export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ resolved: number; pending: number }> {
+export async function runReconcile(
+  deps: RunnerDeps = defaultDeps(),
+  only: (rec: ProbeRecord) => boolean = () => true
+): Promise<{ resolved: number; pending: number }> {
   const client = deps.client();
-  const pending = await deps.store.getPending();
+  const pending = (await deps.store.getPending()).filter(only);
   let resolved = 0;
   const done = async (rec: ProbeRecord) => {
     rec.resolvedAt = deps.now();
@@ -368,4 +383,39 @@ export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ 
   }
 
   return { resolved, pending: pending.length - resolved };
+}
+
+const isAppealDue = (rec: ProbeRecord) => rec.appealDue === true && rec.kind !== "appeal";
+
+export interface AppealWatchOptions {
+  budgetMs?: number; // how long one call keeps polling
+  everyMs?: number; // pause between polls
+  sleep?: (ms: number) => Promise<void>;
+  nowMs?: () => number;
+}
+
+// Poll the appeal-due probes until each is decided (and appealed) or the budget
+// runs out. Returns at once when no probe is waiting for an appeal, which is
+// 4 hours out of 5. /api/cron/appeals calls it every minute with a budget
+// longer than a minute, so calls overlap and a waiting probe is read every few
+// seconds from submission to decision, however long consensus takes.
+export async function runAppealWatch(
+  deps: RunnerDeps = defaultDeps(),
+  o: AppealWatchOptions = {}
+): Promise<{ polls: number; resolved: number; waiting: number }> {
+  const budgetMs = o.budgetMs ?? 100_000;
+  const everyMs = o.everyMs ?? 5_000;
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const nowMs = o.nowMs ?? Date.now;
+  const t0 = nowMs();
+  let polls = 0;
+  let resolved = 0;
+  for (;;) {
+    const r = await runReconcile(deps, isAppealDue);
+    resolved += r.resolved;
+    if (r.resolved + r.pending > 0) polls++;
+    if (r.pending === 0) return { polls, resolved, waiting: 0 };
+    if (nowMs() - t0 + everyMs > budgetMs) return { polls, resolved, waiting: r.pending };
+    await sleep(everyMs);
+  }
 }
