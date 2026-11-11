@@ -297,6 +297,47 @@ describe("runReconcile", () => {
     expect(store.results.find((r) => r.kind === "appeal")).toMatchObject({ outcome: "withdrawn", status: "FINALIZED" });
   });
 
+  it("records a probe that FINALIZED with no majority as UNDETERMINED, ungraded, and does not appeal it", async () => {
+    const s = setup();
+    for (let i = 0; i < 4; i++) await runTick(s.deps);
+    s.store.pending.clear();
+    s.store.results.length = 0;
+    const recs = await runTick(s.deps);
+    const [d, w, , first, second] = recs;
+    // The real shape: prod tx 0xb702334f… (tick 67, r8-shot): FINALIZED, NO_MAJORITY.
+    const noMajority = { resultName: "NO_MAJORITY", lifecycle: { state: "finalized", outcome: "undetermined" } };
+    s.client.txs.set(first.txHash!, decided("FINALIZED", noMajority));
+    s.client.txs.set(second.txHash!, decided("FINALIZED", { resultName: "MAJORITY_AGREE", lifecycle: { state: "finalized", outcome: "accepted" } }));
+    s.client.txs.set(d.txHash!, decided("FINALIZED", noMajority));
+    s.client.txs.set(w.txHash!, decided("FINALIZED", { resultName: "MAJORITY_TIMEOUT" }));
+    s.client.views.set(`get_probe:["5:${first.qid}"]`, {}); // nothing stored: the state was not applied
+    s.client.views.set(`get_probe:["5:${second.qid}"]`, { answer: "42", grade: "correct", error: "" });
+    await runReconcile(s.deps);
+    const by = (id: string) => s.store.results.find((r) => r.id === id)!;
+    expect(by(first.id)).toMatchObject({ status: "UNDETERMINED" });
+    expect(by(first.id).grade).toBeUndefined();
+    expect(by(second.id)).toMatchObject({ status: "FINALIZED", grade: "correct" });
+    expect(by(d.id)).toMatchObject({ status: "UNDETERMINED" });
+    expect(by(d.id).grade).toBeUndefined();
+    expect(by(w.id)).toMatchObject({ status: "VALIDATORS_TIMEOUT" });
+    expect(by(w.id).grade).toBeUndefined();
+    // Finalized: there is no decision left to appeal, so no appeal is attempted.
+    expect(s.client.appeals).toEqual([]);
+    expect(s.store.results.some((r) => r.kind === "appeal")).toBe(false);
+    // /api/heartbeat counts them where it always counted a missing majority.
+    const { byKind } = summarize(s.store.results);
+    expect(byKind.llm).toMatchObject({ total: 2, accepted: 1, undetermined: 1, correct: 1 });
+    expect(byKind.deploy).toMatchObject({ accepted: 0, undetermined: 1 });
+    expect(byKind.write).toMatchObject({ accepted: 0, timedOut: 1 });
+  });
+
+  it("settles a withdrawn appeal when the tx finalized with no majority and no new round", async () => {
+    const { store, client, deps, first } = await appealTick("UNDETERMINED");
+    client.txs.set(first.txHash!, decided("FINALIZED", { numOfRounds: "1", resultName: "NO_MAJORITY" }));
+    await runReconcile(deps);
+    expect(store.results.find((r) => r.kind === "appeal")).toMatchObject({ outcome: "withdrawn", status: "UNDETERMINED" });
+  });
+
   it("does not appeal a probe that is not due", async () => {
     const { client, deps } = await ticked();
     const recs = await runTick(deps);

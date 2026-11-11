@@ -18,7 +18,8 @@ import type { Repo } from "./repo";
 import { MANUAL_GROUP } from "./manualPlan";
 import { callRefusal } from "./targets";
 import {
-  expand, groupsOf, jsonSafe, MissingDeploy, OK_STATUSES, runPass, sendsValue, stepStatus, toCalldata, VALUE_REFUSED, type Group,
+  consensusOutcome, expand, groupsOf, jsonSafe, MissingDeploy, OK_STATUSES, runPass, sendsValue, settledStatus, stepStatus,
+  toCalldata, VALUE_REFUSED, type Group,
 } from "./spec";
 import type { Job, Network, Run, Step, StepRun } from "./types";
 
@@ -283,10 +284,14 @@ function deployedAddress(tx: ChainTx): string | null {
 // Fill a step run from a decided tx. Returns false while undecided.
 export function measure(sr: StepRunRow, tx: ChainTx, costWei: bigint): boolean {
   const chain = String(tx.statusName ?? tx.status ?? "");
-  const status = stepStatus(chain);
+  // FINALIZED alone is not agreement: the consensus outcome decides (spec.ts).
+  const outcome = consensusOutcome(tx);
+  const status = stepStatus(chain, outcome);
   if (!status) return false;
   sr.status = status;
   sr.chainStatus = chain;
+  if (status === "UNDETERMINED" && chain !== "UNDETERMINED") sr.error = "validators did not reach a majority";
+  else if (status === "TIMEOUT" && settledStatus(chain, outcome) !== chain) sr.error = "validators timed out";
   sr.resolvedAt = Math.floor(Date.now() / 1000);
   const created = Number(tx.createdTimestamp ?? 0);
   const lastVote = Number(tx.lastVoteTimestamp ?? 0);

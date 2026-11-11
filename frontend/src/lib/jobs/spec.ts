@@ -280,13 +280,38 @@ export function runPass(steps: StepRun[], assertions: Assertion[], done: boolean
   return assertions.filter((a) => byId.has(a.step)).every((a) => checkAssertion(byId.get(a.step)!.result, a));
 }
 
-// Chain statusName → StepRun status.
-export function stepStatus(chain: string): StepRun["status"] | null {
-  switch (chain) {
+// What consensus decided, read from a tx. A FINALIZED tx says nothing about
+// agreement on its own: validators can finalize with no majority (statusName
+// FINALIZED, resultName NO_MAJORITY, lifecycle.outcome "undetermined").
+export type ConsensusOutcome = "accepted" | "undetermined" | "timeout" | null;
+
+const UNDETERMINED_RESULTS = new Set(["NO_MAJORITY", "MAJORITY_DISAGREE", "DETERMINISTIC_VIOLATION"]);
+
+export function consensusOutcome(tx: { resultName?: unknown; lifecycle?: unknown }): ConsensusOutcome {
+  const lc = (tx.lifecycle as { outcome?: unknown } | null | undefined)?.outcome;
+  const result = typeof tx.resultName === "string" ? tx.resultName : "";
+  if (lc === "undetermined" || UNDETERMINED_RESULTS.has(result)) return "undetermined";
+  if (lc === "validators-timeout" || lc === "leader-timeout" || result === "MAJORITY_TIMEOUT") return "timeout";
+  if (lc === "accepted" || result === "MAJORITY_AGREE") return "accepted";
+  return null; // the node did not say (older Studio): the status stands
+}
+
+// The chain status that counts: a FINALIZED tx whose consensus did not agree
+// is UNDETERMINED (or a validators timeout), never a pass.
+export function settledStatus(chain: string, outcome: ConsensusOutcome): string {
+  if (chain !== "FINALIZED" && chain !== "READY_TO_FINALIZE") return chain;
+  if (outcome === "undetermined") return "UNDETERMINED";
+  if (outcome === "timeout") return "VALIDATORS_TIMEOUT";
+  return chain;
+}
+
+// Chain statusName (+ consensus outcome) → StepRun status.
+export function stepStatus(chain: string, outcome: ConsensusOutcome = null): StepRun["status"] | null {
+  switch (settledStatus(chain, outcome)) {
     case "ACCEPTED":
     case "FINALIZED":
     case "UNDETERMINED":
-      return chain;
+      return settledStatus(chain, outcome) as StepRun["status"];
     case "READY_TO_FINALIZE":
       return "ACCEPTED";
     case "LEADER_TIMEOUT":

@@ -21,6 +21,7 @@ import type { TransactionHash } from "genlayer-js/types";
 import { CANARY_SOURCE } from "./canary";
 import { appealDue, rotation } from "./probes";
 import * as store from "./store";
+import { consensusOutcome, settledStatus } from "@/lib/jobs/spec";
 import type { AppealOutcome, Grade, ProbeRecord, VoteCounts } from "./types";
 
 export const TIMEOUT_SEC = 6 * 3600;
@@ -37,6 +38,8 @@ const DECIDED = new Set([
   "CANCELED",
 ]);
 const OK = new Set(["ACCEPTED", "FINALIZED", "READY_TO_FINALIZE"]);
+// The STORED status, before finalization: afterwards there is no active
+// decision left to appeal.
 const APPEALABLE = new Set(["ACCEPTED", "UNDETERMINED"]);
 
 // The slice of genlayer-js the runner uses (fakeable in tests).
@@ -50,6 +53,9 @@ export interface RunnerTx {
   to_address?: string;
   txDataDecoded?: { contractAddress?: string };
   lastRound?: { validatorVotesName?: string[] };
+  // What consensus decided: a FINALIZED tx can still be NO_MAJORITY.
+  resultName?: string;
+  lifecycle?: { state?: string; outcome?: string };
 }
 
 export interface RunnerClient {
@@ -167,8 +173,16 @@ function votes(tx: RunnerTx): VoteCounts | undefined {
   return v;
 }
 
-function statusOf(tx: RunnerTx | undefined): string {
+// The status exactly as the chain stores it.
+function storedStatus(tx: RunnerTx | undefined): string {
   return String(tx?.statusName ?? tx?.status ?? "");
+}
+
+// The status that counts: FINALIZED alone says nothing about agreement, so a
+// tx finalized with no majority is UNDETERMINED (lib/jobs/spec.ts), exactly as
+// if reconcile had read it before it finalized.
+function statusOf(tx: RunnerTx | undefined): string {
+  return tx ? settledStatus(storedStatus(tx), consensusOutcome(tx)) : "";
 }
 
 function measure(rec: ProbeRecord, tx: RunnerTx): void {
@@ -295,6 +309,7 @@ export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ 
       rec.error = errMsg(e);
     }
     const status = statusOf(tx);
+    const finalized = storedStatus(tx) === "FINALIZED";
     const expired = deps.now() - rec.submittedAt > TIMEOUT_SEC;
 
     if (rec.kind === "appeal") {
@@ -305,10 +320,10 @@ export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ 
         await grade(deps, rec, tx);
         rec.outcome = appealOutcome(rec);
         await done(rec);
-      } else if (status === "FINALIZED" || expired) {
+      } else if (finalized || expired) {
         rec.status = status || "TIMEOUT";
         rec.outcome = "withdrawn";
-        if (status !== "FINALIZED") rec.error = rec.error ?? "no appeal round decided after 6h";
+        if (!finalized) rec.error = rec.error ?? "no appeal round decided after 6h";
         await done(rec);
       }
       continue;
@@ -330,8 +345,8 @@ export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ 
         rec.acceptedAt = deps.now();
         await grade(deps, rec, tx);
       }
-      if (status === "FINALIZED") {
-        rec.status = status;
+      if (finalized) {
+        rec.status = status; // FINALIZED, or what it finalized as (UNDETERMINED: no majority)
         const created = Number(tx.createdTimestamp ?? 0) || rec.submittedAt;
         rec.finalizedSec = Math.max(0, deps.now() - created);
         await done(rec);
@@ -349,7 +364,7 @@ export async function runReconcile(deps: RunnerDeps = defaultDeps()): Promise<{ 
     await grade(deps, rec, tx);
     await done(rec);
 
-    if (rec.appealDue && APPEALABLE.has(rec.status ?? "")) await appeal(deps, client, rec);
+    if (rec.appealDue && APPEALABLE.has(storedStatus(tx))) await appeal(deps, client, rec);
   }
 
   return { resolved, pending: pending.length - resolved };

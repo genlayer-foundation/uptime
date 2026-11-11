@@ -1,15 +1,16 @@
 // The relayer is one key per network, and on Bradbury it is also the Heartbeat
 // operator and the pools' scheduler. These tests pin what a user job can NOT
-// make it do, at both layers (create/edit, and again before every submit).
+// make it do, at both layers (create/edit, and again before every submit), and
+// that a run without a validator majority is never recorded as passed.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainClient, ChainTx } from "@/lib/jobs/chain";
 import { BRADBURY_PHASE2 } from "@/lib/chains";
-import { dispatchDue, ensureHeartbeatJob, toPublicRun, type ExecutorDeps } from "@/lib/jobs/executor";
+import { dispatchDue, ensureHeartbeatJob, reconcile, toPublicRun, type ExecutorDeps } from "@/lib/jobs/executor";
 import type { GateDeps } from "@/lib/jobs/gate";
 import { newId, poolIdFor } from "@/lib/jobs/ids";
 import { initialSchedule, toSpec } from "@/lib/jobs/schedule";
 import { createJob, deleteJob, editJob } from "@/lib/jobs/service";
-import { validateSteps } from "@/lib/jobs/spec";
+import { consensusOutcome, settledStatus, stepStatus, validateSteps } from "@/lib/jobs/spec";
 import { callRefusal, stepsRefusal, systemTargets } from "@/lib/jobs/targets";
 import type { Step } from "@/lib/jobs/types";
 import { MemoryRepo } from "./memoryRepo";
@@ -226,5 +227,70 @@ describe("per-wallet job quota on Bradbury", () => {
     expect(await createJob(deps, BOB, body([write(C1)]))).toMatchObject({ ok: false, status: 429 });
     process.env.BRADBURY_MAX_JOBS_PER_WALLET = "0";
     expect((await createJob(deps, BOB, body([write(C1)]))).ok).toBe(true); // back to the default of 10
+  });
+});
+
+describe("FINALIZED is not agreement", () => {
+  it("reads the consensus outcome from lifecycle or resultName", () => {
+    expect(consensusOutcome({ resultName: "NO_MAJORITY", lifecycle: { state: "finalized", outcome: "undetermined" } })).toBe("undetermined");
+    expect(consensusOutcome({ resultName: "NO_MAJORITY" })).toBe("undetermined");
+    expect(consensusOutcome({ resultName: "MAJORITY_DISAGREE" })).toBe("undetermined");
+    expect(consensusOutcome({ lifecycle: { outcome: "undetermined" } })).toBe("undetermined");
+    expect(consensusOutcome({ resultName: "MAJORITY_TIMEOUT" })).toBe("timeout");
+    expect(consensusOutcome({ resultName: "MAJORITY_AGREE", lifecycle: { outcome: "accepted" } })).toBe("accepted");
+    expect(consensusOutcome({})).toBeNull();
+    expect(consensusOutcome({ lifecycle: { state: "finalized" } })).toBeNull();
+  });
+
+  it("maps a FINALIZED tx by its outcome and leaves every other status alone", () => {
+    expect(stepStatus("FINALIZED", "undetermined")).toBe("UNDETERMINED");
+    expect(stepStatus("FINALIZED", "timeout")).toBe("TIMEOUT");
+    expect(stepStatus("FINALIZED", "accepted")).toBe("FINALIZED");
+    expect(stepStatus("FINALIZED", null)).toBe("FINALIZED");
+    expect(stepStatus("FINALIZED")).toBe("FINALIZED");
+    expect(stepStatus("ACCEPTED", "undetermined")).toBe("ACCEPTED"); // the stored decision stands until it finalizes
+    expect(stepStatus("PROPOSING", "undetermined")).toBeNull();
+    expect(settledStatus("UNDETERMINED", null)).toBe("UNDETERMINED");
+  });
+
+  it("fails a run whose tx finalized with no majority, and does not run its next step", async () => {
+    const { deps, client, repo, stored } = setup();
+    await stored([
+      { id: "a", kind: "write", contract: C1, method: "a", args: [] },
+      { id: "b", kind: "write", contract: C1, method: "b", args: [] },
+    ]);
+    // The real shape: prod tx 0xb702334f… (Heartbeat tick 67, r8-shot).
+    client.getTransaction.mockResolvedValue(
+      tx({ statusName: "FINALIZED", resultName: "NO_MAJORITY", lifecycle: { state: "finalized", outcome: "undetermined" }, numOfRounds: "2" })
+    );
+    await dispatchDue(deps);
+    await reconcile(deps);
+    expect(client.writeContract).toHaveBeenCalledTimes(1);
+    const run = toPublicRun(repo.runs[0]);
+    expect(run).toMatchObject({ pass: false, steps: [{ stepId: "a", status: "UNDETERMINED", error: "validators did not reach a majority" }] });
+    expect(run.steps[0].timeToAcceptedMs).toBeUndefined();
+    expect(repo.runs[0].steps[0].chainStatus).toBe("FINALIZED");
+  });
+
+  it("passes a run whose tx finalized with a majority", async () => {
+    const { deps, client, repo, stored } = setup();
+    await stored([{ id: "a", kind: "write", contract: C1, method: "a", args: [] }]);
+    client.getTransaction.mockResolvedValue(tx({ statusName: "FINALIZED", resultName: "MAJORITY_AGREE", lifecycle: { state: "finalized", outcome: "accepted" } }));
+    await dispatchDue(deps);
+    await reconcile(deps);
+    expect(toPublicRun(repo.runs[0])).toMatchObject({ pass: true, steps: [{ status: "FINALIZED" }] });
+  });
+
+  it("fails the Heartbeat run when one of its probes finalized with no majority", async () => {
+    const { deps, client, repo, setNow } = setup();
+    const hb = await ensureHeartbeatJob(repo, RELAYER, HEARTBEAT, T0);
+    const tick = async () => ({ tick: 67, probes: [{ kind: "write", txHash: "0xb1" }, { kind: "llm", qid: "r8-shot", txHash: "0xl1" }] });
+    client.getTransaction.mockImplementation(async (a?: { hash: string }) =>
+      a?.hash === "0xl1" ? tx({ statusName: "FINALIZED", resultName: "NO_MAJORITY" }) : tx({ statusName: "FINALIZED", resultName: "MAJORITY_AGREE" })
+    );
+    setNow(hb!.schedules[0].anchorAt);
+    await dispatchDue({ ...deps, heartbeatTick: tick });
+    await reconcile(deps);
+    expect(toPublicRun(repo.runs[0])).toMatchObject({ pass: false, steps: [{ status: "FINALIZED" }, { stepId: "probe", status: "UNDETERMINED" }] });
   });
 });

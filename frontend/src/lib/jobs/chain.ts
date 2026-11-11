@@ -33,6 +33,9 @@ export interface ChainTx {
   lastVoteTimestamp?: string;
   numOfRounds?: string;
   txExecutionResultName?: string;
+  // What consensus decided: a FINALIZED tx can still be NO_MAJORITY (spec.ts consensusOutcome).
+  resultName?: string;
+  lifecycle?: { state?: string; outcome?: string };
   recipient?: string;
   to_address?: string;
   txDataDecoded?: { contractAddress?: string };
