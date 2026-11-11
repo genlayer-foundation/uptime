@@ -15,9 +15,13 @@ import { UptimePoolV2 } from "../src/UptimePoolV2.sol";
 /// Deploy (owner's call; signs with the key given to forge, e.g. --account <keystore name>):
 ///   ... forge script script/DeployUptimePoolV2.s.sol --rpc-url bradbury --force --broadcast --account <name>
 ///
-/// Env (all optional): ADMIN (default: the deployer, i.e. the broadcasting wallet; one plain
-/// wallet, no multisig), SCHEDULER and MAILER (spender addresses, default zero), ROTATION_DELAY
-/// seconds (default 0: a rotation executes as soon as it is proposed), SALT (bytes32, default 0).
+/// The owner's path is the signing page (sign/README.md): it creates the admin Safe and sends this
+/// same CREATE2 calldata from MetaMask. This script is the forge equivalent.
+///
+/// Env: ADMIN (REQUIRED: the admin multisig, PRODUCT.md D11; it can never be a spender),
+/// SCHEDULER and MAILER (the first spenders, set by the constructor with no wait; a role left
+/// zero can only be filled later through proposeSpender + the delay), ROTATION_DELAY seconds
+/// (default 172800 = 48 hours, which is also the contract's floor), SALT (bytes32, default 0).
 contract DeployUptimePoolV2 is Script {
     /// Arachnid deterministic deployment proxy. Calldata is salt ++ initcode; returns the address.
     address constant FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
@@ -27,10 +31,10 @@ contract DeployUptimePoolV2 is Script {
         // Inside a broadcast, tx.origin as forge reports it is the signing wallet (the deployer).
         vm.startBroadcast();
         (,, address deployer) = vm.readCallers();
-        address admin = vm.envOr("ADMIN", deployer);
+        address admin = vm.envAddress("ADMIN");
         address scheduler = vm.envOr("SCHEDULER", address(0));
         address mailer = vm.envOr("MAILER", address(0));
-        uint64 delay = uint64(vm.envOr("ROTATION_DELAY", uint256(0)));
+        uint64 delay = uint64(vm.envOr("ROTATION_DELAY", uint256(48 hours)));
         bytes32 salt = vm.envOr("SALT", bytes32(0));
 
         require(block.chainid == BRADBURY_CHAIN_ID, "Not Bradbury (4221)");

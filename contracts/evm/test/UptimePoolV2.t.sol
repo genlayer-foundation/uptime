@@ -79,6 +79,18 @@ contract RefuserV2 {
     }
 }
 
+/// Stand-in for a multisig admin: forwards a call, as Safe.execTransaction does.
+contract AdminForwarder {
+    function exec(address to, bytes calldata data) external {
+        (bool ok, bytes memory ret) = to.call(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+    }
+}
+
 contract UptimePoolV2Test is Test {
     uint256 internal constant ALL_ = type(uint256).max;
     UptimePoolV2 internal pool;
@@ -564,7 +576,7 @@ contract UptimePoolV2Test is Test {
 
     function testSpenderReentryDuringChargeFails() public {
         ReentrantSpenderV2 s = new ReentrantSpenderV2();
-        UptimePoolV2 p = new UptimePoolV2(admin, 0, address(s), address(0));
+        UptimePoolV2 p = new UptimePoolV2(admin, 48 hours, address(s), address(0));
         s.setPool(p, ID, 0.1 ether);
         uint8[] memory roles = new uint8[](1);
         roles[0] = 1;
@@ -632,9 +644,106 @@ contract UptimePoolV2Test is Test {
         vm.expectRevert(abi.encodeWithSelector(UptimePoolV2.SpenderHasRole.selector, 2));
         pool.executeSpender(1);
         vm.expectRevert(UptimePoolV2.InvalidAdmin.selector);
-        new UptimePoolV2(address(0), 0, scheduler, mailer);
+        new UptimePoolV2(address(0), 48 hours, scheduler, mailer);
         vm.expectRevert(abi.encodeWithSelector(UptimePoolV2.SpenderHasRole.selector, 1));
-        new UptimePoolV2(admin, 0, scheduler, scheduler);
+        new UptimePoolV2(admin, 48 hours, scheduler, scheduler);
+    }
+
+    /// D11: no deployment of this code can rotate a spender in under 48 hours.
+    function testRotationDelayHasA48HourFloor() public {
+        assertEq(pool.MIN_ROTATION_DELAY(), 48 hours);
+        assertEq(pool.rotationDelay(), 48 hours);
+        uint64[3] memory tooShort = [uint64(0), 1, 48 hours - 1];
+        for (uint256 i; i < tooShort.length; ++i) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    UptimePoolV2.InvalidRotationDelay.selector, 48 hours, 30 days, tooShort[i]
+                )
+            );
+            new UptimePoolV2(admin, tooShort[i], scheduler, mailer);
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(UptimePoolV2.InvalidRotationDelay.selector, 48 hours, 30 days, 30 days + 1)
+        );
+        new UptimePoolV2(admin, 30 days + 1, scheduler, mailer);
+        new UptimePoolV2(admin, 30 days, scheduler, mailer);
+    }
+
+    function testFuzzRotationNeverExecutesBeforeTheDelay(uint64 delay, uint64 waited) public {
+        delay = uint64(bound(delay, 48 hours, 30 days));
+        waited = uint64(bound(waited, 0, 60 days));
+        UptimePoolV2 p = new UptimePoolV2(admin, delay, scheduler, mailer);
+        address next = makeAddr("next");
+        vm.prank(admin);
+        p.proposeSpender(1, next);
+        vm.warp(block.timestamp + waited);
+        vm.prank(admin);
+        if (waited < delay) {
+            vm.expectRevert();
+            p.executeSpender(1);
+            assertEq(p.spenderOf(1), scheduler);
+        } else {
+            p.executeSpender(1);
+            assertEq(p.spenderOf(1), next);
+        }
+    }
+
+    /// First-time setup needs no wait: the constructor sets both spenders. A role left unset at
+    /// deploy is NOT a shortcut: setting it later waits the full delay like any rotation.
+    function testInitialSpendersAreSetAtDeployAndAnUnsetRoleStillWaits() public {
+        assertEq(pool.spenderOf(1), scheduler);
+        assertEq(pool.spenderOf(2), mailer);
+        assertEq(pool.roleOf(scheduler), 1);
+        assertEq(pool.roleOf(mailer), 2);
+
+        UptimePoolV2 p = new UptimePoolV2(admin, 48 hours, scheduler, address(0));
+        assertEq(p.spenderOf(2), address(0));
+        vm.prank(admin);
+        p.proposeSpender(2, mailer);
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(UptimePoolV2.RotationNotReady.selector, block.timestamp + 48 hours)
+        );
+        p.executeSpender(2);
+        // Re-proposing restarts the clock; it never shortens it.
+        vm.warp(block.timestamp + 47 hours);
+        vm.prank(admin);
+        p.proposeSpender(2, mailer);
+        vm.warp(block.timestamp + 1 hours);
+        vm.prank(admin);
+        vm.expectRevert();
+        p.executeSpender(2);
+        vm.warp(block.timestamp + 47 hours);
+        vm.prank(admin);
+        p.executeSpender(2);
+        assertEq(p.spenderOf(2), mailer);
+    }
+
+    /// Admin, scheduler and mailer are always three different addresses.
+    function testAdminCanNeverHoldASpenderRole() public {
+        vm.expectRevert(UptimePoolV2.SpenderIsAdmin.selector);
+        new UptimePoolV2(admin, 48 hours, admin, mailer);
+        vm.expectRevert(UptimePoolV2.SpenderIsAdmin.selector);
+        new UptimePoolV2(admin, 48 hours, scheduler, admin);
+        vm.prank(admin);
+        vm.expectRevert(UptimePoolV2.SpenderIsAdmin.selector);
+        pool.proposeSpender(1, admin);
+        assertTrue(pool.admin() != pool.spenderOf(1) && pool.admin() != pool.spenderOf(2));
+        assertTrue(pool.spenderOf(1) != pool.spenderOf(2));
+    }
+
+    /// A contract admin (the Safe) works like any other admin: only its calls rotate.
+    function testContractAdminRotates() public {
+        AdminForwarder safe = new AdminForwarder();
+        UptimePoolV2 p = new UptimePoolV2(address(safe), 48 hours, scheduler, mailer);
+        address next = makeAddr("next");
+        vm.expectRevert(UptimePoolV2.NotAdmin.selector);
+        p.proposeSpender(2, next);
+        safe.exec(address(p), abi.encodeCall(UptimePoolV2.proposeSpender, (2, next)));
+        vm.warp(block.timestamp + 48 hours);
+        safe.exec(address(p), abi.encodeCall(UptimePoolV2.executeSpender, (2)));
+        assertEq(p.spenderOf(2), next);
+        assertEq(p.roleOf(mailer), 0);
     }
 
     // ------------------------------------------------------------ history + pagination

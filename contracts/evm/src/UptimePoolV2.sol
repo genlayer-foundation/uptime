@@ -24,10 +24,33 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 /// charge empties a pool its share epoch advances: every old share is worth nothing (there is
 /// nothing left) and the next contribution starts fresh. Share math is full-precision mulDiv
 /// (a port of OpenZeppelin Math.mulDiv, inlined because only ReentrancyGuard is vendored).
+///
+/// Share scale (liveness). A charge lowers `balance` and never `totalShares`, so shares-per-wei
+/// only grows; unbounded, `amount * totalShares / balance` stops fitting in 256 bits and top-ups
+/// revert. So the price is kept in a band. Before a mint, while shares-per-wei is above
+/// MAX_SHARES_PER_WEI (2^120), the pool's share scale advances one step: `totalShares` is divided
+/// by 2^64 and every stake is divided by 2^64 LAZILY, the next time it is read or touched (a stake
+/// remembers the scale it was written at). O(1) in the number of backers; at most 3 steps per call.
+/// A stake's division rounds UP, so a non-zero stake never becomes zero and `backers` stays
+/// exact; `totalShares` is set to floor(total / 2^64) + backers, an upper bound of the sum of the
+/// rounded stakes, so sum(sharesOf) <= totalShares always (solvency). After a step the price is
+/// above 2^56 shares per wei, so what rounding moves between backers is below 2^-56 wei each.
+/// Two rules keep the price from collapsing the other way (few shares behind real wei, the
+/// ERC-4626 inflation setup): (1) the dust rule: the sole backer, or a backer whose exit would
+/// leave the others with fewer than DUST_SHARES shares worth less than 1 wei in total, owns the
+/// WHOLE balance, and taking it resets the epoch; (2) a mint is refused below
+/// MIN_SHARES_PER_WEI. With amounts and balances below 2^128 wei no share computation can
+/// overflow.
 /// Patterns kept from v1: ReentrancyGuard on every state-changing entry point,
 /// checks-effects-interactions, revert on a rejected transfer, permanent history, no receive or
 /// fallback, spender roles behind an admin with a fixed rotation delay, per-period and per-line
 /// caps, strictly increasing settlement ids, skip-not-revert charge lines.
+///
+/// Admin. `admin` (a multisig) and `rotationDelay` are immutable. The delay is at least
+/// MIN_ROTATION_DELAY (48 hours), enforced by the constructor, so no deployment of this code can
+/// rotate a spender instantly. The only undelayed way to set a spender is the constructor itself
+/// (first-time setup). The admin can never hold a spender role, and one address holds at most
+/// one role, so scheduler, mailer and admin are always three different addresses.
 contract UptimePoolV2 is ReentrancyGuard {
     /// @notice Allowance terms, as the owner grants them (identical to v1).
     struct Terms {
@@ -52,12 +75,16 @@ contract UptimePoolV2 is ReentrancyGuard {
         uint64 epoch;
         uint256 balance;
         uint256 totalShares;
-        uint256 backers;
+        uint192 backers;
+        uint64 scale;
     }
 
+    /// @dev `shares` is in units of the pool scale it was written at (`scale`); read it through
+    /// `_sharesOf`, never directly.
     struct Stake {
         uint256 shares;
         uint64 epoch;
+        uint64 scale;
         bool listed;
     }
 
@@ -69,8 +96,9 @@ contract UptimePoolV2 is ReentrancyGuard {
 
     /// @dev kind: 1 create, 2 contribution, 3 withdraw, 4 charge, 5 pause, 6 unpause, 7 allowance
     /// set, 8 allowance revoked, 9 allowance paused, 10 allowance unpaused, 11 shares reset (the pool
-    /// was charged empty). actor is the contributor for 1-3. role is set for 4 and 7-10. recipient
-    /// is set for 3 and 4. settlementId for 4 and 11.
+    /// was charged empty, or its last backer left only dust behind). actor is the contributor for
+    /// 1-3. role is set for 4 and 7-10 (and for 11 after a charge). recipient is set for 3 and 4.
+    /// settlementId for 4 and for 11 after a charge.
     struct Operation {
         bytes32 uptimeId;
         address actor;
@@ -105,6 +133,18 @@ contract UptimePoolV2 is ReentrancyGuard {
     /// @notice Shares minted per wei into an empty pool. High precision keeps every rounding loss
     /// far below one wei.
     uint256 public constant SCALE = 1e18;
+    /// @notice Above this many shares per wei the share scale advances before a mint.
+    uint256 public constant MAX_SHARES_PER_WEI = 1 << 120;
+    /// @notice A mint is refused below this many shares per wei (rounding would cost real wei).
+    uint256 public constant MIN_SHARES_PER_WEI = 1 << 16;
+    /// @notice Fewer shares than this, worth less than 1 wei in total, are dust (see the dust rule).
+    uint256 public constant DUST_SHARES = 1 << 48;
+    /// @dev One scale step divides shares by 2^RESCALE_BITS.
+    uint256 private constant RESCALE_BITS = 64;
+    /// @notice The shortest rotation delay this contract can be deployed with.
+    uint64 public constant MIN_ROTATION_DELAY = 48 hours;
+    /// @notice The longest (a typo must not freeze rotation forever).
+    uint64 public constant MAX_ROTATION_DELAY = 30 days;
 
     address public immutable admin;
     uint64 public immutable rotationDelay;
@@ -143,6 +183,9 @@ contract UptimePoolV2 is ReentrancyGuard {
     error InvalidHistoryLimit();
     error InvalidHistoryOffset();
     error MathOverflow();
+    error InvalidRotationDelay(uint64 min, uint64 max, uint64 given);
+    error SpenderIsAdmin();
+    error SharePriceTooLow();
 
     event PoolCreated(bytes32 indexed uptimeId, address indexed owner, uint256 amount);
     event Contributed(bytes32 indexed uptimeId, address indexed contributor, uint256 amount, uint256 shares);
@@ -154,6 +197,7 @@ contract UptimePoolV2 is ReentrancyGuard {
         uint256 shares
     );
     event SharesReset(bytes32 indexed uptimeId, uint64 epoch);
+    event SharesRescaled(bytes32 indexed uptimeId, uint64 scale, uint256 totalShares);
     event PoolPaused(bytes32 indexed uptimeId, bool paused);
     event AllowanceSet(bytes32 indexed uptimeId, uint8 indexed role, Terms terms);
     event AllowanceRevoked(bytes32 indexed uptimeId, uint8 indexed role);
@@ -171,8 +215,17 @@ contract UptimePoolV2 is ReentrancyGuard {
     event SpenderProposalCancelled(uint8 indexed role);
     event SpenderChanged(uint8 indexed role, address indexed previous, address indexed spender);
 
+    /// @param admin_ The only address that may rotate spenders (a multisig). Immutable.
+    /// @param rotationDelay_ Seconds between proposing and executing a rotation, 48 hours to 30
+    /// days. Immutable.
+    /// @param scheduler First ROLE_SCHEDULER spender, or zero to leave the role unset.
+    /// @param mailer First ROLE_MAILER spender, or zero. This is the ONLY undelayed way to set a
+    /// spender: anything set later goes through proposeSpender + rotationDelay + executeSpender.
     constructor(address admin_, uint64 rotationDelay_, address scheduler, address mailer) {
         if (admin_ == address(0)) revert InvalidAdmin();
+        if (rotationDelay_ < MIN_ROTATION_DELAY || rotationDelay_ > MAX_ROTATION_DELAY) {
+            revert InvalidRotationDelay(MIN_ROTATION_DELAY, MAX_ROTATION_DELAY, rotationDelay_);
+        }
         if (scheduler != address(0) && scheduler == mailer) revert SpenderHasRole(ROLE_SCHEDULER);
         admin = admin_;
         rotationDelay = rotationDelay_;
@@ -290,11 +343,7 @@ contract UptimePoolV2 is ReentrancyGuard {
                 Pool storage pool = _pools[ids[i]];
                 if (pool.balance == 0 && pool.totalShares != 0) {
                     // Charged empty: every share is worth nothing; start a fresh epoch.
-                    pool.epoch += 1;
-                    pool.totalShares = 0;
-                    pool.backers = 0;
-                    _record(ids[i], 11, role, 0, address(0), settlementId);
-                    emit SharesReset(ids[i], pool.epoch);
+                    _resetShares(ids[i], pool, role, settlementId);
                 }
             } else {
                 emit ChargeSkipped(ids[i], role, settlementId, amounts[i], reason);
@@ -310,9 +359,13 @@ contract UptimePoolV2 is ReentrancyGuard {
 
     // ---------------------------------------------------------------- admin
 
+    /// @notice Start a rotation: `spender` (zero = nobody) takes `role` once `rotationDelay` (at
+    /// least 48 hours) has passed and the admin calls executeSpender. Replaces any pending
+    /// proposal for the role and restarts its clock. Admin only.
     function proposeSpender(uint8 role, address spender) external nonReentrant {
         if (msg.sender != admin) revert NotAdmin();
         if (role == 0) revert InvalidRole();
+        if (spender == admin) revert SpenderIsAdmin();
         uint64 eta = uint64(block.timestamp) + rotationDelay;
         _pending[role] = PendingSpender({ spender: spender, eta: eta, exists: true });
         emit SpenderProposed(role, spender, eta);
@@ -353,9 +406,14 @@ contract UptimePoolV2 is ReentrancyGuard {
         return (pool.totalShares, pool.epoch);
     }
 
+    /// @notice How many times the pool's shares were divided by 2^64 (see "Share scale").
+    function shareScale(bytes32 uptimeId) external view returns (uint64) {
+        return _pools[uptimeId].scale;
+    }
+
+    /// @notice `contributor`'s shares in the pool's CURRENT epoch and scale.
     function sharesOf(bytes32 uptimeId, address contributor) public view returns (uint256) {
-        Stake storage s = _stakes[uptimeId][contributor];
-        return s.epoch == _pools[uptimeId].epoch ? s.shares : 0;
+        return _sharesOf(_pools[uptimeId], _stakes[uptimeId][contributor]);
     }
 
     /// @notice What `contributor` could withdraw from `uptimeId` right now.
@@ -436,30 +494,89 @@ contract UptimePoolV2 is ReentrancyGuard {
         if (pool.owner != msg.sender) revert NotPoolOwner();
     }
 
+    /// @dev A stake's shares in the pool's current epoch and scale. Each scale step the stake is
+    /// behind divides it by 2^64, rounding UP: a non-zero stake stays non-zero.
+    function _sharesOf(Pool storage pool, Stake storage s) private view returns (uint256 shares) {
+        if (s.epoch != pool.epoch) return 0;
+        shares = s.shares;
+        uint256 behind = pool.scale - s.scale;
+        if (behind != 0 && shares != 0) {
+            uint256 bits = behind * RESCALE_BITS;
+            if (bits >= 256) return 1;
+            uint256 q = shares >> bits;
+            shares = (q << bits) == shares ? q : q + 1;
+        }
+    }
+
+    /// @dev Bring a stake to the pool's current epoch and scale, in storage.
+    function _sync(Pool storage pool, Stake storage s) private returns (uint256 shares) {
+        shares = _sharesOf(pool, s);
+        if (s.epoch != pool.epoch || s.scale != pool.scale) {
+            s.epoch = pool.epoch;
+            s.scale = pool.scale;
+            s.shares = shares;
+        }
+    }
+
+    /// @dev What `shares` (current epoch and scale) can withdraw. Pro-rata, rounded down, except
+    /// under the dust rule, where the holder owns the whole balance: the sole backer, or the
+    /// majority backer when all the other shares together are fewer than DUST_SHARES and worth
+    /// less than 1 wei (nobody else could withdraw anything, and leaving that wei behind so few
+    /// shares would collapse the share price). At most one backer is ever in that position.
     function _valueOf(Pool storage pool, uint256 shares) private view returns (uint256) {
-        if (shares == 0) return 0;
-        if (shares == pool.totalShares) return pool.balance; // the sole backer owns every wei
-        return _mulDiv(shares, pool.balance, pool.totalShares);
+        uint256 balance = pool.balance;
+        if (shares == 0 || balance == 0) return 0;
+        if (pool.backers == 1) return balance; // the sole backer owns every wei
+        uint256 total = pool.totalShares;
+        uint256 rest = total - shares;
+        if (rest == 0) return balance;
+        if (rest < shares && rest < DUST_SHARES && _mulDiv(rest, balance, total) == 0) return balance;
+        return _mulDiv(shares, balance, total);
+    }
+
+    /// @dev Every share is worth nothing (the balance is 0): start a fresh epoch.
+    function _resetShares(bytes32 uptimeId, Pool storage pool, uint8 role, uint256 settlementId) private {
+        pool.epoch += 1;
+        pool.totalShares = 0;
+        pool.backers = 0;
+        _record(uptimeId, 11, role, 0, address(0), settlementId);
+        emit SharesReset(uptimeId, pool.epoch);
     }
 
     function _contribute(bytes32 uptimeId, Pool storage pool, uint256 amount) private {
-        uint256 minted = pool.totalShares == 0
-            ? _mulDiv(amount, SCALE, 1)
-            : _mulDiv(amount, pool.totalShares, pool.balance);
+        uint256 total = pool.totalShares;
+        uint256 minted;
+        if (total == 0) {
+            minted = _mulDiv(amount, SCALE, 1);
+        } else {
+            uint256 balance = pool.balance;
+            if (total / balance > MAX_SHARES_PER_WEI) {
+                // Charges inflated shares-per-wei: advance the share scale (see "Share scale").
+                // total > 2^120 here, so the loop strictly shrinks it and runs at most 3 times.
+                uint64 scale = pool.scale;
+                uint256 backers = pool.backers;
+                do {
+                    total = (total >> RESCALE_BITS) + backers;
+                    scale += 1;
+                } while (total / balance > MAX_SHARES_PER_WEI);
+                pool.totalShares = total;
+                pool.scale = scale;
+                emit SharesRescaled(uptimeId, scale, total);
+            }
+            if (total / balance < MIN_SHARES_PER_WEI) revert SharePriceTooLow();
+            minted = _mulDiv(amount, total, balance);
+        }
         if (minted == 0) revert ZeroShares();
 
         Stake storage s = _stakes[uptimeId][msg.sender];
-        if (s.epoch != pool.epoch) {
-            s.epoch = pool.epoch;
-            s.shares = 0;
-        }
-        if (s.shares == 0) pool.backers += 1;
+        uint256 shares = _sync(pool, s);
+        if (shares == 0) pool.backers += 1;
         if (!s.listed) {
             s.listed = true;
             _contributors[uptimeId].push(msg.sender);
         }
-        s.shares += minted;
-        pool.totalShares += minted;
+        s.shares = shares + minted;
+        pool.totalShares = total + minted;
         pool.balance += amount;
         totalBalance += amount;
         emit Contributed(uptimeId, msg.sender, amount, minted);
@@ -472,7 +589,9 @@ contract UptimePoolV2 is ReentrancyGuard {
         Pool storage pool = _pools[uptimeId];
         if (pool.owner == address(0)) revert UnknownPool();
         Stake storage s = _stakes[uptimeId][msg.sender];
-        uint256 shares = s.epoch == pool.epoch ? s.shares : 0;
+        uint256 shares = _sync(pool, s);
+        uint256 total = pool.totalShares;
+        uint256 balance = pool.balance;
         uint256 owned = _valueOf(pool, shares);
         uint256 burn;
 
@@ -483,23 +602,35 @@ contract UptimePoolV2 is ReentrancyGuard {
         } else {
             if (amount == 0) revert ZeroAmount();
             if (amount > owned) revert InsufficientBalance(owned, amount);
-            if (amount == pool.balance) {
-                burn = shares; // only the sole backer can own the whole balance
+            if (amount == balance) {
+                burn = shares; // only a backer who owns the whole balance (dust rule) gets here
             } else {
-                burn = _mulDivUp(amount, pool.totalShares, pool.balance);
-                // Never strand GEN behind zero shares: whoever burns the last share takes the rest.
-                if (burn >= pool.totalShares) burn = pool.totalShares - 1;
+                burn = _mulDivUp(amount, total, balance);
+                // Never strand GEN behind zero shares: whoever owns the whole balance keeps a
+                // share until they take the rest.
+                if (owned == balance && burn >= shares) burn = shares - 1;
                 if (burn > shares) revert InsufficientBalance(owned, amount);
             }
         }
 
         s.shares = shares - burn;
-        if (shares != 0 && s.shares == 0) pool.backers -= 1;
-        pool.totalShares -= burn;
-        pool.balance -= amount;
+        pool.balance = balance - amount;
         totalBalance -= amount;
         _record(uptimeId, 3, 0, amount, recipient, 0);
         emit Withdrawn(uptimeId, msg.sender, recipient, amount, burn);
+        if (amount == balance) {
+            // The pool is empty. Whatever shares remain (other backers' dust, rounding slack from
+            // a scale step) are worth nothing: start a fresh epoch, as a charge to zero does.
+            if (total != burn) {
+                _resetShares(uptimeId, pool, 0, 0);
+            } else {
+                pool.totalShares = 0;
+                pool.backers = 0;
+            }
+        } else {
+            pool.totalShares = total - burn;
+            if (shares != 0 && burn == shares) pool.backers -= 1;
+        }
 
         if (amount != 0) {
             (bool sent,) = recipient.call{ value: amount }("");
@@ -554,6 +685,7 @@ contract UptimePoolV2 is ReentrancyGuard {
 
     function _setSpender(uint8 role, address spender) private {
         if (spender != address(0)) {
+            if (spender == admin) revert SpenderIsAdmin();
             uint8 held = roleOf[spender];
             if (held != 0 && held != role) revert SpenderHasRole(held);
         }

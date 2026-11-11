@@ -16,7 +16,7 @@
   button.secondary { background:transparent; color:var(--fg); font-size:14px; padding:8px 14px; }
   code, .mono { font-family:ui-monospace, Menlo, monospace; font-size:13px; word-break:break-all; }
   label { display:block; margin:6px 0 2px; color:var(--muted); font-size:13px; }
-  input { width:100%; box-sizing:border-box; font:13px ui-monospace, Menlo, monospace; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--hi); color:var(--fg); }
+  input, textarea, select { width:100%; box-sizing:border-box; font:13px ui-monospace, Menlo, monospace; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--hi); color:var(--fg); }
   .summary { background:var(--hi); border-left:4px solid var(--warn); padding:10px 12px; margin:10px 0; font-family:ui-monospace, Menlo, monospace; font-size:13px; word-break:break-all; min-height:1.4em; }
   .big { font-size:20px; font-weight:700; font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
   .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); } .muted { color:var(--muted); }
@@ -53,13 +53,30 @@
   <button id="p-go" disabled>Deploy UptimePool (1 signature)</button>
 </section>
 
+<section id="safe">
+  <h2>0. Admin Safe — 1 transaction</h2>
+  <p class="muted">The multisig that will be the v2 pool's admin (PRODUCT.md D11). Created through Safe's own proxy factory, already on 4221: <code>createProxyWithNonce(singleton, setup(owners, threshold, …), saltNonce)</code>. A plain Safe: no modules, no payment, the standard fallback handler. The address depends only on the version, owners (in this order), threshold and saltNonce, so it is known before anything is sent. Any account can send this transaction; it does not have to be an owner.</p>
+  <label>Safe version</label><select id="s-version"></select>
+  <label>owners (one address per line)</label><textarea id="s-owners" rows="4" spellcheck="false"></textarea>
+  <label>threshold (signatures needed)</label><input id="s-threshold">
+  <label>saltNonce (uint256; change it to get a different address for the same owners)</label><input id="s-nonce">
+  <p>Predicted Safe address:</p>
+  <div id="s-addr" class="big">—</div>
+  <div id="s-state" class="muted"></div>
+  <div class="summary" id="s-summary"></div>
+  <button id="s-go" disabled>Create Safe (1 signature)</button>
+  <button id="s-use" class="secondary" disabled>Use as v2 admin</button>
+</section>
+
 <section id="poolv2">
   <h2>1b. UptimePool v2 (community pools) — 1 transaction</h2>
-  <p class="muted">CREATE2 through <code>0x4e59…956C</code>, same calldata as <code>script/DeployUptimePoolV2.s.sol</code>. Same constructor as v1; anyone can back a pool, each backer withdraws only their own pro-rata share. v1 keeps running: the app switches only when <code>UPTIME_POOL_V2_BRADBURY</code> is set to the address below. Set its mailer afterwards in section 3 (paste this address as the pool).</p>
-  <label>admin (the connected account)</label><input id="v-admin" readonly>
-  <label>rotationDelay (seconds)</label><input id="v-delay">
+  <p class="muted">CREATE2 through <code>0x4e59…956C</code>, same calldata as <code>script/DeployUptimePoolV2.s.sol</code>. Anyone can back a pool, each backer withdraws only their own pro-rata share. v1 keeps running: the app switches only when <code>UPTIME_POOL_V2_BRADBURY</code> is set to the address below.</p>
+  <p class="warn" style="font-size:13px">Admin and rotationDelay are permanent. Spender changes take rotationDelay (48 hours minimum, enforced by the contract) from <code>proposeSpender</code> to <code>executeSpender</code>, both sent by the admin Safe. The scheduler and mailer below are set by the constructor, right now, with no wait: this is the only time that is possible, so set both. Admin, scheduler and mailer must be three different addresses.</p>
+  <div id="v-build" class="muted mono"></div>
+  <label>admin (the Safe from section 0; must already have code on 4221)</label><input id="v-admin">
+  <label>rotationDelay (seconds; 172800 = 48 hours, the minimum)</label><input id="v-delay">
   <label>scheduler (ROLE_SCHEDULER spender)</label><input id="v-scheduler">
-  <label>mailer (ROLE_MAILER spender; zero = unset)</label><input id="v-mailer">
+  <label>mailer (ROLE_MAILER spender)</label><input id="v-mailer">
   <label>salt (bytes32)</label><input id="v-salt">
   <p>Predicted UptimePoolV2 address:</p>
   <div id="v-addr" class="big">—</div>
@@ -81,7 +98,7 @@
 
 <section id="mailer">
   <h2>3. Set mailer on a deployed UptimePool — 2 transactions</h2>
-  <p class="muted">Works on v1 or v2 (paste the pool address). Admin only. <code>proposeSpender(2, mailer)</code>, then <code>executeSpender(2)</code> once <code>rotationDelay</code> has passed (0 on the live pool, so right away). The mailer must differ from the scheduler (<code>SpenderHasRole</code>). Only the address goes on chain; its key stays in 1Password.</p>
+  <p class="muted">For a pool whose admin is the connected wallet (v1, or the first v2). <code>proposeSpender(2, mailer)</code>, then <code>executeSpender(2)</code> once <code>rotationDelay</code> has passed (0 on v1, so right away). The mailer must differ from the scheduler (<code>SpenderHasRole</code>). Only the address goes on chain; its key stays in 1Password. A pool whose admin is a Safe cannot be changed from here: those two calls have to be Safe transactions.</p>
   <label>UptimePool address</label><input id="m-pool">
   <label>new mailer address (ROLE_MAILER, role 2)</label><input id="m-addr">
   <div id="m-state" class="muted"></div>
@@ -95,6 +112,8 @@
   <div id="log"></div>
 </section>
 
-<script type="module" src="app.js"></script>
+<!-- Cache-busting: a fresh query string on every load, passed on to lib.js and data.js by app.js,
+     so no browser or server cache can hand back an old module. serve.mjs also sends no-store. -->
+<script type="module">import("./app.js?v=" + Date.now());</script>
 </body>
 </html>

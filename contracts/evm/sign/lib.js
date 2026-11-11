@@ -114,9 +114,125 @@ export function buildPoolTx(data, args) {
 }
 
 /** UptimePoolV2 (community-backed pools), exactly as script/DeployUptimePoolV2.s.sol does it.
- *  Same constructor as v1, so the same calldata layout; only the creation code differs. */
+ *  Same constructor layout as v1; only the creation code differs. The constructor reverts unless
+ *  MIN_ROTATION_DELAY <= rotationDelay <= MAX_ROTATION_DELAY and admin holds no spender role. */
 export function buildPoolV2Tx(data, args) {
+  if (args.rotationDelay === undefined) throw new Error("rotationDelay is required for UptimePoolV2");
   return buildCreate2PoolTx(data.poolV2.creationCode, "UptimePoolV2", "poolv2", args);
+}
+
+// ------------------------------------------------------------------ Safe (the pool admin)
+
+/** Safe deployments with code on chain 4221, verified by eth_getCode + VERSION() on 2026-11-10
+ *  (these are the canonical addresses of safe-global/safe-deployments). The L2 singleton is used:
+ *  it emits an event per transaction, which is all an indexer has on a chain without Safe's
+ *  transaction service. checkSafeDeployment() re-verifies before anything is signed. */
+export const SAFE_DEPLOYMENTS = {
+  "1.4.1": {
+    label: "Safe 1.4.1 (SafeL2)",
+    factory: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+    singleton: "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+    fallbackHandler: "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+  },
+  "1.3.0": {
+    label: "Safe 1.3.0 (GnosisSafeL2)",
+    factory: "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
+    singleton: "0x3E5c63644E683549055b9Be8653de26E0B4CD36E",
+    fallbackHandler: "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4",
+  },
+};
+
+const SENTINEL = "0x0000000000000000000000000000000000000001";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const padBytes = (hexNoPrefix) => hexNoPrefix + "0".repeat((64 - (hexNoPrefix.length % 64)) % 64);
+
+/** Throws with a plain reason if owners/threshold cannot make a Safe. Returns checksummed owners. */
+export function validateSafeOwners(owners, threshold) {
+  if (!owners.length) throw new Error("at least one owner");
+  const seen = new Set();
+  for (const o of owners) {
+    if (!isAddress(o)) throw new Error(`owner is not an address: ${o}`);
+    const l = o.toLowerCase();
+    if (l === ZERO_ADDRESS || l === SENTINEL) throw new Error(`owner cannot be ${o}`);
+    if (seen.has(l)) throw new Error(`duplicate owner ${o}`);
+    seen.add(l);
+  }
+  if (!Number.isInteger(threshold) || threshold < 1 || threshold > owners.length)
+    throw new Error(`threshold must be 1 to ${owners.length}`);
+  return owners.map(checksum);
+}
+
+/** Safe.setup(owners, threshold, to=0, data=0x, fallbackHandler, paymentToken=0, payment=0, paymentReceiver=0):
+ *  a plain Safe, no modules, no setup delegatecall, no payment. */
+export function encodeSafeSetup(owners, threshold, fallbackHandler) {
+  const n = owners.length;
+  const head = [
+    encUint(0x100), encUint(threshold), encAddress(ZERO_ADDRESS), encUint(0x100 + 32 * (1 + n)),
+    encAddress(fallbackHandler), encAddress(ZERO_ADDRESS), encUint(0), encAddress(ZERO_ADDRESS),
+  ];
+  const tail = [encUint(n), ...owners.map(encAddress), encUint(0)];
+  return "0x" + selector("setup(address[],uint256,address,bytes,address,address,uint256,address)") + head.join("") + tail.join("");
+}
+
+/** SafeProxyFactory.createProxyWithNonce(singleton, initializer, saltNonce), and the address it
+ *  will create: CREATE2(factory, keccak(keccak(initializer) ++ saltNonce), proxyCreationCode ++ singleton).
+ *  `proxyCreationCode` is read from the factory on chain (readProxyCreationCode). */
+export function buildCreateSafeTx({ version, owners, threshold, saltNonce = 0n }, proxyCreationCode) {
+  const d = SAFE_DEPLOYMENTS[version];
+  if (!d) throw new Error(`unknown Safe version ${version}`);
+  owners = validateSafeOwners(owners, threshold);
+  const nonce = BigInt(saltNonce);
+  if (nonce < 0n || nonce >= 2n ** 256n) throw new Error("saltNonce must be a uint256");
+  const initializer = encodeSafeSetup(owners, threshold, d.fallbackHandler);
+  const init = strip(initializer);
+  const data = "0x" + selector("createProxyWithNonce(address,bytes,uint256)") +
+    encAddress(d.singleton) + encUint(0x60) + encUint(nonce) + encUint(init.length / 2) + padBytes(init);
+  const salt = keccakHex("0x" + strip(keccakHex(initializer)) + encUint(nonce));
+  const expected = create2Address(salt, "0x" + strip(proxyCreationCode) + encAddress(d.singleton), d.factory);
+  return {
+    key: `safe:${expected.toLowerCase()}`, name: `Safe ${version} (${threshold} of ${owners.length})`,
+    to: checksum(d.factory), data, expected, via: `Safe proxy factory ${d.factory.slice(0, 6)}…${d.factory.slice(-4)}`,
+    args: { version, owners, threshold, saltNonce: nonce.toString() },
+  };
+}
+
+const decodeBytes = (hex) => { const w = strip(hex); const len = Number(BigInt("0x" + w.slice(64, 128))); return "0x" + w.slice(128, 128 + 2 * len); };
+const decodeString = (hex) => new TextDecoder().decode(hexToBytes(decodeBytes(hex)));
+const view = (reader, to, sig, args = "") => reader.call("eth_call", [{ to, data: "0x" + selector(sig) + args }, "latest"]);
+
+export async function readProxyCreationCode(reader, version) {
+  return decodeBytes(await view(reader, SAFE_DEPLOYMENTS[version].factory, "proxyCreationCode()"));
+}
+
+/** Proves the three Safe contracts this page would use have code on the chain the reader is on,
+ *  and that the singleton reports the expected version. Throws otherwise. */
+export async function checkSafeDeployment(reader, version) {
+  const d = SAFE_DEPLOYMENTS[version];
+  for (const [what, addr] of [["proxy factory", d.factory], ["singleton", d.singleton], ["fallback handler", d.fallbackHandler]]) {
+    if (!hasCode(await reader.call("eth_getCode", [addr, "latest"]))) throw new Error(`Safe ${version} ${what} ${addr} has no code on this chain`);
+  }
+  const v = decodeString(await view(reader, d.singleton, "VERSION()"));
+  if (v !== version) throw new Error(`singleton ${d.singleton} reports VERSION ${v}, expected ${version}`);
+  return d;
+}
+
+/** Read a deployed Safe: { version, threshold, owners[] }. Throws if `addr` does not answer like one. */
+export async function readSafe(reader, addr) {
+  const [ver, thr, own] = await Promise.all([view(reader, addr, "VERSION()"), view(reader, addr, "getThreshold()"), view(reader, addr, "getOwners()")]);
+  const w = strip(own);
+  if (strip(thr).length !== 64 || w.length < 128) throw new Error("not a Safe (no getThreshold/getOwners)");
+  const n = Number(BigInt("0x" + w.slice(64, 128)));
+  const owners = [];
+  for (let i = 0; i < n; i++) owners.push(checksum("0x" + w.slice(128 + 64 * i + 24, 128 + 64 * (i + 1))));
+  const threshold = Number(BigInt(thr));
+  if (!n || threshold < 1 || threshold > n) throw new Error("not a Safe (bad owners/threshold)");
+  return { version: decodeString(ver), threshold, owners };
+}
+
+/** MIN_ROTATION_DELAY() of a deployed UptimePoolV2, or null if the code has no such function
+ *  (the first v2 deployment, which could rotate instantly). */
+export async function readMinRotationDelay(reader, pool) {
+  try { return Number(BigInt(await view(reader, pool, "MIN_ROTATION_DELAY()"))); } catch { return null; }
 }
 
 function buildCreate2PoolTx(creationCode, name, keyPrefix, { admin, rotationDelay = 0, scheduler, mailer, salt }) {
@@ -254,7 +370,7 @@ export async function runTx(env, tx) {
   status(tx.key, "estimating");
   const est = await estimate(reader, from, tx);
   const gas = gasWithHeadroom(est);
-  const summary = `${tx.name} -> CREATE2 factory ${FACTORY.slice(0, 6)}…${FACTORY.slice(-4)}, expected at ${tx.expected}, estimate ${est.toLocaleString("en-US")} gas, sending with gas ${gas.toLocaleString("en-US")}, value 0`;
+  const summary = `${tx.name} -> ${tx.via || `CREATE2 factory ${FACTORY.slice(0, 6)}…${FACTORY.slice(-4)}`}, expected at ${tx.expected}, estimate ${est.toLocaleString("en-US")} gas, sending with gas ${gas.toLocaleString("en-US")}, value 0`;
   status(tx.key, "signing", { est, gas, summary });
   if (env.beforeSend) await env.beforeSend(summary, tx);
   log(`SIGN: ${summary}`);
@@ -276,7 +392,7 @@ export async function runTx(env, tx) {
 export const ROLE_SCHEDULER = 1;
 export const ROLE_MAILER = 2;
 
-/** proposeSpender(role, spender): admin only; executable after rotationDelay (0 on the live pool). */
+/** proposeSpender(role, spender): admin only; executable after rotationDelay (0 on v1, at least 48 h on v2). */
 export function buildProposeSpenderTx(pool, role, spender) {
   return { key: `spender:propose:${pool.toLowerCase()}:${role}:${spender.toLowerCase()}`, name: `proposeSpender(${role}, ${checksum(spender)})`,
     to: checksum(pool), data: "0x" + selector("proposeSpender(uint8,address)") + encUint(role) + encAddress(spender) };

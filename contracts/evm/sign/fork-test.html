@@ -1,7 +1,12 @@
 <!doctype html><html><body>
 <script>
 // TEST ONLY: MetaMask stand-in that forwards to anvil's unlocked account 0.
-const A = "http://127.0.0.1:8545";
+//   fork-test.html                 Safe (2 of 3) -> UptimePoolV2 with that Safe as admin -> UptimePool v1 -> 44 delegation txs
+//   fork-test.html?flow=v2         stops after the v2 pool (2 transactions)
+//   fork-test.html?anvil=http://127.0.0.1:8546   another anvil port
+const Q = new URLSearchParams(location.search);
+const A = Q.get("anvil") || "http://127.0.0.1:8545";
+const FLOW = Q.get("flow") || "all";
 const rpc = async (method, params=[]) => { const r = await (await fetch(A,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})})).json(); if (r.error) throw r.error; return r.result; };
 window.__sent = [];
 window.ethereum = { on(){}, async request({method, params}) {
@@ -12,18 +17,46 @@ window.ethereum = { on(){}, async request({method, params}) {
 </script>
 <div id="host"></div>
 <script type="module">
-const html = await (await fetch("index.html")).text();
-document.body.insertAdjacentHTML("beforeend", html.replace(/[\s\S]*<body>/, "").replace(/<script[\s\S]*$/, ""));
-history.replaceState(null, "", "?rpc=http://127.0.0.1:8545");
-await import("./app.js");
-const $ = (id) => document.getElementById(id);
-const until = async (f, ms=240000) => { const t=Date.now(); while(!f()) { if (Date.now()-t>ms) throw new Error("timeout"); await new Promise(r=>setTimeout(r,500)); } };
-$("connect").click();
-await until(() => !$("p-go").disabled);
-$("p-go").click();
-await until(() => /DEPLOYED/.test($("p-state").textContent));
-await until(() => !$("d-go").disabled);
-$("d-go").click();
-await until(() => /complete/.test($("d-progress").textContent));
-document.title = "RESULT " + JSON.stringify({ pool: $("p-addr").textContent, poolState: $("p-state").textContent, progress: $("d-progress").textContent, sent: window.__sent.length, gasSet: window.__sent.every(t=>t.gas) });
+try {
+  const html = await (await fetch("index.html", { cache: "no-store" })).text();
+  document.body.insertAdjacentHTML("beforeend", html.replace(/[\s\S]*<body>/, "").replace(/<!-- Cache-busting[\s\S]*$/, ""));
+  history.replaceState(null, "", "?rpc=" + A);
+  await import("./app.js?v=" + Date.now());
+  const $ = (id) => document.getElementById(id);
+  const until = async (f, what, ms=240000) => { const t=Date.now(); while(!f()) { if (Date.now()-t>ms) throw new Error("timeout: " + what); await new Promise(r=>setTimeout(r,500)); } };
+  const type = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event("input")); };
+  $("connect").click();
+  await until(() => $("acct").textContent.startsWith("0x"), "connect");
+  // 0. Safe: 2 of 3 anvil accounts, a fresh saltNonce so every run creates a new one.
+  const accts = (await rpc("eth_accounts")).slice(0, 3);
+  type("s-owners", accts.join("\n")); type("s-threshold", "2"); type("s-nonce", String(Date.now()));
+  await until(() => !$("s-go").disabled, "safe sendable: " + $("s-state").textContent);
+  const safe = $("s-addr").textContent;
+  $("s-go").click();
+  await until(() => /DEPLOYED/.test($("s-state").textContent), "safe deployed");
+  // 1b. v2 pool: the page must have put the Safe in as admin, and must refuse a short delay.
+  if ($("v-admin").value !== safe) throw new Error("v-admin was not filled with the Safe");
+  type("v-delay", "0");
+  await until(() => /InvalidRotationDelay/.test($("v-state").textContent), "delay 0 refused");
+  if (!$("v-go").disabled) throw new Error("deploy enabled with rotationDelay 0");
+  type("v-delay", "172800");
+  type("v-admin", accts[0]);
+  await until(() => /no code at that address/.test($("v-state").textContent), "EOA admin refused");
+  type("v-admin", safe);
+  await until(() => !$("v-go").disabled, "v2 sendable: " + $("v-state").textContent);
+  const v2note = $("v-state").textContent;
+  $("v-go").click();
+  await until(() => /DEPLOYED/.test($("v-state").textContent), "v2 deployed");
+  const out = { safe, safeState: $("s-state").textContent, v2: $("v-addr").textContent, v2note, v2State: $("v-state").textContent, build: $("v-build").textContent };
+  if (FLOW !== "v2") {
+    await until(() => !$("p-go").disabled, "v1 sendable");
+    $("p-go").click();
+    await until(() => /DEPLOYED/.test($("p-state").textContent), "v1 deployed");
+    await until(() => !$("d-go").disabled || /complete/.test($("d-progress").textContent), "delegation ready");
+    if (!/complete/.test($("d-progress").textContent)) $("d-go").click();
+    await until(() => /complete/.test($("d-progress").textContent), "delegation complete", 900000);
+    Object.assign(out, { pool: $("p-addr").textContent, poolState: $("p-state").textContent, progress: $("d-progress").textContent });
+  }
+  document.title = "RESULT " + JSON.stringify({ ...out, sent: window.__sent.length, gasSet: window.__sent.every(t=>t.gas) });
+} catch (e) { document.title = "FAILED " + (e?.message || e); }
 </script></body></html>
