@@ -265,7 +265,7 @@ function votes(tx: ChainTx): StepRunRow["votes"] {
   if (!names?.length) return undefined;
   const v = { agree: 0, disagree: 0, timeout: 0, other: 0 };
   for (const n of names) {
-    // Phase 2 names a vote by the result the validator agreed to
+    // Since Phase 2 a vote is named by the result the validator agreed to
     // (FINISHED_WITH_RETURN/ERROR); a mismatch is NONDET_DISAGREE or
     // DETERMINISTIC_VIOLATION. AGREE/DISAGREE are the pre-Phase 2 names.
     if (AGREE_VOTES.has(n)) v.agree++;
@@ -487,7 +487,15 @@ export async function ensureHeartbeatJob(
 ): Promise<JobRow | null> {
   if (!owner || !contract) return null;
   const found = await repo.findSystemJob("bradbury", HEARTBEAT);
-  if (found) return found;
+  if (found) {
+    // The contract comes from env (HEARTBEAT_CONTRACT). After a redeploy, e.g.
+    // on a new consensus deployment, the stored steps follow it, so the public
+    // job page never shows a retired address. The runs themselves always used env.
+    const stale = found.steps.some((s) => s.kind === "write" && s.contract.toLowerCase() !== contract.toLowerCase());
+    if (!stale) return found;
+    const steps = found.steps.map((s) => (s.kind === "write" ? { ...s, contract } : s));
+    return (await repo.updateJob(found.id, { steps })) ?? found;
+  }
   const schedule = { everyMinutes: 60 };
   const id = newId();
   return repo.createJob({
