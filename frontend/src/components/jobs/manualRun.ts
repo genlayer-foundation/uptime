@@ -2,7 +2,7 @@
 // sends, signed by the visitor's wallet (window.ethereum), then report each tx
 // hash to /api/jobs/:id/manual, which verifies it on-chain before recording.
 //
-// Bradbury: genlayer-js 2.x with the Phase 2 fee distribution the server sends
+// Bradbury: genlayer-js 2.x with the fee distribution the server sends
 // (lib/genlayer/fees.ts; the SDK computes the deposit from FeeManager).
 // Studio: genlayer-js 1.x, the legacy addTransaction hosted Studio decodes
 // (lib/genlayer/studio.ts), no fees. Both SDKs route eth_sendTransaction to the
@@ -51,8 +51,8 @@ async function clientFor(network: Network, account: Address): Promise<Submit> {
     return createClient({ chain: studionet, account }) as unknown as Submit;
   }
   await ensureBradbury();
-  const [{ createClient }, { bradburyPhase2 }] = await Promise.all([import("genlayer-js"), import("@/lib/chains")]);
-  return createClient({ chain: bradburyPhase2, account, provider: eth } as never) as unknown as Submit;
+  const [{ createClient }, { bradburyChain }] = await Promise.all([import("genlayer-js"), import("@/lib/chains")]);
+  return createClient({ chain: bradburyChain, account, provider: eth } as never) as unknown as Submit;
 }
 
 async function sign(network: Network, account: Address, call: ManualCall, wire: WireFees): Promise<string> {

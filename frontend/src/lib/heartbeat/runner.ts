@@ -170,7 +170,7 @@ function votes(tx: RunnerTx): VoteCounts | undefined {
   if (!names?.length) return undefined;
   const v: VoteCounts = { agree: 0, disagree: 0, timeout: 0, other: 0 };
   for (const n of names) {
-    // Phase 2 names a vote by the result the validator agreed to
+    // Since Phase 2 a vote is named by the result the validator agreed to
     // (FINISHED_WITH_RETURN/ERROR); a mismatch is NONDET_DISAGREE or
     // DETERMINISTIC_VIOLATION. AGREE/DISAGREE are the pre-Phase 2 names.
     if (AGREE_VOTES.has(n)) v.agree++;

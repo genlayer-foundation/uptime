@@ -48,10 +48,87 @@ UPTIME_TARGET=studio .venv-studio/bin/pytest test/direct -q    # UPTIME_TARGET p
 5. Redeploy the long-lived contracts on that network from `build/<target>/` and update their env
    addresses (`deploy_env` in `targets.json`). Commit the rebuilt files with the pin change.
 
+## Redeploy on a new consensus deployment (Bradbury Phase 3)
+
+An intelligent contract lives in ONE consensus deployment. Bradbury Phase 3 (2026-11-24) is a
+new deployment on the same rollup as Phase 2 (chain 4221), so the three long-lived Bradbury
+contracts do not exist on it and must be deployed again. The EVM contracts under `evm/` and
+`delegation/` are plain contracts on the rollup: they depend on the chain only, keep their
+addresses and balances, and need nothing.
+
+| Contract | Constructor | Env var to change (Vercel Production) |
+|---|---|---|
+| `build/bradbury/heartbeat.py` | `(fixture_base, operator)` | `HEARTBEAT_CONTRACT` |
+| `build/bradbury/web_probe.py` | none | `UPTIME_WEBPROBE_BRADBURY` |
+| `build/bradbury/ask.py` | none | `UPTIME_ASK_BRADBURY` |
+
+Addresses live in env only (`deploy_env` in `targets.json`), never in code or the database.
+The canary is deployed by every tick; `mail_escrow.py` was never deployed.
+
+**Before anything** (each is a read, nothing is sent):
+
+1. A GenLayer node RPC that tracks Phase 3. `rpc.testnet-chain.genlayer.com` serves no `gen_*`
+   method, and on 2026-11-25 `rpc-bradbury.genlayer.com` still tracked Phase 2. A node that
+   returns code for the Phase 2 Heartbeat is NOT a Phase 3 node:
+   ```bash
+   curl -s -X POST -H 'content-type: application/json' "$NODE_RPC" -d '{"jsonrpc":"2.0","id":1,
+     "method":"gen_getContractCode","params":[{"address":"0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F"}]}'
+   # Phase 3 node: "contract code not found".  A long base64 result: still Phase 2, stop.
+   ```
+2. The runner pin still loads on that node's GenVM (Phase 3 nodes run v0.6.0; the pin in
+   `targets.json` was taken from GenVM v0.6.0-rc10 and has not been tried on a Phase 3 node):
+   ```bash
+   UPTIME_RPC_BRADBURY="$NODE_RPC" node contracts/load-check.mjs bradbury
+   ```
+   `invalid_contract runner malformed` or `runner absent` = follow "When a network upgrades
+   GenVM" above first.
+3. At least 5 validators are selectable, else every submit reverts
+   `TooFewValidatorsForAdmission` (11 on 2026-11-25):
+   ```bash
+   cast call 0xcE16862EAf10B97A0619BeBb662991fb4a52e346 'selectableValidators()(address[])' \
+     --rpc-url https://rpc.testnet-chain.genlayer.com
+   ```
+
+**Deploy** with genlayer CLI 0.40.1, the first whose `testnet-bradbury` profile carries the
+Phase 3 addresses (check them with `genlayer network info`: ConsensusMain must be
+`0x0f4F0e05475723790E4a2ed0598370783C300926`). The deployer becomes the Heartbeat's owner
+(`set_operator` only); the operator must be the address of the scheduler wallet
+(`RELAYER_KEY_BRADBURY`), which signs every tick. The scheduler wallet can also be the
+deployer. Each deploy deposits at most ~0.05 GEN plus chain gas, so 1 GEN in the deployer is
+ample; unused deposit is refunded.
+
+```bash
+npx genlayer@0.40.1 network set testnet-bradbury
+npx genlayer@0.40.1 network info                       # Phase 3 addresses?
+GENLAYER_E2E_NO_OPEN=1 npx genlayer@0.40.1 deploy --rpc "$NODE_RPC" --wallet browser \
+  --contract contracts/build/bradbury/heartbeat.py \
+  --args "https://uptime.genlayer.foundation/heartbeat" <scheduler wallet address>
+GENLAYER_E2E_NO_OPEN=1 npx genlayer@0.40.1 deploy --rpc "$NODE_RPC" --wallet browser --contract contracts/build/bradbury/web_probe.py
+GENLAYER_E2E_NO_OPEN=1 npx genlayer@0.40.1 deploy --rpc "$NODE_RPC" --wallet browser --contract contracts/build/bradbury/ask.py
+# check each once it is accepted:
+npx genlayer@0.40.1 call <heartbeat address> get_operator --rpc "$NODE_RPC"   # = scheduler wallet
+npx genlayer@0.40.1 call <heartbeat address> get_version --rpc "$NODE_RPC"
+```
+
+**Then**, on Vercel Production: set `HEARTBEAT_CONTRACT`, `UPTIME_WEBPROBE_BRADBURY`,
+`UPTIME_ASK_BRADBURY` to the new addresses and `NEXT_PUBLIC_BRADBURY_GENLAYER_RPC` to the node
+RPC (unless Labs repointed `rpc-bradbury.genlayer.com`), and deploy the app. Record the
+addresses in `INTEGRATIONS.md` (On-chain) and the README table.
+
+**Running cost**: the scheduler wallet pays ~0.25 GEN of deposits per hourly tick (5 txs, part
+refunded) plus an appeal bond every 5th tick: at most ~6 GEN a day. Its balance is on the
+rollup, not in a consensus deployment: Phase 2 funds are still there.
+
+**What the switch does not move**: Heartbeat results of the old deployment stay in
+`heartbeat_probes` and in `/api/heartbeat` windows that reach back before the switch; the tick
+counter continues. User jobs keep the contract addresses they were created with: a job that
+writes to a Phase 2 contract (including the old WebProbe and Ask addresses) has nothing to
+call on Phase 3 until its owner edits it or recreates it from the preset.
+
 ## Deploy the Studio presets (owner signs in MetaMask)
 
 **Deploy Studio builds with genlayer CLI 0.39.2 (`npx genlayer@0.39.2`), Bradbury with
-0.40.0-rc.5.** 0.40.x bundles genlayer-js 2.x, which sends the fee-aware
+0.40.1 (Phase 3; 0.40.0-rc.5 was Phase 2).** 0.40.x bundles genlayer-js 2.x, which sends the fee-aware
 `addTransaction(params)` (`0x35a251fb`) that hosted Studio cannot decode: the tx finalizes
 `NO_MAJORITY` with no contract (2026-11-06). 0.39.2 (genlayer-js 1.1.8) sends the legacy
 `addTransaction` Studio expects; the app's Studio client uses the same 1.1.8

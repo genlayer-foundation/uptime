@@ -13,7 +13,7 @@
 // files under is always this job's own, set by the server ({{job_id}}).
 // Reads are not restricted: they sign nothing.
 
-import { BRADBURY_PHASE2 } from "@/lib/chains";
+import { BRADBURY } from "@/lib/chains";
 import { parseWalletList } from "./allowlist";
 import type { Step } from "./types";
 
@@ -42,7 +42,7 @@ function listed(names: string[], env: Env): Set<string> {
  */
 export function systemTargets(env: Env = process.env): Set<string> {
   const out = listed(SYSTEM_ENV, env);
-  for (const a of Object.values(BRADBURY_PHASE2.contracts)) out.add(a.toLowerCase());
+  for (const a of Object.values(BRADBURY.contracts)) out.add(a.toLowerCase());
   for (const a of parseWalletList(env.UPTIME_BLOCKED_TARGETS)) out.add(a);
   return out;
 }

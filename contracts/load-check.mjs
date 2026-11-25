@@ -3,6 +3,7 @@
 //
 //   node contracts/load-check.mjs              # every target in contracts/targets.json
 //   node contracts/load-check.mjs studio       # one target
+//   UPTIME_RPC_BRADBURY=https://… node contracts/load-check.mjs bradbury   # another node
 //
 // studio:   gen_getContractSchemaForCode(hex code) -> the network's GenVM loads the code and
 //           returns its schema (proves runner pin + SDK dialect).
@@ -62,6 +63,10 @@ const checks = {
   },
 };
 
+// UPTIME_RPC_<TARGET> (e.g. UPTIME_RPC_BRADBURY) points a target at another node, such as
+// the node of a new consensus deployment before targets.json is changed.
+const rpcFor = (target, spec) => process.env[`UPTIME_RPC_${target.toUpperCase()}`]?.trim() || spec.rpc;
+
 const only = process.argv.slice(2);
 let failed = 0;
 for (const [target, spec] of Object.entries(targets)) {
@@ -69,7 +74,7 @@ for (const [target, spec] of Object.entries(targets)) {
   for (const name of Object.keys(ARGS)) {
     const code = readFileSync(join(here, "build", target, `${name}.py`), "utf8");
     try {
-      const msg = await checks[spec.load_check.method](spec.rpc, code, ARGS[name]);
+      const msg = await checks[spec.load_check.method](rpcFor(target, spec), code, ARGS[name]);
       console.log(`ok   ${target}/${name}.py  ${msg}`);
     } catch (e) {
       failed++;

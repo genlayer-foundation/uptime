@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseTransaction, type Hex } from "viem";
 import { genlayerClient } from "@/lib/jobs/chain";
 import { STUDIO_ADD_TRANSACTION_SELECTOR, studioChainV1 } from "@/lib/genlayer/studio";
-import { bradburyPhase2 } from "@/lib/chains";
+import { bradburyChain } from "@/lib/chains";
 
 // Well-known Hardhat/Anvil dev key #1: never funded anywhere real.
 const TEST_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f668cdd6d8b690";
@@ -84,12 +84,12 @@ describe("Studio jobs submit the call hosted Studio decodes", () => {
   });
 });
 
-describe("Bradbury jobs still pay the Phase 2 deposit", () => {
+describe("Bradbury jobs still pay the fee deposit", () => {
   it("write and deploy use addTransaction(params) with msg.value = deposit", async () => {
     const txs = await submitBoth("bradbury");
     expect(txs).toHaveLength(2);
     for (const tx of txs) {
-      expect(tx.to!.toLowerCase()).toBe(bradburyPhase2.consensusMainContract!.address.toLowerCase());
+      expect(tx.to!.toLowerCase()).toBe(bradburyChain.consensusMainContract!.address.toLowerCase());
       expect(tx.data!.slice(0, 10)).toBe(FEE_SELECTOR);
       expect(tx.value).toBe(DEPOSIT);
       expect(tx.chainId).toBe(4221);

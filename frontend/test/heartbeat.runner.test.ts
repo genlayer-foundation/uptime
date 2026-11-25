@@ -190,7 +190,7 @@ describe("runReconcile", () => {
     expect(by["1:llm:r2-answer42"]).toMatchObject({ answer: "54", grade: "wrong" });
   });
 
-  it("counts Phase 2 vote names (FINISHED_WITH_*, NONDET_DISAGREE, TIMEOUT)", async () => {
+  it("counts the vote names in use since Phase 2 (FINISHED_WITH_*, NONDET_DISAGREE, TIMEOUT)", async () => {
     const { store, client, deps } = setup();
     const [, , f0] = await runTick(deps);
     client.txs.set(

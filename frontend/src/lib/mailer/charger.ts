@@ -19,7 +19,7 @@ import {
   type Log,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { BRADBURY_PHASE2 } from "../chains";
+import { BRADBURY } from "../chains";
 import { bradburyEvmRpc, mailerKey, poolAddress } from "./config";
 
 export const ROLE_MAILER = 2;
@@ -143,12 +143,12 @@ export function evmPoolCharger(): PoolCharger | null {
   const key = mailerKey();
   if (!pool || !key) return null;
   const chain = defineChain({
-    id: BRADBURY_PHASE2.chainId,
-    name: "GenLayer Bradbury Phase 2",
+    id: BRADBURY.chainId,
+    name: BRADBURY.name,
     nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-    rpcUrls: { default: { http: [bradburyEvmRpc(BRADBURY_PHASE2.chainRpc)] } },
+    rpcUrls: { default: { http: [bradburyEvmRpc(BRADBURY.chainRpc)] } },
   });
-  const transport = http(bradburyEvmRpc(BRADBURY_PHASE2.chainRpc), { timeout: 20_000 });
+  const transport = http(bradburyEvmRpc(BRADBURY.chainRpc), { timeout: 20_000 });
   const account = privateKeyToAccount(key);
   const pub = createPublicClient({ chain, transport });
   const wallet = createWalletClient({ chain, transport, account });
@@ -157,7 +157,7 @@ export function evmPoolCharger(): PoolCharger | null {
     async charge(req) {
       // 0. pinned chain: refuse to sign for anything but 4221
       try {
-        if ((await pub.getChainId()) !== BRADBURY_PHASE2.chainId) return { outcome: "failed", reason: "wrong_chain" };
+        if ((await pub.getChainId()) !== BRADBURY.chainId) return { outcome: "failed", reason: "wrong_chain" };
       } catch (e) {
         return { outcome: "failed", reason: `rpc:${shortError(e)}` };
       }

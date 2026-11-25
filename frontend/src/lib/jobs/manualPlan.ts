@@ -34,7 +34,7 @@ export const signableCount = (job: JobLike, heartbeat: boolean) =>
   manualSteps(job, heartbeat).filter((s) => s.kind !== "read").length;
 
 /**
- * Rough Phase 2 deposit per transaction at the default fee distribution: the
+ * Rough Bradbury deposit per transaction at the default fee distribution: the
  * execution budget for the leader round and its one rotation. Unused budget
  * is refunded at finalization, so this is an upper estimate. Studio is free.
  */

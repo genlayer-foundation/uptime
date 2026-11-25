@@ -4,7 +4,7 @@
 // that a run without a validator majority is never recorded as passed.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainClient, ChainTx } from "@/lib/jobs/chain";
-import { BRADBURY_PHASE2 } from "@/lib/chains";
+import { BRADBURY } from "@/lib/chains";
 import { dispatchDue, ensureHeartbeatJob, reconcile, toPublicRun, type ExecutorDeps } from "@/lib/jobs/executor";
 import type { GateDeps } from "@/lib/jobs/gate";
 import { newId, poolIdFor } from "@/lib/jobs/ids";
@@ -128,15 +128,15 @@ describe("a step never sends the relayer's GEN", () => {
 describe("a user job cannot act as the relayer against system contracts", () => {
   it("lists the Heartbeat, the pools, the consensus contracts and UPTIME_BLOCKED_TARGETS", () => {
     const t = systemTargets();
-    for (const a of [HEARTBEAT, POOL, POOL_V2, EXTRA, ...Object.values(BRADBURY_PHASE2.contracts)]) expect(t.has(a.toLowerCase())).toBe(true);
+    for (const a of [HEARTBEAT, POOL, POOL_V2, EXTRA, ...Object.values(BRADBURY.contracts)]) expect(t.has(a.toLowerCase())).toBe(true);
     expect(t.has(C1)).toBe(false);
     expect(t.has(WEBPROBE)).toBe(false); // presets stay callable, with the job's own id
-    expect(systemTargets({}).size).toBe(Object.keys(BRADBURY_PHASE2.contracts).length); // nothing configured: fails closed on what is known
+    expect(systemTargets({}).size).toBe(Object.keys(BRADBURY.contracts).length); // nothing configured: fails closed on what is known
   });
 
   it("refuses a write to one at create and edit, whatever the address casing; reads stay allowed", async () => {
     const { deps } = setup();
-    for (const a of [HEARTBEAT, HEARTBEAT.toLowerCase(), POOL, POOL_V2, EXTRA, BRADBURY_PHASE2.contracts.consensusMain]) {
+    for (const a of [HEARTBEAT, HEARTBEAT.toLowerCase(), POOL, POOL_V2, EXTRA, BRADBURY.contracts.consensusMain]) {
       expect(await createJob(deps, BOB, body([write(a, { method: "bump", args: [1] })]))).toMatchObject({
         ok: false, status: 400, error: expect.stringMatching(/system contract/),
       });

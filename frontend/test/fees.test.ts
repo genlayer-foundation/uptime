@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { toFunctionSelector } from "viem";
 import { createClient } from "genlayer-js";
 import { DEFAULT_BRADBURY_FEES, feesFor, withFees } from "@/lib/genlayer/fees";
-import { bradburyPhase2 } from "@/lib/chains";
+import { bradburyChain } from "@/lib/chains";
 
 function fakeClient() {
   const calls: Record<string, unknown>[] = [];
@@ -81,10 +81,10 @@ describe("withFees", () => {
 });
 
 // The regression behind every SUBMIT_FAILED "Transaction reverted": genlayer-js
-// 0.26 encoded the legacy 5/6-arg addTransaction, which Phase 2's
-// ConsensusMainWithFees does not have. The SDK must encode the fee-aware
+// 0.26 encoded the legacy 5/6-arg addTransaction, which Bradbury's
+// ConsensusMainWithFees (Phase 2 and 3) does not have. The SDK must encode the fee-aware
 // addTransaction(params) (selector 0x35a251fb) with msg.value = deposit.
-describe("Phase 2 submission encoding", () => {
+describe("Bradbury submission encoding", () => {
   it("sends addTransaction(params) to ConsensusMainWithFees with a non-zero deposit", async () => {
     const FROM = "0xDcA42c83d171811EB1d886e13a07D5776AcA84dd";
     const DEPOSIT = 50_000_000_000_000_000n;
@@ -124,7 +124,7 @@ describe("Phase 2 submission encoding", () => {
     globalThis.fetch = fetchStub as typeof fetch;
     try {
       const client = withFees(
-        createClient({ chain: bradburyPhase2, account: { address: FROM, type: "json-rpc" } as never }),
+        createClient({ chain: bradburyChain, account: { address: FROM, type: "json-rpc" } as never }),
         "bradbury",
         {}
       );
@@ -135,7 +135,7 @@ describe("Phase 2 submission encoding", () => {
       globalThis.fetch = realFetch;
     }
     expect(sent).toBeDefined();
-    expect(sent!.to.toLowerCase()).toBe(bradburyPhase2.consensusMainContract!.address.toLowerCase());
+    expect(sent!.to.toLowerCase()).toBe(bradburyChain.consensusMainContract!.address.toLowerCase());
     expect(sent!.data.slice(0, 10)).toBe("0x35a251fb");
     expect(BigInt(sent!.value)).toBe(DEPOSIT);
     // and not the legacy selectors 0.26 sent

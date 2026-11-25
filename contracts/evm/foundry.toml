@@ -1,4 +1,4 @@
-# Foundry project for the Uptime pool (Bradbury Phase 2 = Arbitrum Orbit, chain 4221).
+# Foundry project for the Uptime pool (Bradbury rollup = Arbitrum Orbit, chain 4221; independent of the consensus deployment).
 # Dependencies are vendored under lib/ (hashes in dependencies.lock.json); no `forge install`.
 [profile.default]
 src = "src"
