@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseTransaction, type Hex } from "viem";
 import { genlayerClient } from "@/lib/jobs/chain";
 import { STUDIO_ADD_TRANSACTION_SELECTOR, studioChainV1 } from "@/lib/genlayer/studio";
-import { bradburyChain } from "@/lib/chains";
+import { BRADBURY, bradburyChain } from "@/lib/chains";
+import { SDK_GAS_FALLBACK } from "@/lib/genlayer/rpcRoute";
 
 // Well-known Hardhat/Anvil dev key #1: never funded anywhere real.
 const TEST_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f668cdd6d8b690";
@@ -21,13 +22,21 @@ type Rpc = { id: number; method: string; params: unknown[] };
 
 let sent: ReturnType<typeof parseTransaction>[] = [];
 let methods: string[] = [];
+let urls: { url: string; method: string }[] = [];
+// How many eth_estimateGas / eth_call answers fail with -32603 before one succeeds.
+let estimateFailures = 0;
+let callFailures = 0;
 const realFetch = globalThis.fetch;
 
 function rpcStub() {
-  return async (_url: unknown, init?: { body?: unknown }) => {
+  return async (url: unknown, init?: { body?: unknown }) => {
     const body = JSON.parse(String(init?.body));
+    const internal = (m: Rpc) => ({ jsonrpc: "2.0", id: m.id, error: { code: -32603, message: "Internal error" } });
     const one = (m: Rpc) => {
       methods.push(m.method);
+      urls.push({ url: String(url), method: m.method });
+      if (m.method === "eth_estimateGas" && estimateFailures-- > 0) return internal(m);
+      if (m.method === "eth_call" && callFailures-- > 0) return internal(m);
       switch (m.method) {
         case "eth_sendRawTransaction":
           sent.push(parseTransaction(m.params[0] as Hex));
@@ -50,6 +59,9 @@ function rpcStub() {
 beforeEach(() => {
   sent = [];
   methods = [];
+  urls = [];
+  estimateFailures = 0;
+  callFailures = 0;
   process.env.RELAYER_KEY_STUDIO = TEST_KEY;
   process.env.RELAYER_KEY_BRADBURY = TEST_KEY;
   delete process.env.BRADBURY_TX_FEES;
@@ -94,5 +106,29 @@ describe("Bradbury jobs still pay the fee deposit", () => {
       expect(tx.value).toBe(DEPOSIT);
       expect(tx.chainId).toBe(4221);
     }
+  });
+});
+
+describe("Bradbury submits survive the node RPC's -32603s (rpcRoute.ts)", () => {
+  const write = () =>
+    genlayerClient("bradbury").writeContract({ address: "0x4574A36757da191D34CE3a38060b229928766024", functionName: "ping", args: [], value: 0n });
+
+  it("eth_* go to the chain RPC, and one -32603 on the fee quote and the gas estimate is retried", async () => {
+    callFailures = 1;
+    estimateFailures = 1;
+    await write().catch(() => undefined);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].gas).not.toBe(SDK_GAS_FALLBACK);
+    expect(sent[0].value).toBe(DEPOSIT);
+    const eth = urls.filter((u) => u.method.startsWith("eth_"));
+    expect(eth.length).toBeGreaterThan(0);
+    for (const u of eth) expect(u.url).toBe(BRADBURY.chainRpc);
+  });
+
+  it("a gas estimate that fails twice is never sent with the 200000 fallback", async () => {
+    estimateFailures = 2;
+    await expect(write()).rejects.toThrow(/200000 gas limit/);
+    expect(sent).toHaveLength(0);
+    expect(methods).not.toContain("eth_sendRawTransaction");
   });
 });
