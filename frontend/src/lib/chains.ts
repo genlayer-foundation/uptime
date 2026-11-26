@@ -25,9 +25,14 @@
 //
 // GenLayer node RPC: `gen_*` calls (readContract, schemas, gen_call) need a GenLayer node that
 // tracks THIS deployment. The chain RPC serves none of them, and a node following another
-// deployment answers for the same chain id with that deployment's contracts. Set
-// NEXT_PUBLIC_BRADBURY_GENLAYER_RPC to the Phase 3 node; the default is the host Uptime has
-// always used, which tracked Phase 2 when this was written (2026-11-25).
+// deployment answers for the same chain id with that deployment's contracts. Phase 3's node is
+// https://rpc.bradbury.genlayer.com (checked 2026-11-25: it resolves Phase 3 transactions and
+// contracts and has no code for Phase 2's; the older rpc-bradbury.genlayer.com, hyphen, still
+// tracks Phase 2). NEXT_PUBLIC_BRADBURY_GENLAYER_RPC overrides it.
+//
+// That node answers eth_sendRawTransaction "method not found", so `sendRpc` names where signed
+// transactions go instead (the chain RPC); lib/genlayer/sendRoute.ts reroutes them server-side.
+// Browser wallets send through their own RPC (components/jobs/wallet.ts adds the chain RPC).
 
 import { localnet, studionet, testnetBradbury } from "genlayer-js/chains";
 import type { GenLayerChain } from "genlayer-js/types";
@@ -45,6 +50,11 @@ export interface Deployment {
   genesisBlock: number;
   /** GenLayer node RPC: serves gen_* AND passes eth_* through. */
   genlayerRpc: string;
+  /**
+   * Where signed transactions (eth_sendRawTransaction) go when `genlayerRpc` does not accept
+   * them. Unset = `genlayerRpc` takes them too.
+   */
+  sendRpc?: string;
   /** Plain EVM chain RPC (no gen_*). Rate-limited without a Conduit key. Use for the pool contract. */
   chainRpc: string;
   chainExplorer: string;
@@ -67,7 +77,8 @@ const BRADBURY_PHASE_3: Deployment = {
   chainId: 4221,
   genesisHash: "0x17d89764d4f4f963158fc4c5e8f2cb670c2837740b35f37081c12860c3df97e4",
   genesisBlock: 694191,
-  genlayerRpc: process.env.NEXT_PUBLIC_BRADBURY_GENLAYER_RPC?.trim() || "https://rpc-bradbury.genlayer.com",
+  genlayerRpc: process.env.NEXT_PUBLIC_BRADBURY_GENLAYER_RPC?.trim() || "https://rpc.bradbury.genlayer.com",
+  sendRpc: "https://rpc.testnet-chain.genlayer.com",
   chainRpc: "https://rpc.testnet-chain.genlayer.com",
   chainExplorer: "https://scan.testnet-chain.genlayer.com",
   contracts: {

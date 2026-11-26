@@ -15,6 +15,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { BRADBURY, CHAINS } from "@/lib/chains";
 import { signingKey } from "@/lib/signer";
 import { withFees } from "@/lib/genlayer/fees";
+import { routeDeploymentSends } from "@/lib/genlayer/sendRoute";
 import { studioClient } from "@/lib/genlayer/studio";
 import type { Network } from "./types";
 
@@ -62,6 +63,8 @@ export function genlayerClient(n: Network): ChainClient {
   // Studio: genlayer-js 1.x, the legacy addTransaction hosted Studio decodes,
   // no fees (lib/genlayer/studio.ts).
   if (n === "studio") return studioClient(key) as unknown as ChainClient;
+  // The node RPC may refuse signed txs: they go to the deployment's sendRpc (sendRoute.ts).
+  routeDeploymentSends(BRADBURY);
   // Bradbury deploys/writes carry the fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: CHAINS[n].chain, account: createAccount(key) }), n) as unknown as ChainClient;
 }
