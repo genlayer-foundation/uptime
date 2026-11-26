@@ -68,7 +68,19 @@ export async function GET(request: Request) {
       { status: 503 }
     );
   } else {
-    [results, pending] = await Promise.all([getResults(since), getPending()]);
+    try {
+      [results, pending] = await Promise.all([getResults(since), getPending()]);
+    } catch (e) {
+      // The store is configured but not answering (database down, over its
+      // plan quota, tables missing). Readers must be able to tell this from
+      // "no data": a fixed body, never the driver's message.
+      const code = typeof (e as { code?: unknown })?.code === "string" ? (e as { code: string }).code : null;
+      console.error("heartbeat store unavailable", code, e instanceof Error ? e.message : String(e));
+      return NextResponse.json(
+        { error: "database_unavailable", code },
+        { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "300" } }
+      );
+    }
   }
   // Only a dev server labels its responses; the deployed JSON is unchanged.
   const headers = sourceSwitchAllowed() ? { [SOURCE_HEADER]: source } : undefined;
