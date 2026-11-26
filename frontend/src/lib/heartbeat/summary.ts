@@ -7,6 +7,7 @@ export interface Stat {
   accepted: number; // reached ACCEPTED, READY_TO_FINALIZE or FINALIZED
   undetermined: number; // decided without agreement
   timedOut: number; // LEADER/VALIDATORS timeout, CANCELED, or our 6h TIMEOUT
+  unresolved: number; // never read back by reconcile (UNRESOLVED): our side, not the network's
   graded: number; // carries an on-chain (or canary/bump) grade
   correct: number;
   wrong: number;
@@ -37,6 +38,7 @@ export function stat(recs: ProbeRecord[]): Stat {
     accepted: 0,
     undetermined: 0,
     timedOut: 0,
+    unresolved: 0,
     graded: 0,
     correct: 0,
     wrong: 0,
@@ -56,6 +58,7 @@ export function stat(recs: ProbeRecord[]): Stat {
     if (r.status === "SUBMIT_FAILED") s.submitFailed++;
     else if (OK.has(r.status ?? "")) s.accepted++;
     else if (r.status === "UNDETERMINED") s.undetermined++;
+    else if (r.status === "UNRESOLVED") s.unresolved++;
     else s.timedOut++;
     if (r.grade) s.graded++;
     if (r.grade === "correct") s.correct++;
@@ -132,8 +135,9 @@ export function summarize(recs: ProbeRecord[], bucketSec = 3600) {
 //   passed   every action was sent and graded correct
 //   failed   at least one sent action was not correct (wrong, injected,
 //            no agreement, timed out, or an agreed error): a network result
-//   missed   we failed to send at least one action (SUBMIT_FAILED), and none
-//            of the sent ones failed: our side, not the network's
+//   missed   we failed to send at least one action (SUBMIT_FAILED) or to
+//            read one back (UNRESOLVED), and none of the others failed: our
+//            side, not the network's
 //   pending  some action is still waiting for validators
 // Hourly slots with no run at all (the scheduler never fired) are counted
 // as missed too, from the first run in the window up to the last due slot.
@@ -163,7 +167,7 @@ export interface RunsSummary {
 }
 
 function actionOutcome(r: ProbeRecord): "correct" | "bad" | "notSent" | "pending" {
-  if (r.status === "SUBMIT_FAILED") return "notSent";
+  if (r.status === "SUBMIT_FAILED" || r.status === "UNRESOLVED") return "notSent";
   if (!r.status) return "pending";
   if (r.grade === "correct" && OK.has(r.status)) return "correct";
   return "bad";

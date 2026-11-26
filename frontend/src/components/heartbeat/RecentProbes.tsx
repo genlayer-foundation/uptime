@@ -5,7 +5,7 @@ import { DASH, duration, shortHash } from "./format";
 
 function statusTone(status: string): Tone {
   if (status === "ACCEPTED" || status === "FINALIZED") return "success";
-  if (status === "UNDETERMINED") return "warn";
+  if (status === "UNDETERMINED" || status === "UNRESOLVED") return "warn";
   return "danger"; // timeouts, CANCELED, SUBMIT_FAILED
 }
 
