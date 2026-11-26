@@ -16,6 +16,7 @@ function result(r: ProbeRecord | undefined): { label: string; tone: Tone } {
   if (!r) return { label: "Not sent", tone: "neutral" };
   if (!r.status) return { label: "Waiting for validators", tone: "neutral" };
   if (r.status === "SUBMIT_FAILED") return { label: "Missed (our side)", tone: "warn" };
+  if (r.status === "UNRESOLVED") return { label: "Not read back (our side)", tone: "warn" };
   if (r.kind === "appeal") {
     if (r.outcome === "upheld") return { label: "Upheld", tone: "success" };
     if (r.outcome === "overturned") return { label: "Overturned", tone: "danger" };

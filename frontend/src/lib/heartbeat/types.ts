@@ -42,7 +42,7 @@ export interface ProbeRecord {
   gradeBefore?: Grade;
 
   // Filled in by reconcile.
-  status?: string; // final statusName, or SUBMIT_FAILED / TIMEOUT
+  status?: string; // final statusName, or SUBMIT_FAILED / TIMEOUT / UNRESOLVED (never read back)
   error?: string; // submit/read failure, or the contract's agreed error ([EXTERNAL] fixture drift, ...)
   resolvedAt?: number;
   latencySec?: number; // time to decision: chain lastVoteTimestamp - createdTimestamp
