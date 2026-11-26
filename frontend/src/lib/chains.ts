@@ -3,82 +3,123 @@
 //   import { CHAINS } from "@/lib/chains";      // or "../chains" from src/lib/genlayer/
 //   createClient({ chain: CHAINS.bradbury.chain, account });
 //
-// Why: genlayer-js 0.26.5 and 1.1.8 (per docs/PRODUCT.md §2) shipped `testnetBradbury`
-// with the SUNSET Bradbury Phase 1 contracts. The RPC host it uses, rpc-bradbury.genlayer.com,
-// now serves Phase 2 (genesis hash below matched on 2026-11-02), so the SDK talks to the right
-// chain with the wrong consensus/staking addresses.
+// Bradbury is one rollup (Arbitrum Orbit / Conduit, chain 4221) that has carried several
+// consensus deployments: Phase 2, Phantom Bradbury, Phase 3. They share the chain id, the
+// chain RPC, the explorer and native GEN, and are told apart ONLY by contract address. So a
+// deployment is one object below, `BRADBURY` names the one this app talks to, and nothing
+// else in the app names a phase. Moving to the next deployment (or adding a second network
+// such as Clarke) is a new object here, not a rename across the app.
 //
-// Sources, all checked 2026-11-02:
-//  - genlayerlabs/genlayer-consensus@4e5bacaa deployments/bradbury-phase-2.json
-//  - the live AddressManager 0x3F71AE08…38E0, getAllContractAddresses(), via
-//    https://rpc.testnet-chain.genlayer.com (every address below matched the manifest)
-//  - testnet/CLAUDE.md (workspace) for AddressManager / Staking / ConsensusMain
-//  - docs.genlayer.com/developers/networks for chain id, currency and genesis hash
+// Phase 3 sources, all checked 2026-11-25:
+//  - genlayerlabs/genlayer-networks bradbury-phase-3/testnet_deployments.json
+//    (key genlayerOrbitTestnet.deployment_bradbury_phase_3; consensus release v0.6.0,
+//    genlayerlabs/genlayer-consensus@8805afba): every address below is copied from it
+//  - bradbury-phase-3/abi vs bradbury-phase-2/abi: addTransaction(params) (0x35a251fb),
+//    submitAppeal, FeeManager.calculateRoundFees, ConsensusData, Appeals are unchanged
+//  - the live chain: code at each address, and calculateRoundFees on the Phase 3 FeeManager
+//    quotes the same deposit as Phase 2 did for the default distribution (lib/genlayer/fees.ts)
 //
-// Docs advice: resolve Staking and ConsensusMain through the AddressManager rather than
-// treating them as permanent. These are pinned for a deterministic client; re-check them
-// against `AddressManager.getAllContractAddresses()` when Labs announces a redeploy.
+// genlayer-js is pinned at 2.0.0-rc.2, whose own testnetBradbury carries the PHASE 2 addresses
+// (2.1.0 is the first release with Phase 3's). The override below replaces every address the
+// SDK uses, and the ABIs the app calls are the same in both, so the pin stays.
 //
-// genlayer-js 2.0.0-rc.2 (pinned) ships Phase 2 ABIs and the same addresses in its own
-// testnetBradbury; the override stays to pin the RPC host and catch a future SDK drift. 0.26.x
-// encoded the legacy 5-arg addTransaction, which Phase 2 lacks: every submit reverted.
-// Fees: lib/genlayer/fees.ts.
+// GenLayer node RPC: `gen_*` calls (readContract, schemas, gen_call) need a GenLayer node that
+// tracks THIS deployment. The chain RPC serves none of them, and a node following another
+// deployment answers for the same chain id with that deployment's contracts. Phase 3's node is
+// https://rpc.bradbury.genlayer.com (checked 2026-11-25: it resolves Phase 3 transactions and
+// contracts and has no code for Phase 2's; the older rpc-bradbury.genlayer.com, hyphen, still
+// tracks Phase 2). NEXT_PUBLIC_BRADBURY_GENLAYER_RPC overrides it.
+//
+// That node answers eth_sendRawTransaction "method not found", so `sendRpc` names where signed
+// transactions go instead (the chain RPC); lib/genlayer/sendRoute.ts reroutes them server-side.
+// Browser wallets send through their own RPC (components/jobs/wallet.ts adds the chain RPC).
 
 import { localnet, studionet, testnetBradbury } from "genlayer-js/chains";
 import type { GenLayerChain } from "genlayer-js/types";
 
 type Address = `0x${string}`;
 
-/** Bradbury Phase 2 (Arbitrum Orbit / Conduit, chain 4221). */
-export const BRADBURY_PHASE2 = {
-  chainId: 4221,
-  /** Block 0 hash. A different value means the RPC points at another deployment. */
-  genesisHash: "0x17d89764d4f4f963158fc4c5e8f2cb670c2837740b35f37081c12860c3df97e4",
+/** One consensus deployment on a GenLayer rollup. */
+export interface Deployment {
+  /** Shown to wallets and in logs. */
+  name: string;
+  chainId: number;
+  /** Block 0 hash of the rollup. A different value means the RPC points at another chain. */
+  genesisHash: `0x${string}`;
+  /** Block the deployment starts at (its AddressManager). */
+  genesisBlock: number;
   /** GenLayer node RPC: serves gen_* AND passes eth_* through. */
-  genlayerRpc: "https://rpc-bradbury.genlayer.com",
+  genlayerRpc: string;
+  /**
+   * Where signed transactions (eth_sendRawTransaction) go when `genlayerRpc` does not accept
+   * them. Unset = `genlayerRpc` takes them too.
+   */
+  sendRpc?: string;
   /** Plain EVM chain RPC (no gen_*). Rate-limited without a Conduit key. Use for the pool contract. */
+  chainRpc: string;
+  chainExplorer: string;
+  contracts: {
+    addressManager: Address;
+    consensusMain: Address;
+    consensusData: Address;
+    staking: Address;
+    stakingData: Address;
+    feeManager: Address;
+    roundsStorage: Address;
+    appeals: Address;
+    validatorWalletFactory: Address;
+  };
+}
+
+/** Bradbury Phase 3 (consensus v0.6.0, deployed 2026-11-24 on chain 4221). */
+const BRADBURY_PHASE_3: Deployment = {
+  name: "GenLayer Bradbury Phase 3",
+  chainId: 4221,
+  genesisHash: "0x17d89764d4f4f963158fc4c5e8f2cb670c2837740b35f37081c12860c3df97e4",
+  genesisBlock: 694191,
+  genlayerRpc: process.env.NEXT_PUBLIC_BRADBURY_GENLAYER_RPC?.trim() || "https://rpc.bradbury.genlayer.com",
+  sendRpc: "https://rpc.testnet-chain.genlayer.com",
   chainRpc: "https://rpc.testnet-chain.genlayer.com",
   chainExplorer: "https://scan.testnet-chain.genlayer.com",
   contracts: {
-    addressManager: "0x3F71AE080BD6270A91dBcc7960d88797828538E0",
-    consensusMain: "0x2E2766cbc3E5e61Ce93bBcdCBb3eAcB82082A019",
-    consensusData: "0xc5FA6f82BEe53598825d6edf7E3e24613082c75B",
-    staking: "0xD8fBa96C0dBB0257028dBc0107060b958e5c7113",
-    stakingData: "0x8951E93ae3E95F44Bc700fd8D145d30f5eeD408E",
-    feeManager: "0x7678587A847712f2A96082AC07883A88D0fc7245",
-    roundsStorage: "0x4038d4F72C7aAbA5a442cC0dA946012B9E3f4B8a",
-    appeals: "0xdc953c3bCf8837987853ca05a78D52fFC3E18651",
-    validatorWalletFactory: "0x399FCBe6b442903cbA4d3B647B4b30EddF729314",
-  } satisfies Record<string, Address>,
-  /** The SDK defaults these replace (Phase 1, sunset 2026-10-20). Kept to detect drift. */
-  staleSdkDefaults: {
-    consensusMain: "0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D",
-    consensusData: "0x85D7bf947A512Fc640C75327A780c90847267697",
-    staking: "0x4A4449E617F8D10FDeD0b461CadEf83939E821A5",
-    feeManager: "0xF205868bf5db79d2162843742D18D0900A9E462a",
-    roundsStorage: "0x7134D05af13A14c0b66Fe129fb930b1d0C420e33",
-  } satisfies Record<string, Address>,
-} as const;
+    addressManager: "0x0192C6C9482251790965B7136352B26234d81d79",
+    consensusMain: "0x0f4F0e05475723790E4a2ed0598370783C300926",
+    consensusData: "0x2247b85b7ca7fb1Fea990b4aFAB4328D9c597f28",
+    staking: "0xcE16862EAf10B97A0619BeBb662991fb4a52e346",
+    stakingData: "0x93C23BB63772868D536e7f4A46f8D947E0b9538C",
+    feeManager: "0x8E8B6194020dB1CbEf9C6c9dcFeE8FfF1e5E33c3",
+    roundsStorage: "0xa6bdB728B82c23786D6e3CAfc0B97235490A64Fb",
+    appeals: "0x10F2d70ABB8F588f96bEB1a02c99163EB75A2CF1",
+    validatorWalletFactory: "0xfE7bA48e90FeA19C955c18bBDE8BdC0810C2e6ed",
+  },
+};
+
+/** The Bradbury deployment this app talks to. */
+export const BRADBURY: Deployment = BRADBURY_PHASE_3;
 
 function withAddress<T extends { address: Address } | null>(c: T, address: Address): T {
   if (c === null) throw new Error("genlayer-js chain is missing a contract this override expects");
   return { ...c, address };
 }
 
-const p2 = BRADBURY_PHASE2.contracts;
+/** The genlayer-js chain for a deployment: the SDK's ABIs with this deployment's addresses. */
+function chainFor(d: Deployment): GenLayerChain {
+  return {
+    ...testnetBradbury,
+    id: d.chainId,
+    name: d.name,
+    rpcUrls: { default: { http: [d.genlayerRpc] } },
+    blockExplorers: { default: { name: "GenLayer Chain Explorer", url: d.chainExplorer } },
+    consensusMainContract: withAddress(testnetBradbury.consensusMainContract, d.contracts.consensusMain),
+    consensusDataContract: withAddress(testnetBradbury.consensusDataContract, d.contracts.consensusData),
+    stakingContract: withAddress(testnetBradbury.stakingContract, d.contracts.staking),
+    feeManagerContract: withAddress(testnetBradbury.feeManagerContract, d.contracts.feeManager),
+    roundsStorageContract: withAddress(testnetBradbury.roundsStorageContract, d.contracts.roundsStorage),
+    appealsContract: withAddress(testnetBradbury.appealsContract, d.contracts.appeals),
+  };
+}
 
-export const bradburyPhase2: GenLayerChain = {
-  ...testnetBradbury,
-  id: BRADBURY_PHASE2.chainId,
-  name: "GenLayer Bradbury Phase 2",
-  rpcUrls: { default: { http: [BRADBURY_PHASE2.genlayerRpc] } },
-  blockExplorers: { default: { name: "GenLayer Chain Explorer", url: BRADBURY_PHASE2.chainExplorer } },
-  consensusMainContract: withAddress(testnetBradbury.consensusMainContract, p2.consensusMain),
-  consensusDataContract: withAddress(testnetBradbury.consensusDataContract, p2.consensusData),
-  stakingContract: withAddress(testnetBradbury.stakingContract, p2.staking),
-  feeManagerContract: withAddress(testnetBradbury.feeManagerContract, p2.feeManager),
-  roundsStorageContract: withAddress(testnetBradbury.roundsStorageContract, p2.roundsStorage),
-};
+export const bradburyChain: GenLayerChain = chainFor(BRADBURY);
 
 export type NetworkKey = "studio" | "bradbury";
 
@@ -102,9 +143,9 @@ export const CHAINS: Record<NetworkKey, NetworkConfig> = {
   bradbury: {
     key: "bradbury",
     label: "Bradbury",
-    chain: bradburyPhase2,
-    poolRpc: BRADBURY_PHASE2.chainRpc,
-    explorerUrl: BRADBURY_PHASE2.chainExplorer,
+    chain: bradburyChain,
+    poolRpc: BRADBURY.chainRpc,
+    explorerUrl: BRADBURY.chainExplorer,
   },
 };
 

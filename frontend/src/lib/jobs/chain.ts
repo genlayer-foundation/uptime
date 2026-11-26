@@ -1,9 +1,9 @@
 // Per-network clients for the job executor, from the explicit chain config
-// in lib/chains.ts (Bradbury = Phase 2 address overrides, never the stale
+// in lib/chains.ts (Bradbury = the current deployment's address overrides, never the
 // genlayer-js defaults).
 //
 //   genlayer  genlayer-js client: deploy / write / read (Bradbury: 2.x, txs
-//             carry the Phase 2 fee deposit, lib/genlayer/fees.ts; Studio: 1.x,
+//             carry the fee deposit, lib/genlayer/fees.ts; Studio: 1.x,
 //             legacy addTransaction, lib/genlayer/studio.ts), signed by that
 //             network's relayer key (lib/signer.ts: RELAYER_KEY_STUDIO /
 //             RELAYER_KEY_BRADBURY); the Heartbeat signs with the same key
@@ -12,9 +12,10 @@
 import { createAccount, createClient } from "genlayer-js";
 import { createPublicClient, createWalletClient, defineChain, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { BRADBURY_PHASE2, CHAINS } from "@/lib/chains";
+import { BRADBURY, CHAINS } from "@/lib/chains";
 import { signingKey } from "@/lib/signer";
 import { withFees } from "@/lib/genlayer/fees";
+import { routeDeploymentSends } from "@/lib/genlayer/sendRoute";
 import { studioClient } from "@/lib/genlayer/studio";
 import type { Network } from "./types";
 
@@ -62,7 +63,9 @@ export function genlayerClient(n: Network): ChainClient {
   // Studio: genlayer-js 1.x, the legacy addTransaction hosted Studio decodes,
   // no fees (lib/genlayer/studio.ts).
   if (n === "studio") return studioClient(key) as unknown as ChainClient;
-  // Bradbury deploys/writes carry the Phase 2 fee deposit (lib/genlayer/fees.ts).
+  // The node RPC may refuse signed txs: they go to the deployment's sendRpc (sendRoute.ts).
+  routeDeploymentSends(BRADBURY);
+  // Bradbury deploys/writes carry the fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: CHAINS[n].chain, account: createAccount(key) }), n) as unknown as ChainClient;
 }
 
@@ -73,11 +76,11 @@ export function readerClient(n: Network): Pick<ChainClient, "getTransaction" | "
 }
 
 export const BRADBURY_EVM = defineChain({
-  id: BRADBURY_PHASE2.chainId,
+  id: BRADBURY.chainId,
   name: "GenLayer Testnet Bradbury",
   nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-  rpcUrls: { default: { http: [BRADBURY_PHASE2.chainRpc] } },
-  blockExplorers: { default: { name: "Bradbury scan", url: BRADBURY_PHASE2.chainExplorer } },
+  rpcUrls: { default: { http: [BRADBURY.chainRpc] } },
+  blockExplorers: { default: { name: "Bradbury scan", url: BRADBURY.chainExplorer } },
   testnet: true,
 });
 

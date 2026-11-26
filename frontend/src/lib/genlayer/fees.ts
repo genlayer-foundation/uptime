@@ -1,16 +1,18 @@
-// Fee deposit for every Bradbury Phase 2 transaction.
+// Fee deposit for every Bradbury transaction.
 //
-// Phase 2's ConsensusMainWithFees takes addTransaction(params) with a fee
-// distribution and a non-zero msg.value (the deposit); a tx without one
-// reverts (FeeValueMustBeNonZero). genlayer-js >= 2.0 encodes that call and,
-// given a distribution without feeValue, computes the deposit itself with
+// Bradbury's ConsensusMainWithFees (Phase 2 and Phase 3 alike) takes
+// addTransaction(params) with a fee distribution and a non-zero msg.value
+// (the deposit); a tx without one reverts (FeeValueMustBeNonZero).
+// genlayer-js >= 2.0 encodes that call and, given a distribution without
+// feeValue, computes the deposit itself with
 // FeeManager.calculateRoundFees(distribution, validators). We pass the
 // distribution only, so the deposit always matches what the chain charges.
 //
-// Default (checked against the live FeeManager on 2026-11-06): one funded
-// leader rotation, no pre-funded appeal, 0.025 GEN execution budget per round
-// => ~0.05 GEN deposit per tx. Unused budget is refunded at finalization.
-// The Heartbeat's every-5th-tick appeal pays its own charge (appealTransaction).
+// Default (checked against the live Phase 3 FeeManager on 2026-11-25; the
+// quote is the same as Phase 2's): one funded leader rotation, no pre-funded
+// appeal, 0.025 GEN execution budget per round => ~0.05 GEN deposit per tx.
+// Unused budget is refunded at finalization. The Heartbeat's every-5th-tick
+// appeal pays its own charge (appealTransaction).
 //
 // Override any field with BRADBURY_TX_FEES, a JSON object, e.g.
 //   BRADBURY_TX_FEES='{"appealRounds":"1","rotations":["1","1"]}'   (~0.125 GEN)

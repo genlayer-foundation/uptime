@@ -36,7 +36,7 @@ Overview, probe table and setup: `README.md`. External surface: `INTEGRATIONS.md
   `contracts/build/{bradbury,studio}/<name>.py` from `contracts/targets.json` (runner
   pin + SDK rewrites per target). Generated files are committed: never hand-edit them,
   and `python3 contracts/build.py --check` must pass. Deploy only from `build/<target>/`.
-  Bradbury/studio-next = `py-genlayer:babwp9t…` (GenVM v0.6.0-rc10); Studio =
+  Bradbury = `py-genlayer:kzybg95…` (Phase 3, GenVM v0.6.0-rc17; studio-next not re-checked); Studio =
   `py-genlayer:1jb45aa8…` (GenVM v0.2.16). A wrong pin fails every deploy with
   `invalid_contract runner malformed`. Before any deploy run `contracts/verify.sh --network`
   (Studio `gen_getContractSchemaForCode`, Bradbury `gen_call` deploy: no transaction).

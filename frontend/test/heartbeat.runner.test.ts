@@ -2,7 +2,7 @@
 // chain client and an in-memory store. No network, no database.
 import { describe, expect, it } from "vitest";
 import { POOL, PROBE_SET, appealDue, rotation } from "@/lib/heartbeat/probes";
-import { runAppealWatch, runReconcile, runTick, tickPlan, type RunnerClient, type RunnerDeps, type RunnerTx } from "@/lib/heartbeat/runner";
+import { STALE_SEC, TIMEOUT_SEC, runAppealWatch, runReconcile, runTick, tickPlan, type RunnerClient, type RunnerDeps, type RunnerTx } from "@/lib/heartbeat/runner";
 import { latestRun, runsSummary, summarize } from "@/lib/heartbeat/summary";
 import type { ProbeRecord } from "@/lib/heartbeat/types";
 
@@ -182,7 +182,7 @@ describe("runReconcile", () => {
     client.views.set('get_probe:["1:r1-extract"]', { tick: 1, pid: "r1-extract", answer: "", grade: "", error: "[EXTERNAL] fixture drift: primer.html lacks HB2-primer" });
     client.views.set('get_probe:["1:r2-answer42"]', new Map<string, unknown>([["answer", "54"], ["grade", "wrong"], ["error", ""]]));
     const rep = await runReconcile(deps);
-    expect(rep).toEqual({ resolved: 3, pending: 2 });
+    expect(rep).toEqual({ resolved: 3, pending: 2, stale: 0, deferred: 0 });
     const by = Object.fromEntries(store.results.map((r) => [r.id, r]));
     expect(by["1:fetch:f0-status"]).toMatchObject({ status: "ACCEPTED", grade: "correct", latencySec: 90, rounds: 1, votes: { agree: 4, disagree: 1 } });
     expect(by["1:llm:r1-extract"].grade).toBeUndefined();
@@ -190,7 +190,7 @@ describe("runReconcile", () => {
     expect(by["1:llm:r2-answer42"]).toMatchObject({ answer: "54", grade: "wrong" });
   });
 
-  it("counts Phase 2 vote names (FINISHED_WITH_*, NONDET_DISAGREE, TIMEOUT)", async () => {
+  it("counts the vote names in use since Phase 2 (FINISHED_WITH_*, NONDET_DISAGREE, TIMEOUT)", async () => {
     const { store, client, deps } = setup();
     const [, , f0] = await runTick(deps);
     client.txs.set(
@@ -353,6 +353,95 @@ describe("runReconcile", () => {
     for (const r of recs) if (r.qid) client.views.set(`get_probe:["2:${r.qid}"]`, { answer: "x", grade: "wrong", error: "" });
     await runReconcile(deps);
     expect(client.appeals).toEqual([]);
+  });
+});
+
+describe("runReconcile backlog", () => {
+  // A pending record `ageSec` old, with its own tx hash.
+  function old(s: ReturnType<typeof setup>, i: number, ageSec: number, over: Partial<ProbeRecord> = {}): ProbeRecord {
+    const rec: ProbeRecord = {
+      id: `${i}:llm:r1-extract`,
+      tick: i,
+      kind: "llm",
+      type: "llm",
+      qid: "r1-extract",
+      txHash: `0x${i.toString(16).padStart(64, "0")}`,
+      submittedAt: s.clock.now - ageSec,
+      ...over,
+    };
+    s.store.pending.set(rec.id, rec);
+    return rec;
+  }
+  function countReads(c: Fake) {
+    const n = { reads: 0 };
+    const get = c.getTransaction;
+    c.getTransaction = async (a) => (n.reads++, get(a));
+    return n;
+  }
+
+  it("settles every record an hour past its timeout in one run, without a chain read", async () => {
+    const s = setup();
+    for (let i = 1; i <= 700; i++) old(s, i, STALE_SEC + i * 60);
+    const accepted = old(s, 701, STALE_SEC + 60, { id: "701:deploy:", kind: "deploy", type: "deploy", qid: undefined, status: "ACCEPTED", acceptedAt: 1, latencySec: 40 });
+    const n = countReads(s.client);
+    const out = await runReconcile(s.deps);
+    expect(out).toMatchObject({ resolved: 701, pending: 0, stale: 701, deferred: 0 });
+    expect(n.reads).toBe(0);
+    expect(s.store.results.filter((r) => r.status === "UNRESOLVED")).toHaveLength(700);
+    expect(s.store.results.find((r) => r.id === "1:llm:r1-extract")).toMatchObject({ status: "UNRESOLVED", error: "not read back within 6h" });
+    // A canary whose decision was measured keeps it; only finalization is missing.
+    expect(s.store.results.find((r) => r.id === accepted.id)).toMatchObject({ status: "ACCEPTED", latencySec: 40, error: "not finalized after 6h" });
+  });
+
+  it("reads the newest first and stops starting lookups at its budget", async () => {
+    const s = setup();
+    for (let i = 1; i <= 20; i++) {
+      const r = old(s, i, (21 - i) * 600); // tick 20 is the newest
+      s.client.txs.set(r.txHash!, decided("ACCEPTED"));
+      s.client.views.set(`get_probe:["${i}:r1-extract"]`, { answer: "42", grade: "correct", error: "" });
+    }
+    let ms = 0;
+    const get = s.client.getTransaction;
+    s.client.getTransaction = async (a) => ((ms += 3_000), get(a)); // a slow node: 3 s a lookup
+    const out = await runReconcile(s.deps, undefined, { budgetMs: 25_000, nowMs: () => ms });
+    expect(out).toMatchObject({ resolved: 9, pending: 11, deferred: 11 });
+    expect(s.store.results.map((r) => r.tick)).toEqual([20, 19, 18, 17, 16, 15, 14, 13, 12]);
+  });
+
+  it("gives up on a read that hangs and moves on", async () => {
+    const s = setup();
+    const hung = old(s, 1, 60);
+    const fine = old(s, 2, 120);
+    s.client.txs.set(fine.txHash!, decided("ACCEPTED"));
+    s.client.views.set(`get_probe:["2:r1-extract"]`, { answer: "42", grade: "correct", error: "" });
+    const get = s.client.getTransaction;
+    s.client.getTransaction = (a) => (a.hash === hung.txHash ? new Promise<never>(() => {}) : get(a));
+    const out = await runReconcile(s.deps, undefined, { callTimeoutMs: 20 });
+    expect(out).toMatchObject({ resolved: 1, pending: 1 });
+    expect(s.store.results[0]).toMatchObject({ id: fine.id, grade: "correct" });
+    expect(s.store.pending.has(hung.id)).toBe(true);
+  });
+
+  it("past its timeout, a tx the node cannot find (a previous deployment's) is ours, an undecided one the network's", async () => {
+    const s = setup();
+    const gone = old(s, 1, TIMEOUT_SEC + 60); // no tx in the fake: "not found"
+    const slow = old(s, 2, TIMEOUT_SEC + 60);
+    s.client.txs.set(slow.txHash!, { statusName: "PROPOSING" });
+    const appeal = old(s, 3, TIMEOUT_SEC + 60, { id: "3:appeal:r1-extract", kind: "appeal", appealOf: "3:llm:r1-extract" });
+    await runReconcile(s.deps);
+    const by = Object.fromEntries(s.store.results.map((r) => [r.id, r]));
+    expect(by[gone.id]).toMatchObject({ status: "UNRESOLVED", error: "not found" });
+    expect(by[slow.id]).toMatchObject({ status: "PROPOSING", error: "no decision after 6h" });
+    expect(by[appeal.id].status).toBe("UNRESOLVED");
+    expect(by[appeal.id].outcome).toBeUndefined();
+  });
+
+  it("counts UNRESOLVED as our miss, not a network failure", () => {
+    const base = { tick: 1, type: "web" as const, submittedAt: 3600, grade: "correct" as const, status: "FINALIZED" };
+    const results: ProbeRecord[] = (["deploy", "write", "fetch", "llm"] as const).map((kind, i) => ({ ...base, id: `1:${kind}:${i}`, kind }));
+    results.push({ ...base, id: "1:llm:9", kind: "llm", status: "UNRESOLVED", grade: undefined });
+    expect(runsSummary(results, [], 7200)).toMatchObject({ runs: 1, missed: 1, failed: 0 });
+    expect(summarize(results).byKind.llm).toMatchObject({ unresolved: 1, timedOut: 0 });
   });
 });
 

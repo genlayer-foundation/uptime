@@ -2,7 +2,9 @@
 //   tick       submit this hour's probes and return
 //   reconcile  read back every pending tx; copy the decided ones' ON-CHAIN
 //              grades; keep canary deploys pending until FINALIZED so both of
-//              their times are recorded
+//              their times are recorded. Newest first, within a 25 s budget
+//              (8 s per read); records an hour past their 6h timeout are
+//              settled UNRESOLVED without a read (runReconcile)
 //   appeals    the same pass, on the appeal-due probes only, every few seconds
 //              (runAppealWatch, /api/cron/appeals every minute). An appeal is
 //              only possible between a decision and its finalization, a window
@@ -170,7 +172,7 @@ function votes(tx: RunnerTx): VoteCounts | undefined {
   if (!names?.length) return undefined;
   const v: VoteCounts = { agree: 0, disagree: 0, timeout: 0, other: 0 };
   for (const n of names) {
-    // Phase 2 names a vote by the result the validator agreed to
+    // Since Phase 2 a vote is named by the result the validator agreed to
     // (FINISHED_WITH_RETURN/ERROR); a mismatch is NONDET_DISAGREE or
     // DETERMINISTIC_VIOLATION. AGREE/DISAGREE are the pre-Phase 2 names.
     if (AGREE_VOTES.has(n)) v.agree++;
@@ -303,12 +305,63 @@ export function appealOutcome(ap: ProbeRecord): AppealOutcome {
   return "upheld";
 }
 
+// A record still pending this long after its 6h timeout was not looked up when
+// it expired (a healthy reconcile runs every 10 min), so it is settled from the
+// database alone: our side, never a network TIMEOUT.
+export const STALE_SEC = TIMEOUT_SEC + 3600;
+// Settled without a lookup, or the tx could not be read at all by its timeout:
+// the tx may well have been decided, we never saw it (reconcile backlog, or a
+// tx of a previous deployment the current node does not know).
+export const UNRESOLVED = "UNRESOLVED";
+
+export interface ReconcileOptions {
+  budgetMs?: number; // no new lookup starts after this (default 25 s: the route's maxDuration is 60 s)
+  callTimeoutMs?: number; // per chain read (default 8 s)
+  nowMs?: () => number;
+}
+
+// The reads get a timeout; the sends do not (giving up on a send does not
+// unsend it).
+function withReadTimeouts(c: RunnerClient, ms: number): RunnerClient {
+  const timed = <T>(what: string, p: Promise<T>): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const t = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms} ms`)), ms);
+    });
+    return Promise.race([p, t]).finally(() => clearTimeout(timer));
+  };
+  return {
+    deployContract: (a) => c.deployContract(a),
+    writeContract: (a) => c.writeContract(a),
+    appealTransaction: (a) => c.appealTransaction(a),
+    getTransaction: (a) => timed("getTransaction", c.getTransaction(a)),
+    readContract: (a) => timed(`readContract ${a.functionName}`, c.readContract(a)),
+    getMinAppealBond: (a) => timed("getMinAppealBond", c.getMinAppealBond(a)),
+  };
+}
+
+// Settle a stale record without a chain read (see STALE_SEC).
+function settleStale(rec: ProbeRecord): void {
+  if (rec.kind === "deploy" && rec.acceptedAt !== undefined) {
+    rec.error = "not finalized after 6h"; // its decision was measured: keep it
+    return;
+  }
+  rec.status = UNRESOLVED;
+  rec.error = rec.error ?? "not read back within 6h";
+}
+
 export async function runReconcile(
   deps: RunnerDeps = defaultDeps(),
-  only: (rec: ProbeRecord) => boolean = () => true
-): Promise<{ resolved: number; pending: number }> {
-  const client = deps.client();
-  const pending = (await deps.store.getPending()).filter(only);
+  only: (rec: ProbeRecord) => boolean = () => true,
+  o: ReconcileOptions = {}
+): Promise<{ resolved: number; pending: number; stale: number; deferred: number }> {
+  const nowMs = o.nowMs ?? Date.now;
+  const t0 = nowMs();
+  const budgetMs = o.budgetMs ?? 25_000;
+  const callMs = o.callTimeoutMs ?? 8_000;
+  const client = withReadTimeouts(deps.client(), callMs);
+  const timedDeps: RunnerDeps = { ...deps, reader: () => withReadTimeouts(deps.reader(), callMs) };
+  const all = (await deps.store.getPending()).filter(only);
   let resolved = 0;
   const done = async (rec: ProbeRecord) => {
     rec.resolvedAt = deps.now();
@@ -316,7 +369,27 @@ export async function runReconcile(
     resolved++;
   };
 
+  // 1. Stale records: one database write each, no chain read, three at a time
+  // (the pool is small and shared with the jobs reconcile).
+  const stale = all.filter((r) => deps.now() - r.submittedAt > STALE_SEC);
+  for (let i = 0; i < stale.length && nowMs() - t0 <= budgetMs; i += 3) {
+    await Promise.all(
+      stale.slice(i, i + 3).map((rec) => {
+        settleStale(rec);
+        return done(rec);
+      })
+    );
+  }
+
+  // 2. The rest, newest first, so fresh results never wait behind old ones;
+  // whatever the budget leaves is read on the next run.
+  const pending = all.filter((r) => deps.now() - r.submittedAt <= STALE_SEC).sort((a, b) => b.submittedAt - a.submittedAt);
+  let deferred = 0;
   for (const rec of pending) {
+    if (nowMs() - t0 > budgetMs) {
+      deferred++;
+      continue;
+    }
     let tx: RunnerTx | undefined;
     try {
       tx = await client.getTransaction({ hash: rec.txHash! as TransactionHash });
@@ -332,13 +405,16 @@ export async function runReconcile(
       const before = rec.rounds ?? 0;
       if (tx && DECIDED.has(status) && Number(tx.numOfRounds ?? 0) > before) {
         measure(rec, tx);
-        await grade(deps, rec, tx);
+        await grade(timedDeps, rec, tx);
         rec.outcome = appealOutcome(rec);
         await done(rec);
-      } else if (finalized || expired) {
+      } else if (finalized || (expired && tx)) {
         rec.status = status || "TIMEOUT";
         rec.outcome = "withdrawn";
         if (!finalized) rec.error = rec.error ?? "no appeal round decided after 6h";
+        await done(rec);
+      } else if (expired) {
+        rec.status = UNRESOLVED; // unreadable: no outcome to claim
         await done(rec);
       }
       continue;
@@ -347,7 +423,9 @@ export async function runReconcile(
     if (!tx || !DECIDED.has(status)) {
       if (expired) {
         if (rec.kind === "deploy" && rec.acceptedAt !== undefined) rec.error = "not finalized after 6h";
-        else Object.assign(rec, { status: status || "TIMEOUT", error: rec.error ?? "no decision after 6h" });
+        // Read and still undecided: the network's timeout. Unreadable: ours.
+        else if (tx) Object.assign(rec, { status: status || "TIMEOUT", error: rec.error ?? "no decision after 6h" });
+        else rec.status = UNRESOLVED;
         await done(rec);
       }
       continue;
@@ -358,7 +436,7 @@ export async function runReconcile(
       if (rec.acceptedAt === undefined) {
         measure(rec, tx);
         rec.acceptedAt = deps.now();
-        await grade(deps, rec, tx);
+        await grade(timedDeps, rec, tx);
       }
       if (finalized) {
         rec.status = status; // FINALIZED, or what it finalized as (UNDETERMINED: no majority)
@@ -376,13 +454,13 @@ export async function runReconcile(
     }
 
     measure(rec, tx);
-    await grade(deps, rec, tx);
+    await grade(timedDeps, rec, tx);
     await done(rec);
 
     if (rec.appealDue && APPEALABLE.has(storedStatus(tx))) await appeal(deps, client, rec);
   }
 
-  return { resolved, pending: pending.length - resolved };
+  return { resolved, pending: all.length - resolved, stale: stale.length, deferred };
 }
 
 const isAppealDue = (rec: ProbeRecord) => rec.appealDue === true && rec.kind !== "appeal";
@@ -411,7 +489,7 @@ export async function runAppealWatch(
   let polls = 0;
   let resolved = 0;
   for (;;) {
-    const r = await runReconcile(deps, isAppealDue);
+    const r = await runReconcile(deps, isAppealDue, { nowMs });
     resolved += r.resolved;
     if (r.resolved + r.pending > 0) polls++;
     if (r.pending === 0) return { polls, resolved, waiting: 0 };

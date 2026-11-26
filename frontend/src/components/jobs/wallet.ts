@@ -1,10 +1,10 @@
 // Browser wallet (EIP-1193, e.g. MetaMask) for SIWE sign-in and the UptimePool.
 // No wallet SDK: viem over the injected provider. The pool lives on the plain
-// EVM side of Bradbury Phase 2 (chain 4221), so the wallet is switched there
+// EVM side of the Bradbury rollup (chain 4221), so the wallet is switched there
 // before any pool transaction.
 
 import { createPublicClient, createWalletClient, custom, defineChain, http, type Address } from "viem";
-import { BRADBURY_PHASE2 } from "@/lib/chains";
+import { BRADBURY } from "@/lib/chains";
 
 type Eip1193 = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -13,11 +13,11 @@ type Eip1193 = {
 };
 
 export const bradburyEvm = defineChain({
-  id: BRADBURY_PHASE2.chainId,
+  id: BRADBURY.chainId,
   name: "GenLayer Testnet Bradbury",
   nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-  rpcUrls: { default: { http: [BRADBURY_PHASE2.chainRpc] } },
-  blockExplorers: { default: { name: "GenLayer Chain Explorer", url: BRADBURY_PHASE2.chainExplorer } },
+  rpcUrls: { default: { http: [BRADBURY.chainRpc] } },
+  blockExplorers: { default: { name: "GenLayer Chain Explorer", url: BRADBURY.chainExplorer } },
   testnet: true,
 });
 
@@ -60,7 +60,7 @@ export async function ensureBradbury(): Promise<void> {
           chainName: bradburyEvm.name,
           nativeCurrency: bradburyEvm.nativeCurrency,
           rpcUrls: bradburyEvm.rpcUrls.default.http,
-          blockExplorerUrls: [BRADBURY_PHASE2.chainExplorer],
+          blockExplorerUrls: [BRADBURY.chainExplorer],
         },
       ],
     });

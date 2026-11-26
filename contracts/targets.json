@@ -6,11 +6,11 @@
         "testnetBradbury",
         "studio-next"
       ],
-      "runner": "py-genlayer:babwp9t37jw9g4j2bccgn14g6x7x9s1f7dsmh7emvz735pz4zxa0",
-      "genvm": "v0.6.0-rc10",
+      "runner": "py-genlayer:kzybg95x1gn21dw72m7hyg0maaap04n4nx55j9yt6fkdqxtz6bz0",
+      "genvm": "v0.6.0-rc17",
       "genvm_repo": "genlayerlabs/genvm-manager",
       "sdk": "v0.6: import genlayer as gl; gl.contract.Contract; gl.storage.*; gl.vm.run_nondet; UserError.data",
-      "rpc": "https://rpc-bradbury.genlayer.com",
+      "rpc": "https://rpc.bradbury.genlayer.com",
       "rewrites": [],
       "forbid": [
         "from genlayer import *",

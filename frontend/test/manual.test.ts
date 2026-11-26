@@ -203,4 +203,17 @@ describe("manual run flow", () => {
     expect(start).toMatchObject({ ok: true, value: { call: { kind: "deploy", stepId: "canary", code: "# canary" } } });
     expect(manualBlocker({ schedule: { everyMinutes: 5 }, steps: [{ id: "p", kind: "write", contract: C1, method: "pay", args: [], value: "5" }] }, false)).toMatch(/sends GEN/);
   });
+
+  it("Heartbeat: the system job follows a redeployed contract address", async () => {
+    const s = setup();
+    const NEXT = "0x2222222222222222222222222222222222222222";
+    const hb = await ensureHeartbeatJob(s.repo, OWNER, C1, T0);
+    const moved = await ensureHeartbeatJob(s.repo, OWNER, NEXT, T0 + 60);
+    expect(moved!.id).toBe(hb!.id);
+    const writes = moved!.steps.filter((x) => x.kind === "write");
+    expect(writes).toHaveLength(3);
+    for (const w of writes) expect(w).toMatchObject({ contract: NEXT });
+    expect(moved!.steps.find((x) => x.kind === "deploy")).toMatchObject({ preset: "canary" });
+    expect((await ensureHeartbeatJob(s.repo, OWNER, NEXT.toUpperCase().replace("0X", "0x"), T0 + 120))!.steps).toEqual(moved!.steps);
+  });
 });

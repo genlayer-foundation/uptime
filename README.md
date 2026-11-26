@@ -63,7 +63,7 @@ Time to decision comes from the chain's own `createdTimestamp` → `lastVoteTime
 
 ```bash
 # contracts. One source per contract (contracts/src/), one generated build per network
-# GenVM: contracts/build/bradbury/ (py-genlayer:babwp9t…, GenVM v0.6.0-rc10) and
+# GenVM: contracts/build/bradbury/ (py-genlayer:kzybg95…, GenVM v0.6.0-rc17) and
 # contracts/build/studio/ (py-genlayer:1jb45aa8…, GenVM v0.2.16). See contracts/README.md.
 python3 contracts/build.py          # after editing contracts/src/ or contracts/targets.json
 contracts/verify.sh --network       # drift + direct tests + genvm-lint per target + read-only live load checks
@@ -102,11 +102,11 @@ The switch exists only under `next dev`. In any build (`next build`, Vercel prev
 
 ## Cost
 
-Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal when one is sent (bond: `getMinAppealBond`). Each tx deposits ~0.05 GEN of Phase 2 fees (`BRADBURY_TX_FEES`, see INTEGRATIONS.md), ~0.25 GEN per tick; unused budget is refunded at finalization. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
+Per hour: 5 txs (1 deploy, 1 bump, 1 F0 fetch, 2 rotating probes), about 13 LLM calls on a 5-validator committee. Every 5 hours, 1 appeal when one is sent (bond: `getMinAppealBond`). Each tx deposits ~0.05 GEN of fees (`BRADBURY_TX_FEES`, see INTEGRATIONS.md), ~0.25 GEN per tick; unused budget is refunded at finalization. The scheduler wallet behind `RELAYER_KEY_BRADBURY` must stay funded on Bradbury.
 
 ## Uptime contracts
 
-The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. All of them are deployed on Bradbury at the addresses below; none is audited. `INTEGRATIONS.md` (On-chain) is the reference for addresses.
+The scheduled-actions product (design: `docs/PRODUCT.md`, local draft) adds these. None is audited. The EVM pools are plain contracts on the Bradbury rollup and are unaffected by a new consensus deployment. The Python contracts live in one consensus deployment: the Bradbury addresses below are the **Phase 2** ones, retired with Phase 2, and each has to be deployed again on Phase 3 (`contracts/README.md`, "Redeploy on a new consensus deployment"). `INTEGRATIONS.md` (On-chain) is the reference for addresses.
 
 Every Python contract is built per network GenVM from one source: deploy `contracts/build/bradbury/<name>.py` on Bradbury and `contracts/build/studio/<name>.py` on Studio (GenVM v0.2.16). The app picks the build for the job's network (`contracts/README.md`).
 
@@ -114,9 +114,9 @@ Every Python contract is built per network GenVM from one source: deploy `contra
 |---|---|---|
 | `contracts/evm/src/UptimePool.sol` | Bradbury only (plain EVM on the Arbitrum Orbit chain, chain 4221) | Users lock GEN per uptime. Scheduler and mailer draw from it only within the owner's per-spender allowances. Owner can pause, revoke, or withdraw at any time Deployed at `0x5ea32AdBDF2f3C68C2Fe5566ec3156bF88e41d0A` (`UPTIME_POOL_BRADBURY`; admin `0x3B49…Da97`, scheduler `0xDcA4…84dd`, mailer `0xb696…4774`, read on-chain 2026-11-10). Production now uses v2 |
 | `contracts/evm/src/UptimePoolV2.sol` | Bradbury only (same chain) | Community pools: anyone can back a job, each backer withdraws only their own share. Deployed and set in production (`UPTIME_POOL_V2_BRADBURY`); current address in `INTEGRATIONS.md` (On-chain) |
-| `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury: `0x9d1984c170c6E1ed0126925B4a345371239155cB` (`UPTIME_WEBPROBE_BRADBURY`); Studio: `0x4574A36757da191D34CE3a38060b229928766024` (`UPTIME_WEBPROBE_STUDIO`) |
-| `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury: `0xa47174e0A375C2116f9830498F59748A391D25d8` (`UPTIME_ASK_BRADBURY`); Studio: `0x3E6A11b37a94F7dA45E052aE6A2D289d3E8128e6` (`UPTIME_ASK_STUDIO`) |
-| `contracts/src/heartbeat.py`, `contracts/src/canary.py` | Bradbury (canary: any network, per-network build) | Preset 1 (the Bradbury Heartbeat). Heartbeat deployed at `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F` (`HEARTBEAT_CONTRACT`); canaries are a new deploy each tick |
+| `contracts/src/web_probe.py` | Studio + Bradbury | Preset 2 `check_url` and preset 3 `check_api`. Bradbury (`UPTIME_WEBPROBE_BRADBURY`): Phase 3 `0xBe69B3D95fe2573Cb29a83Fd7EB34a1E19da6185`, Phase 2 was `0x9d1984c170c6E1ed0126925B4a345371239155cB`; Studio: `0x4574A36757da191D34CE3a38060b229928766024` (`UPTIME_WEBPROBE_STUDIO`) |
+| `contracts/src/ask.py` | Studio + Bradbury | Preset 4 `ask`: optional page read, an LLM question, a short normalized answer. Bradbury (`UPTIME_ASK_BRADBURY`): Phase 3 `0x4B7Db78dd8690745EC225A05A28725672c3998E8`, Phase 2 was `0xa47174e0A375C2116f9830498F59748A391D25d8`; Studio: `0x3E6A11b37a94F7dA45E052aE6A2D289d3E8128e6` (`UPTIME_ASK_STUDIO`) |
+| `contracts/src/heartbeat.py`, `contracts/src/canary.py` | Bradbury (canary: any network, per-network build) | Preset 1 (the Bradbury Heartbeat). Heartbeat (`HEARTBEAT_CONTRACT`): Phase 3 `0x99609545d458cCe960356e41A13DF8A0C63753cB`, Phase 2 was `0x66a4bF89E8812Ced84C405c6f0Cb0E35153EBb3F`; canaries are a new deploy each tick |
 
 ### UptimePool
 
@@ -162,9 +162,9 @@ The scheduler signs every run with the relayer key (`RELAYER_KEY_*`, resolved in
 | 7 Deploy your contract | `deployContract({ code: <user source, pinned by hash when the uptime is created>, args })` |
 | 8 Deploy every X, call every Y | schedule A = preset 7. Schedule B = preset 5 against the address that A's latest ACCEPTED deploy returned |
 
-### Bradbury Phase 2 chain config
+### Bradbury chain config (Phase 3)
 
-`genlayer-js` `testnetBradbury` still carries the Phase 1 consensus and staking addresses. `frontend/src/lib/chains.ts` (`CHAINS.bradbury.chain` = `bradburyPhase2`) holds the Phase 2 addresses, verified against the live AddressManager. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. `genlayer-js` is pinned at `2.0.0-rc.2`, whose ABIs are Phase 2's (fee-aware `addTransaction`); every Bradbury deploy/write carries a fee deposit from `frontend/src/lib/genlayer/fees.ts`. Studio jobs use genlayer-js 1.1.8 (aliased `genlayer-js-v1`, `frontend/src/lib/genlayer/studio.ts`): hosted Studio only decodes the legacy `addTransaction` (`0x27241a99`), and 2.x txs finalize `NO_MAJORITY` there with no contract. Studio txs carry no fees.
+Bradbury is one rollup (chain 4221) that has carried several consensus deployments. Phase 3 (consensus `v0.6.0`) replaced Phase 2 on 2026-11-24 on the same chain: same chain RPC, explorer and native GEN, different contract addresses. `frontend/src/lib/chains.ts` holds one object per deployment and exports the active one as `BRADBURY` (`CHAINS.bradbury.chain` = `bradburyChain`); its addresses come from `genlayerlabs/genlayer-networks` `bradbury-phase-3/testnet_deployments.json`. Both the Bradbury Heartbeat client (`frontend/src/lib/genlayer/client.ts`) and the job executor (`frontend/src/lib/jobs/chain.ts`) use it. `genlayer-js` is pinned at `2.0.0-rc.2`: its built-in `testnetBradbury` still carries the Phase 2 addresses, all overridden here, and its ABIs (fee-aware `addTransaction`) match Phase 3 for every call the app makes; every Bradbury deploy/write carries a fee deposit from `frontend/src/lib/genlayer/fees.ts`. Contract reads go through the Phase 3 GenLayer node RPC `https://rpc.bradbury.genlayer.com` (`NEXT_PUBLIC_BRADBURY_GENLAYER_RPC` overrides it); it refuses signed transactions, so server-side sends go to the chain RPC (`frontend/src/lib/genlayer/sendRoute.ts`, see `INTEGRATIONS.md`). Studio jobs use genlayer-js 1.1.8 (aliased `genlayer-js-v1`, `frontend/src/lib/genlayer/studio.ts`): hosted Studio only decodes the legacy `addTransaction` (`0x27241a99`), and 2.x txs finalize `NO_MAJORITY` there with no contract. Studio txs carry no fees.
 
 ## Jobs backend (a generic paid cron)
 

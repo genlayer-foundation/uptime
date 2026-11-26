@@ -1,14 +1,15 @@
 import { createClient, createAccount } from "genlayer-js";
-import { bradburyPhase2 } from "../chains";
+import { BRADBURY, bradburyChain } from "../chains";
 import { signingKey } from "../signer";
 import { withFees } from "./fees";
+import { routeDeploymentSends } from "./sendRoute";
 
 // The Bradbury Heartbeat example job runs on Bradbury only, through the
-// explicit Phase 2 chain config (lib/chains.ts): genlayer-js's own
-// testnetBradbury still carries the sunset Phase 1 consensus addresses.
+// explicit chain config (lib/chains.ts): the pinned genlayer-js's own
+// testnetBradbury carries an older deployment's consensus addresses.
 export const NETWORK = {
   name: "Bradbury",
-  chain: bradburyPhase2,
+  chain: bradburyChain,
   explorerUrl: "https://explorer-bradbury.genlayer.com",
 };
 
@@ -30,7 +31,9 @@ export function getWriteClient() {
   const privateKey = signingKey("bradbury");
   if (!privateKey) throw new Error("RELAYER_KEY_BRADBURY not configured");
   const account = createAccount(privateKey);
-  // Every deploy/write carries the Phase 2 fee deposit (lib/genlayer/fees.ts).
+  // The node RPC may refuse signed txs: they go to the deployment's sendRpc (sendRoute.ts).
+  routeDeploymentSends(BRADBURY);
+  // Every deploy/write carries the fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: NETWORK.chain, account }), "bradbury");
 }
 
