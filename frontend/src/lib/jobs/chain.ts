@@ -15,7 +15,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { BRADBURY, CHAINS } from "@/lib/chains";
 import { signingKey } from "@/lib/signer";
 import { withFees } from "@/lib/genlayer/fees";
-import { routeDeploymentSends } from "@/lib/genlayer/sendRoute";
+import { routeDeployment } from "@/lib/genlayer/rpcRoute";
 import { studioClient } from "@/lib/genlayer/studio";
 import type { Network } from "./types";
 
@@ -63,8 +63,8 @@ export function genlayerClient(n: Network): ChainClient {
   // Studio: genlayer-js 1.x, the legacy addTransaction hosted Studio decodes,
   // no fees (lib/genlayer/studio.ts).
   if (n === "studio") return studioClient(key) as unknown as ChainClient;
-  // The node RPC may refuse signed txs: they go to the deployment's sendRpc (sendRoute.ts).
-  routeDeploymentSends(BRADBURY);
+  // Signed txs, fee quotes and gas estimates go to the chain RPC; gen_* stays on the node (rpcRoute.ts).
+  routeDeployment(BRADBURY);
   // Bradbury deploys/writes carry the fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: CHAINS[n].chain, account: createAccount(key) }), n) as unknown as ChainClient;
 }
@@ -72,6 +72,7 @@ export function genlayerClient(n: Network): ChainClient {
 /** A keyless client for reads and getTransaction (verifying a visitor's "Run now" txs). */
 export function readerClient(n: Network): Pick<ChainClient, "getTransaction" | "readContract"> {
   if (n === "studio") return studioClient() as unknown as ChainClient;
+  routeDeployment(BRADBURY); // eth_* (ConsensusData reads) on the chain RPC (rpcRoute.ts)
   return createClient({ chain: CHAINS[n].chain }) as unknown as ChainClient;
 }
 

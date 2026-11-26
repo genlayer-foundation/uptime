@@ -2,7 +2,7 @@ import { createClient, createAccount } from "genlayer-js";
 import { BRADBURY, bradburyChain } from "../chains";
 import { signingKey } from "../signer";
 import { withFees } from "./fees";
-import { routeDeploymentSends } from "./sendRoute";
+import { routeDeployment } from "./rpcRoute";
 
 // The Bradbury Heartbeat example job runs on Bradbury only, through the
 // explicit chain config (lib/chains.ts): the pinned genlayer-js's own
@@ -22,6 +22,8 @@ export function getContractAddress(): `0x${string}` | undefined {
 }
 
 export function getReadClient() {
+  // gen_* on the node RPC, eth_* (ConsensusData reads) on the chain RPC (rpcRoute.ts).
+  routeDeployment(BRADBURY);
   return createClient({ chain: NETWORK.chain });
 }
 
@@ -31,8 +33,8 @@ export function getWriteClient() {
   const privateKey = signingKey("bradbury");
   if (!privateKey) throw new Error("RELAYER_KEY_BRADBURY not configured");
   const account = createAccount(privateKey);
-  // The node RPC may refuse signed txs: they go to the deployment's sendRpc (sendRoute.ts).
-  routeDeploymentSends(BRADBURY);
+  // Signed txs, fee quotes and gas estimates go to the chain RPC; gen_* stays on the node (rpcRoute.ts).
+  routeDeployment(BRADBURY);
   // Every deploy/write carries the fee deposit (lib/genlayer/fees.ts).
   return withFees(createClient({ chain: NETWORK.chain, account }), "bradbury");
 }

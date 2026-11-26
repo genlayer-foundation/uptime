@@ -30,9 +30,11 @@
 // contracts and has no code for Phase 2's; the older rpc-bradbury.genlayer.com, hyphen, still
 // tracks Phase 2). NEXT_PUBLIC_BRADBURY_GENLAYER_RPC overrides it.
 //
-// That node answers eth_sendRawTransaction "method not found", so `sendRpc` names where signed
-// transactions go instead (the chain RPC); lib/genlayer/sendRoute.ts reroutes them server-side.
-// Browser wallets send through their own RPC (components/jobs/wallet.ts adds the chain RPC).
+// That node answers eth_sendRawTransaction "method not found", and its eth_* pass-through is slow
+// and intermittently answers -32603 "Internal error" (2026-11-26). So `ethRpc` names where every
+// eth_* call goes instead (the chain RPC), sends and reads alike; only gen_* stays on the node.
+// lib/genlayer/rpcRoute.ts does the split server-side. Browser wallets send through their own RPC
+// (components/jobs/wallet.ts adds the chain RPC).
 
 import { localnet, studionet, testnetBradbury } from "genlayer-js/chains";
 import type { GenLayerChain } from "genlayer-js/types";
@@ -51,10 +53,10 @@ export interface Deployment {
   /** GenLayer node RPC: serves gen_* AND passes eth_* through. */
   genlayerRpc: string;
   /**
-   * Where signed transactions (eth_sendRawTransaction) go when `genlayerRpc` does not accept
-   * them. Unset = `genlayerRpc` takes them too.
+   * Where eth_* calls (signed transactions and reads alike) go instead of `genlayerRpc`, which
+   * then serves only gen_*. Unset = `genlayerRpc` takes everything.
    */
-  sendRpc?: string;
+  ethRpc?: string;
   /** Plain EVM chain RPC (no gen_*). Rate-limited without a Conduit key. Use for the pool contract. */
   chainRpc: string;
   chainExplorer: string;
@@ -78,7 +80,7 @@ const BRADBURY_PHASE_3: Deployment = {
   genesisHash: "0x17d89764d4f4f963158fc4c5e8f2cb670c2837740b35f37081c12860c3df97e4",
   genesisBlock: 694191,
   genlayerRpc: process.env.NEXT_PUBLIC_BRADBURY_GENLAYER_RPC?.trim() || "https://rpc.bradbury.genlayer.com",
-  sendRpc: "https://rpc.testnet-chain.genlayer.com",
+  ethRpc: "https://rpc.testnet-chain.genlayer.com",
   chainRpc: "https://rpc.testnet-chain.genlayer.com",
   chainExplorer: "https://scan.testnet-chain.genlayer.com",
   contracts: {
